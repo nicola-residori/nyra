@@ -32,4 +32,5 @@ admin = [
   "templates/*.html",
   "static/css/*.css",
   "static/js/*.js",
+  "static/img/*.png",
 ]
