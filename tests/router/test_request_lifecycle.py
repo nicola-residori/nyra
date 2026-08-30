@@ -208,3 +208,20 @@ async def test_new_request_in_same_session_confirms_or_changes_previous_identity
     identity.detected=None
     fourth=request(session_id=first.session_id); await svc.execute(fourth)
     assert any(r.event=="IDENTITY_GUEST" and r.params.get("current_user_id")=="guest" for r in collector.records)
+
+@pytest.mark.asyncio
+async def test_failed_decision_closes_lifecycle_span_with_fault(tmp_path):
+    collector = Collector()
+    skill = SkillPort(decision=LifecycleDecision(status=RequestStatus.FAILED))
+    svc, _, _ = service(tmp_path, observability=collector, skill_port=skill)
+
+    result = await svc.execute(request())
+
+    assert result.status is RequestStatus.FAILED
+    request_record = next(r for r in collector.records if r.event == "REQUEST_RECEIVED")
+    fault_record = next(r for r in collector.records if r.event == "REQUEST_FAILED")
+    assert request_record.span_id == fault_record.span_id
+    assert fault_record.kind.value == "FAULT"
+    assert fault_record.result == "failed"
+    assert fault_record.payload["status"] == "failed"
+    assert not any(r.event == "REQUEST_COMPLETED" for r in collector.records)

@@ -133,7 +133,9 @@ class RequestLifecycleService:
                       result="failed", params={"error_type": type(exc).__name__},
                       span_elapsed_ms=(monotonic() - started) * 1000)
             raise
-        self._log(request, trace_id, span_id, "REQUEST_COMPLETED", kind=LogKind.RESPONSE,
+        terminal_kind = LogKind.FAULT if response.status is RequestStatus.FAILED else LogKind.RESPONSE
+        terminal_event = "REQUEST_FAILED" if response.status is RequestStatus.FAILED else "REQUEST_COMPLETED"
+        self._log(request, trace_id, span_id, terminal_event, kind=terminal_kind,
                   result=response.status.value,
                   payload=response.model_dump(mode="json"),
                   span_elapsed_ms=(monotonic() - started) * 1000)
