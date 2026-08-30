@@ -61,3 +61,34 @@ Chat conversations are not persistent technical documentation. Architecture deci
 **Status:** Accepted
 
 Source code, comments, documentation, configuration examples, API names, log events, and commit messages are written in English.
+---
+
+## ADR-013 - Nyra Admin is a separate application
+
+**Status:** Accepted
+
+Nyra Admin is a separate application from Nyra Router.
+
+Nyra Admin contains the human-facing web interface and communicates with Router
+through Router APIs.
+
+Nyra Admin must not access Router databases directly.
+
+Router orchestration code and Admin UI code must not share the same application
+entry point.
+
+---
+
+## ADR-014 - Initial Router and Admin ports
+
+**Status:** Accepted
+
+The initial deployment uses:
+
+```text
+Nyra Router :8090
+Nyra Admin  :80
+```
+
+Router and Admin may initially run in the same Proxmox container, but remain
+separate processes and separate systemd services.

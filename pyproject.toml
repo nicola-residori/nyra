@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nyra"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "pydantic>=2.8",
+  "httpx>=0.27",
+  "jinja2>=3.1",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["router*", "admin*", "shared*"]
+exclude = ["tests*", "deploy*", "docs*", "voice*", "memory*", "skills*", "homeassistant*", "data*"]
+
+[tool.setuptools.package-data]
+admin = [
+  "templates/*.html",
+  "static/css/*.css",
+  "static/js/*.js",
+]

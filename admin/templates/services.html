@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<h2>Services</h2>{% if error %}<div class="fault">{{error}}</div>{% endif %}<table><tbody>{% for item in items %}<tr>{% for k,v in item.items() %}{% if k != 'logs' %}<td><b>{{k}}</b><br>{{v}}</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody></table>{% endblock %}

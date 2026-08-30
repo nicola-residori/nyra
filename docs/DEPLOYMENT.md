@@ -1,18 +1,17 @@
-# Nyra Deployment
+# Router and Nyra Admin Deployment
 
-Nyra deployments must be reproducible from the repository. Manual installation steps used during development must eventually be represented by versioned scripts or documented procedures.
+The initial Debian 12 deployment runs two independent systemd services in the same CT:
 
-The repository is the source of truth; running containers are deployment targets.
+- Nyra Router: `0.0.0.0:8090`
+- Nyra Admin: `0.0.0.0:80`
 
-The first supported target is Proxmox using Debian containers. Planned first-level components include nyra-router, nyra-skills, nyra-memory, nyra-voice, and nyra-llm.
+Copy the repository to `/opt/nyra-router`, create `/opt/nyra-router/.env` from `.env.example`, then run:
 
-Installation-specific values such as IP addresses, DNS names, API tokens, credentials, Proxmox storage names, container IDs, and bridges must not be hardcoded.
-
-Planned deployment tooling:
-
-```text
-deploy/
-├── proxmox/
-├── bootstrap/
-└── systemd/
+```bash
+cd /opt/nyra-router
+bash deploy/bootstrap/router.sh
+systemctl status nyra-router --no-pager
+systemctl status nyra-admin --no-pager
+curl -fsS http://127.0.0.1:8090/health
+curl -fsS http://127.0.0.1/health
 ```

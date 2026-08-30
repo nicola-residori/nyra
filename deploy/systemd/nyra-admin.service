@@ -1,0 +1,14 @@
+[Unit]
+Description=Nyra Admin
+After=network-online.target nyra-router.service
+Wants=network-online.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nyra-router
+EnvironmentFile=-/opt/nyra-router/.env
+ExecStart=/opt/nyra-router/.venv/bin/uvicorn admin.app:app --host 0.0.0.0 --port 80
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=multi-user.target
