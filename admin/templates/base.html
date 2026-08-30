@@ -1,1 +1,31 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nyra Admin</title><link rel="stylesheet" href="/static/css/admin.css"></head><body><aside><h1>N.Y.R.A.</h1><small>ADMIN</small><nav><a href="/">Dashboard</a><a href="/logs">Logs</a><a href="/requests">Requests</a><a href="/sessions">Sessions</a><a href="/traces">Traces</a><a href="/services">Services</a></nav></aside><main>{% block content %}{% endblock %}</main><script src="/static/js/time.js"></script>{% block scripts %}{% endblock %}</body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nyra Admin</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+  <aside>
+    <div class="sidebar-brand">
+      <img class="sidebar-logo" src="/static/img/nyra.png" alt="N.Y.R.A. — Neural sYstem for Reasoning & Automation">
+      <div class="sidebar-title">
+        <h1>N.Y.R.A.</h1>
+        <small>ADMIN</small>
+      </div>
+    </div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/logs">Logs</a>
+      <a href="/requests">Requests</a>
+      <a href="/sessions">Sessions</a>
+      <a href="/traces">Traces</a>
+      <a href="/services">Services</a>
+    </nav>
+  </aside>
+  <main>{% block content %}{% endblock %}</main>
+  <script src="/static/js/time.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

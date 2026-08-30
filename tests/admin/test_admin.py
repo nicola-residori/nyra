@@ -76,3 +76,37 @@ def test_summary_pages_mark_timestamps_for_browser_localization():
         body = c.get('/requests').text
         assert 'data-nyra-timestamp="2026-08-30T20:00:00+00:00"' in body
         assert 'data-nyra-timestamp="2026-08-30T20:00:01+00:00"' in body
+
+def test_sidebar_contains_nyra_logo_and_dashboard_does_not_duplicate_it():
+    async def handler(req):
+        if req.url.path == '/health':
+            return httpx.Response(200, json={'service':'nyra-router','version':'0.1','status':'healthy','uptime':1,'timestamp':'x'})
+        return httpx.Response(200, json=[])
+
+    rc = RouterClient('http://router', transport=httpx.MockTransport(handler))
+    app = create_app(AdminSettings(), rc)
+    with TestClient(app) as c:
+        dashboard = c.get('/').text
+        assert '<div class="sidebar-brand">' in dashboard
+        assert '<img class="sidebar-logo" src="/static/img/nyra.png"' in dashboard
+        assert 'class="dashboard-hero"' not in dashboard
+
+
+def test_logs_page_uses_responsive_table_container():
+    async def handler(req):
+        if req.url.path == '/health':
+            return httpx.Response(200, json={'service':'nyra-router','version':'0.1','status':'healthy','uptime':1,'timestamp':'x'})
+        if req.url.path == '/v1/logs':
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=[])
+
+    rc = RouterClient('http://router', transport=httpx.MockTransport(handler))
+    app = create_app(AdminSettings(), rc)
+    with TestClient(app) as c:
+        logs = c.get('/logs').text
+        assert '<div class="table-shell">' in logs
+        css = c.get('/static/css/admin.css').text
+        assert '.table-shell' in css
+        assert 'overflow-x:auto' in css.replace(' ', '')
+        assert '@media(max-width:800px)' in css.replace(' ', '')
+        assert 'minmax(0,1fr)' in css.replace(' ', '')

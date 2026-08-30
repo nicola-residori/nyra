@@ -1,1 +1,8 @@
-{% extends "base.html" %}{% block content %}<h2>Dashboard</h2><section class="dashboard-hero"><img class="nyra-logo" src="/static/img/nyra.png" alt="N.Y.R.A. — Neural sYstem for Reasoning & Automation"><div>{% if router_error %}<div class="fault">Router unavailable: {{router_error}}</div>{% else %}<div class="card"><b>Router</b><span class="ok">{{router_health.status}}</span><p>Version {{router_health.version}} · uptime {{router_health.uptime}}s</p></div>{% endif %}</div></section>{% endblock %}
+{% extends "base.html" %}{% block content %}
+<h2>Dashboard</h2>
+{% if router_error %}
+<div class="fault">Router unavailable: {{router_error}}</div>
+{% else %}
+<div class="card"><b>Router</b><span class="ok">{{router_health.status}}</span><p>Version {{router_health.version}} · uptime {{router_health.uptime}}s</p></div>
+{% endif %}
+{% endblock %}
