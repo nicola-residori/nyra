@@ -4,6 +4,7 @@ from enum import StrEnum
 from typing import Any
 import re
 from pydantic import BaseModel, Field, field_validator
+from shared.protocol.requests import validate_prefixed_uuid
 
 SPAN_RE = re.compile(r"^[A-Z0-9_-]+#[a-z0-9_]+#[A-Z0-9]{8}$")
 
@@ -20,8 +21,8 @@ class LogRecord(BaseModel):
     level: LogLevel
     kind: LogKind
     event: str
-    session_id: str
-    request_id: str
+    session_id: str | None = None
+    request_id: str | None = None
     trace_id: str
     span_id: str
     parent_span_id: str | None = None
@@ -49,6 +50,21 @@ class LogRecord(BaseModel):
         if not value.strip():
             raise ValueError("event is required")
         return value
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, value: str | None) -> str | None:
+        return validate_prefixed_uuid(value, "ses")
+
+    @field_validator("request_id", "origin_request_id")
+    @classmethod
+    def validate_request_ids(cls, value: str | None) -> str | None:
+        return validate_prefixed_uuid(value, "req")
+
+    @field_validator("trace_id")
+    @classmethod
+    def validate_trace_id(cls, value: str) -> str:
+        return validate_prefixed_uuid(value, "trc")
 
     @field_validator("span_id", "parent_span_id")
     @classmethod

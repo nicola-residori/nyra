@@ -18,18 +18,34 @@ class SQLiteObservabilityStore:
 
     def initialize(self):
         with self._connect() as c:
-            c.execute('''CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                schema_version INTEGER NOT NULL,
-                timestamp TEXT NOT NULL,
-                ct TEXT NOT NULL, level TEXT NOT NULL, kind TEXT NOT NULL, event TEXT NOT NULL,
-                session_id TEXT NOT NULL, request_id TEXT NOT NULL, trace_id TEXT NOT NULL, span_id TEXT NOT NULL,
-                parent_span_id TEXT, origin_request_id TEXT, operation TEXT, result TEXT, message TEXT,
-                session_elapsed_ms REAL, request_elapsed_ms REAL, trace_elapsed_ms REAL, span_elapsed_ms REAL,
-                params_json TEXT NOT NULL, payload_json TEXT
-            )''')
+            self._create_logs_table(c)
+            columns = {row[1]: row for row in c.execute("PRAGMA table_info(logs)")}
+            if columns["session_id"][3] or columns["request_id"][3]:
+                self._migrate_nullable_request_columns(c)
             for col in ["timestamp","ct","level","kind","event","session_id","request_id","trace_id","span_id"]:
                 c.execute(f"CREATE INDEX IF NOT EXISTS idx_logs_{col} ON logs({col})")
+
+    @staticmethod
+    def _create_logs_table(c, table_name: str = "logs"):
+        c.execute(f'''CREATE TABLE IF NOT EXISTS {table_name} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            schema_version INTEGER NOT NULL,
+            timestamp TEXT NOT NULL,
+            ct TEXT NOT NULL, level TEXT NOT NULL, kind TEXT NOT NULL, event TEXT NOT NULL,
+            session_id TEXT, request_id TEXT, trace_id TEXT NOT NULL, span_id TEXT NOT NULL,
+            parent_span_id TEXT, origin_request_id TEXT, operation TEXT, result TEXT, message TEXT,
+            session_elapsed_ms REAL, request_elapsed_ms REAL, trace_elapsed_ms REAL, span_elapsed_ms REAL,
+            params_json TEXT NOT NULL, payload_json TEXT
+        )''')
+
+    def _migrate_nullable_request_columns(self, c):
+        c.execute("DROP TABLE IF EXISTS logs_v1_nullable")
+        self._create_logs_table(c, "logs_v1_nullable")
+        columns = [row[1] for row in c.execute("PRAGMA table_info(logs)")]
+        names = ",".join(columns)
+        c.execute(f"INSERT INTO logs_v1_nullable ({names}) SELECT {names} FROM logs")
+        c.execute("DROP TABLE logs")
+        c.execute("ALTER TABLE logs_v1_nullable RENAME TO logs")
 
     def insert_logs(self, records: Iterable[LogRecord]):
         rows=[]
@@ -76,7 +92,10 @@ class SQLiteObservabilityStore:
     def _group(self,key: str, filters=None):
         logs=self.query_logs({**(filters or {}),"limit":500})
         groups={}
-        for row in sorted(logs,key=lambda x:x["timestamp"]): groups.setdefault(row[key],[]).append(row)
+        for row in sorted(logs,key=lambda x:x["timestamp"]):
+            if row[key] is None:
+                continue
+            groups.setdefault(row[key],[]).append(row)
         out=[]
         for ident, rs in groups.items():
             out.append({key:ident,"start_time":rs[0]["timestamp"],"end_time":rs[-1]["timestamp"],"count":len(rs),

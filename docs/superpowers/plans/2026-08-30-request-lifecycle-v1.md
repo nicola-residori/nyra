@@ -13,9 +13,9 @@
 ## Global Constraints
 
 - Repository code, comments, documentation, API names, technical log events, commit messages, and test data are English.
-- `session_id`, `request_id`, and `trace_id` are UUIDs; `span_id` remains `CT#operation#random`.
+- `session_id`, `request_id`, and `trace_id` are canonical prefixed UUIDs (`ses_<UUID>`, `req_<UUID>`, `trc_<UUID>`); `span_id` remains `CT#operation#random`.
 - Trusted ingress creates session/request UUIDs; Router creates trace UUIDs.
-- Clarification follow-ups reuse session/request UUIDs and get a new trace UUID.
+- Clarification follow-ups reuse session/request UUIDs and get a new `trc_<UUID>` trace ID.
 - `closed` is authoritative: the ingress MUST NOT open or resume follow-up.
 - Jobs have null session/request UUIDs and may carry `origin_request_id`.
 - Router owns Speaker-ID initiation for `ha_speaker`; Home Assistant must not perform it for Router.
@@ -68,7 +68,7 @@ Keep existing observability persistence in `router/storage/sqlite.py`; lifecycle
 
 **Interfaces:**
 - Produces `ExecutionType`, `RequestStatus`, `CloseReason`, `RequestSource`, `TrustedIdentity`, `RequestInput`, `NyraRequest`, `NyraResponseBody`, `NyraRequestResponse`.
-- UUID-bearing fields use `UUID | None`.
+- Correlation fields use canonical prefixed UUID strings and nullable values where allowed by the spec.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -207,7 +207,7 @@ git commit -m "feat: define router event protocol"
 ```python
 class RequestStateStore:
     def create(self, state: PersistedRequestState) -> None: ...
-    def get(self, request_id: UUID) -> PersistedRequestState | None: ...
+    def get(self, request_id: str) -> PersistedRequestState | None: ...
     def update(self, state: PersistedRequestState) -> None: ...
     def expire_due(self, now: datetime) -> int: ...
 ```
@@ -364,7 +364,7 @@ Dependencies are injected: request store, event broker, logger, clock, trace UUI
 - [ ] **Step 1: Write failing lifecycle tests**
 
 Test:
-- Router generates a new trace UUID;
+- Router generates a new `trc_<UUID>` trace ID;
 - ingress session/request UUIDs are preserved;
 - first request state is persisted;
 - a second independent request receives its own state;
@@ -498,7 +498,7 @@ git commit -m "feat: add authoritative session closure"
 
 ```python
 class SpeakerIdentityPort(Protocol):
-    async def identify(self, request: NyraRequest, trace_id: UUID) -> str | None: ...
+    async def identify(self, request: NyraRequest, trace_id: str) -> str | None: ...
 ```
 
 - [ ] **Step 1: Add failing integration tests**
@@ -826,7 +826,7 @@ Do not claim the milestone complete unless the fresh verification commands above
 
 ### Spec coverage
 - Synchronous `/v1/requests`: Tasks 6, 11.
-- UUID ownership and clarification trace semantics: Tasks 1, 3, 6, 7.
+- prefixed UUID ownership and clarification trace semantics: Tasks 1, 3, 6, 7.
 - Jobs and `origin_request_id`: Tasks 1, 6.
 - Identity outcomes and Router-owned SID initiation: Tasks 4, 9.
 - Request persistence and expiry: Tasks 3, 7, 14.
@@ -842,4 +842,4 @@ Do not claim the milestone complete unless the fresh verification commands above
 No unresolved placeholders or unspecified implementation steps are intentionally present. Production service migrations are explicitly outside this milestone.
 
 ### Type consistency
-Protocol enums and lifecycle interfaces use the same names throughout this plan. UUID ownership and `closed` semantics match the approved design spec.
+Protocol enums and lifecycle interfaces use the same names throughout this plan. prefixed UUID ownership and `closed` semantics match the approved design spec.

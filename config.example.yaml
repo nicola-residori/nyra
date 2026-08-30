@@ -3,3 +3,7 @@ router:
   port: 8090
   database_path: data/logs.db
   version: 0.1.0
+  clarification_timeout_seconds: 120
+  websocket_queue_size: 100
+  websocket_heartbeat_seconds: 30
+  ingress_token: null

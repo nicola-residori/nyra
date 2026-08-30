@@ -1,7 +1,7 @@
 import re, secrets, uuid
 
 def _prefixed(prefix: str) -> str:
-    return f"{prefix}_{uuid.uuid4().hex}"
+    return f"{prefix}_{uuid.uuid4()}"
 
 def generate_session_id() -> str: return _prefixed("ses")
 def generate_request_id() -> str: return _prefixed("req")

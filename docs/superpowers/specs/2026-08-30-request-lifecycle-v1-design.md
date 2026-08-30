@@ -1,7 +1,7 @@
 # N.Y.R.A. Request Lifecycle v1 Design
 
 ## Goal
-Define the canonical synchronous user-request lifecycle for Router: ingress metadata, UUID ownership, clarification traces, forced conversational closure, jobs, identity, interaction states, WebSocket delivery, and observability.
+Define the canonical synchronous user-request lifecycle for Router: ingress metadata, prefixed UUID ownership, clarification traces, forced conversational closure, jobs, identity, interaction states, WebSocket delivery, and observability.
 
 ## Ingress
 Trusted user clients call `POST /v1/requests` synchronously. The call ends with `completed`, `needs_clarification`, `closed`, or failure.
@@ -20,12 +20,12 @@ Initial types: `ha_speaker`, `ha_assist`, `job`, `nyra_ui`.
 HA must not send Memory context, entity dumps, policies, routing decisions, skill choices, or LLM instructions.
 
 ## Identifier semantics
-`session_id`, `request_id`, and `trace_id` are UUIDs. `span_id` remains `CT#operation#random`.
+`session_id`, `request_id`, and `trace_id` use semantic prefixes plus UUIDs: `ses_<UUID>`, `req_<UUID>`, and `trc_<UUID>`. `span_id` remains `CT#operation#random`.
 
 - `session_id`: created by the trusted user ingress and propagated unchanged.
 - `request_id`: created by the trusted ingress for a new functional user request.
 - Clarification follow-ups keep the same session/request UUIDs.
-- `trace_id`: created by Router for each technical execution/turn. A clarification follow-up gets a new trace UUID.
+- `trace_id`: created by Router for each technical execution/turn as `trc_<UUID>`. A clarification follow-up gets a new trace ID.
 - One operation keeps the same span ID from REQUEST through intermediate logs to RESPONSE or FAULT.
 
 Hierarchy: `SESSION -> REQUEST -> one or more TRACES -> SPANS`.
@@ -34,8 +34,8 @@ Hierarchy: `SESSION -> REQUEST -> one or more TRACES -> SPANS`.
 Background jobs have no active session or request:
 - `session_id = null`
 - `request_id = null`
-- `trace_id = UUID`
-- `origin_request_id = UUID | null`
+- `trace_id = trc_<UUID>`
+- `origin_request_id = req_<UUID> | null`
 
 `origin_request_id` links a delayed job to the user request that created it. Pure internal jobs leave it null.
 
@@ -100,9 +100,9 @@ The canonical request statuses are:
 ```json
 {
   "status": "closed",
-  "session_id": "UUID",
-  "request_id": "UUID",
-  "trace_id": "UUID",
+  "session_id": "ses_<UUID>",
+  "request_id": "req_<UUID>",
+  "trace_id": "trc_<UUID>",
   "response": {
     "text": "Fatto."
   },
@@ -150,9 +150,9 @@ Completed example:
 ```json
 {
   "status": "completed",
-  "session_id": "UUID",
-  "request_id": "UUID",
-  "trace_id": "UUID",
+  "session_id": "ses_<UUID>",
+  "request_id": "req_<UUID>",
+  "trace_id": "trc_<UUID>",
   "response": {"text": "Fatto."}
 }
 ```
@@ -210,7 +210,7 @@ Repository code, comments, docs, API names, technical log events, and test data 
 ## Trust
 Only authenticated trusted ingress clients may submit ingress-owned identifiers and trusted identity.
 
-Router validates UUID syntax, type, type-specific required fields, caller authorization for the claimed type, and identity provenance. Downstream services cannot override trusted session/request/source/identity fields.
+Router validates prefixed UUID syntax, type, type-specific required fields, caller authorization for the claimed type, and identity provenance. Downstream services cannot override trusted session/request/source/identity fields.
 
 ## V1 implementation scope
 This milestone provides:
@@ -224,6 +224,20 @@ This milestone provides:
 - WebSocket events/subscriptions
 - reconnect/resync contract support
 - lifecycle observability
-- tests for UUID ownership, clarification trace reuse, forced closure/no-follow-up semantics, jobs, identity outcomes, and WebSocket state behavior
+- tests for prefixed UUID ownership, clarification trace reuse, forced closure/no-follow-up semantics, jobs, identity outcomes, and WebSocket state behavior
 
 Migration of Skills, Memory, Voice, and the production HA adapter follows later.
+
+
+## Correlation ID Format
+
+Canonical correlation identifiers are human-readable prefixed UUIDs:
+
+```text
+session_id = ses_<UUID>
+request_id = req_<UUID>
+trace_id   = trc_<UUID>
+span_id    = CT#operation#random
+```
+
+The prefixes are part of the canonical identifier and MUST be preserved end-to-end. Job executions keep `session_id` and `request_id` null while always carrying a `trc_<UUID>` trace ID. Historical observability rows are preserved during schema migration, but newly ingested v1 records must use canonical prefixed IDs.

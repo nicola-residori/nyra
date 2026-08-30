@@ -6,37 +6,32 @@ Nyra v1.0-dev
 
 ## Current milestone
 
-Router foundation, centralized logging/tracing, and Nyra Admin.
+Router Request Lifecycle v1 foundation implemented in the working package.
 
-## Approved deployment
+## Implemented foundation
+
+- Router and Admin observability foundation
+- canonical correlation IDs: `ses_<UUID>`, `req_<UUID>`, `trc_<UUID>`
+- nullable session/request IDs for job traces
+- synchronous `POST /v1/requests`
+- persisted clarification state with new trace per continuation
+- authoritative `closed` result and `SESSION_CLOSED` event
+- Router-owned speaker identity initiation boundary and identity outcomes
+- Memory / Skill Check / Skill Execution / LLM interaction-state boundaries
+- persistent `WS /v1/events` with authentication, subscriptions, heartbeat, reconnect-compatible state resynchronization
+- lifecycle observability
+
+## Deployment
 
 - `nyra-router`: port `8090`
 - `nyra-admin`: port `80`
 
-Router and Admin are separate applications and separate systemd services.
+Router and Admin remain separate applications.
 
-They may initially run in the same Proxmox container, but this is only a
-deployment choice.
+## Migration status
 
-Nyra Admin communicates with Router exclusively through Router APIs and does not
-access Router storage directly.
-
-## Current design status
-
-The design for Router foundation, Logging/Tracing v1, and Nyra Admin v1 has been
-written and is awaiting final review before implementation planning.
-
-## Existing alpha services
-
-The current Nyra alpha implementation remains operational while Nyra v1 is
-developed.
-
-No alpha component will be removed until its v1 replacement is validated.
+Production Skills, Memory, Voice, and Home Assistant are not yet migrated to the v1 Router lifecycle. Existing alpha services remain operational until their replacements are validated.
 
 ## Next step
 
-Review and approve:
-
-`docs/specs/2026-08-30-router-logging-admin-v1-design.md`
-
-After approval, create the implementation plan and then implement Milestone 1.
+Validate and deploy the Request Lifecycle v1 Router package, then implement the thin Home Assistant adapter against `POST /v1/requests` and `WS /v1/events`.
