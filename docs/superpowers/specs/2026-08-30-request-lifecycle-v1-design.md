@@ -1,10 +1,10 @@
 # N.Y.R.A. Request Lifecycle v1 Design
 
 ## Goal
-Define the canonical synchronous user-request lifecycle for Router: ingress metadata, UUID ownership, clarification traces, jobs, identity, interaction states, WebSocket delivery, and observability.
+Define the canonical synchronous user-request lifecycle for Router: ingress metadata, UUID ownership, clarification traces, forced conversational closure, jobs, identity, interaction states, WebSocket delivery, and observability.
 
 ## Ingress
-Trusted user clients call `POST /v1/requests` synchronously. The call ends with `completed`, `needs_clarification`, or failure.
+Trusted user clients call `POST /v1/requests` synchronously. The call ends with `completed`, `needs_clarification`, `closed`, or failure.
 
 Ingress provides only raw user input plus minimum trusted metadata:
 - `type`
@@ -77,6 +77,73 @@ A `needs_clarification` response returns the same session/request IDs and the cu
 
 Clarification expiration is configurable; v1 default is 120 seconds. Expired pending requests become `expired`.
 
+## Request terminal statuses
+The canonical request statuses are:
+- `completed`
+- `needs_clarification`
+- `closed`
+- `failed`
+- `expired`
+
+`completed` means the functional request completed normally. The ingress may apply its normal conversational/follow-up behavior.
+
+`needs_clarification` means the functional request remains open and Router expects continuation using the same `session_id` and `request_id`.
+
+`closed` is an authoritative Router instruction to terminate the conversational session after any response has been rendered. The ingress MUST NOT open or resume follow-up after receiving `closed`.
+
+`failed` represents a failed execution.
+
+`expired` represents a previously pending request that can no longer be resumed.
+
+### Closed response
+
+```json
+{
+  "status": "closed",
+  "session_id": "UUID",
+  "request_id": "UUID",
+  "trace_id": "UUID",
+  "response": {
+    "text": "Fatto."
+  },
+  "close_reason": "direct_command"
+}
+```
+
+`response` may be null when no spoken/displayed acknowledgement is required.
+
+Stable initial close reasons:
+- `explicit_close`
+- `direct_command`
+- `alarm_dismissed`
+- `timeout`
+- `policy`
+
+Close reasons explain why closure occurred; they do not change the protocol behavior of `closed`.
+
+## Forced closure and alarms
+Forced closure is part of the Router protocol rather than a Home Assistant workaround.
+
+A direct command may return `closed` when its semantics require completion without conversational follow-up.
+
+For an active alarm, the alarm execution itself may be a background job with no active session/request IDs and an optional `origin_request_id`. If the user invokes Nyra to dismiss the alarm, that new user interaction receives its own session/request/trace identifiers. Router handles the alarm dismissal and returns `closed`, optionally with `response = null`.
+
+The ingress then:
+1. stops/renders the requested action;
+2. does not enter follow-up listening;
+3. returns the speaker/client to `IDLE`.
+
+This prevents an alarm-dismiss wake word from accidentally opening a new conversational follow-up.
+
+## Session closure event
+Router emits a stable technical event when it authoritatively closes a conversational session:
+
+`SESSION_CLOSED`
+
+The event is correlated with available session/request/trace/source identifiers and carries the stable close reason.
+
+This event is observable and may also be delivered through the real-time event channel where useful. The HTTP `status = closed` remains the authoritative command-channel result for the active request.
+
 ## HTTP response
 Completed example:
 
@@ -89,8 +156,6 @@ Completed example:
   "response": {"text": "Fatto."}
 }
 ```
-
-Clarification uses `status = needs_clarification` and a user-facing question.
 
 ## Real-time event channel
 Command channel: `POST /v1/requests`, one synchronous call per interaction turn/trace.
@@ -138,7 +203,7 @@ Operational Context Resolution is deterministic and always performed when applic
 Every technical operation follows:
 `REQUEST -> zero or more EVENT/DEBUG/WARN -> RESPONSE or FAULT`, with the same span ID.
 
-Lifecycle, identity outcomes, state changes, Memory operations, Skill checks, and WebSocket lifecycle use stable English technical event names.
+Lifecycle, identity outcomes, `SESSION_CLOSED`, state changes, Memory operations, Skill checks, and WebSocket lifecycle use stable English technical event names.
 
 Repository code, comments, docs, API names, technical log events, and test data are English. Raw user input and user-facing responses may use the interaction language.
 
@@ -153,11 +218,12 @@ This milestone provides:
 - synchronous `/v1/requests`
 - Router-created trace UUIDs
 - persistent request/clarification state
+- authoritative `closed` response semantics and `SESSION_CLOSED`
 - job-compatible execution context
 - interaction-state model
 - WebSocket events/subscriptions
 - reconnect/resync contract support
 - lifecycle observability
-- tests for UUID ownership, clarification trace reuse, jobs, identity outcomes, and WebSocket state behavior
+- tests for UUID ownership, clarification trace reuse, forced closure/no-follow-up semantics, jobs, identity outcomes, and WebSocket state behavior
 
 Migration of Skills, Memory, Voice, and the production HA adapter follows later.
