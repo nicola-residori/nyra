@@ -1,4 +1,0 @@
-# ESPHome Device Builder entrypoint. Private substitutions are local and gitignored.
-substitutions: !include device_secrets/nyra-mansarda.yaml
-packages:
-  device: !include devices/nyra-mansarda.yaml
