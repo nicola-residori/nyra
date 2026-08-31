@@ -1,0 +1,25 @@
+# Example device file. Prefer generating a speaker with tools/new-speaker.py.
+# Secrets are NOT named per room here: the top-level entrypoint injects the
+# device-local api_encryption_key and ota_password substitutions.
+substitutions:
+  device_name: nyra-room
+  name: nyra-room
+  friendly_name: "Nyra Room"
+  source_id: nyra-room
+  posix_timezone: "CET-1CEST,M3.5.0,M10.5.0/3"
+  volume_min: "0.4"
+  volume_max: "0.8"
+  hidden_ssid: "false"
+  wakeword_model: "/config/esphome/wakewords/nira.json"
+  nyra_assets_dir: "/config/esphome/assets"
+
+packages:
+  nyra: !include ../packages/nyra-speaker.yaml
+
+api:
+  encryption:
+    key: "${api_encryption_key}"
+
+ota:
+  - platform: esphome
+    password: "${ota_password}"

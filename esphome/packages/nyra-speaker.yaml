@@ -1,0 +1,191 @@
+# Shared Nyra ESPHome speaker package.
+# Hardware is provided by the pinned Waveshare ESP32-S3 Audio VA package.
+# Room/device identity belongs only in esphome/devices/*.yaml.
+
+packages:
+  waveshare_audio_va:
+    url: https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va
+    ref: v1.0.0
+    files:
+      - base/core.yaml
+    refresh: 1d
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  hidden: ${hidden_ssid}
+
+micro_wake_word:
+  models:
+    - model: ${wakeword_model}
+      id: nira_model
+
+# Router/HA owns semantic pipeline state. Firmware owns rendering only.
+# These public effect names are the contract consumed by the Nyra HA adapter.
+light:
+  - id: !extend status_ring
+    name: "Nyra Status Ring"
+    effects:
+      - addressable_lambda:
+          name: "nyra_listening_white_fast"
+          update_interval: 90ms
+          lambda: |-
+            const bool on = ((millis() / 180) % 2) == 0;
+            it.all() = on ? Color(255, 255, 255) : Color(20, 20, 20);
+
+      - addressable_lambda:
+          name: "nyra_identifying_warm_white_comet"
+          update_interval: 75ms
+          lambda: |-
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.55f, 0.25f};
+            for (int d = 0; d < 3 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = Color(255 * tail[d], 215 * tail[d], 150 * tail[d]);
+            }
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_identity_green_2blink"
+          update_interval: 40ms
+          lambda: |-
+            static uint32_t started = 0;
+            if (initial_run) started = millis();
+            const uint32_t t = millis() - started;
+            const bool on = (t < 180) || (t >= 300 && t < 480);
+            it.all() = on ? Color(0, 255, 0) : Color(0, 0, 0);
+
+      - addressable_lambda:
+          name: "nyra_identity_red_2blink"
+          update_interval: 40ms
+          lambda: |-
+            static uint32_t started = 0;
+            if (initial_run) started = millis();
+            const uint32_t t = millis() - started;
+            const bool on = (t < 180) || (t >= 300 && t < 480);
+            it.all() = on ? Color(255, 0, 0) : Color(0, 0, 0);
+
+      - addressable_lambda:
+          name: "nyra_identity_blue_2blink"
+          update_interval: 40ms
+          lambda: |-
+            static uint32_t started = 0;
+            if (initial_run) started = millis();
+            const uint32_t t = millis() - started;
+            const bool on = (t < 180) || (t >= 300 && t < 480);
+            it.all() = on ? Color(0, 120, 255) : Color(0, 0, 0);
+
+      - addressable_lambda:
+          name: "nyra_processing_local_turquoise_comet"
+          update_interval: 70ms
+          lambda: |-
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.60f, 0.30f, 0.12f};
+            for (int d = 0; d < 4 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = Color(0, 210 * tail[d], 210 * tail[d]);
+            }
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_processing_global_rainbow_comet"
+          update_interval: 70ms
+          lambda: |-
+            static int head = 0;
+            static uint8_t phase = 0;
+            if (initial_run) { head = 0; phase = 0; }
+            const int n = it.size();
+            auto rainbow = [](uint8_t hue, float brightness) -> Color {
+              uint8_t region = hue / 43;
+              uint8_t remainder = (hue - region * 43) * 6;
+              uint8_t p = 0, q = 255 - remainder, t = remainder;
+              uint8_t r, g, b;
+              switch (region) {
+                case 0: r = 255; g = t; b = p; break;
+                case 1: r = q; g = 255; b = p; break;
+                case 2: r = p; g = 255; b = t; break;
+                case 3: r = p; g = q; b = 255; break;
+                case 4: r = t; g = p; b = 255; break;
+                default: r = 255; g = p; b = q; break;
+              }
+              return Color(r * brightness, g * brightness, b * brightness);
+            };
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.72f, 0.48f, 0.28f, 0.14f};
+            for (int d = 0; d < 5 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = rainbow((uint8_t)(phase - d * 42), tail[d]);
+            }
+            head = (head + 1) % n;
+            phase += 7;
+
+      - addressable_lambda:
+          name: "nyra_using_tool_yellow_comet"
+          update_interval: 70ms
+          lambda: |-
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.60f, 0.30f, 0.12f};
+            for (int d = 0; d < 4 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = Color(255 * tail[d], 175 * tail[d], 0);
+            }
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_speaking_purple_audio"
+          update_interval: 60ms
+          lambda: |-
+            // The Waveshare base package does not expose PCM amplitude to light effects.
+            // Render SPEAKING as a lively rotating purple pulse. A future amplitude
+            // hook can replace this without changing the public effect contract.
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(18, 0, 28);
+            it[head] = Color(180, 0, 255);
+            it[(head - 1 + n) % n] = Color(90, 0, 150);
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_error_red"
+          update_interval: 100ms
+          lambda: |-
+            const bool on = ((millis() / 250) % 2) == 0;
+            it.all() = on ? Color(255, 0, 0) : Color(45, 0, 0);
+
+# Atomic close feedback endpoint consumed by the HA bridge:
+# local chime + blue double blink. No Router round-trip for rendering details.
+audio_file:
+  - id: nyra_close_sound
+    file: ${nyra_assets_dir}/nyra_close.wav
+
+script:
+  - id: nyra_close_feedback_sequence
+    mode: restart
+    then:
+      - script.execute:
+          id: play_sound
+          priority: true
+          sound_file: !lambda 'return id(nyra_close_sound);'
+      - light.turn_on:
+          id: status_ring
+          effect: "nyra_identity_blue_2blink"
+      - delay: 650ms
+      - light.turn_off: status_ring
+
+button:
+  - platform: template
+    id: nyra_close_feedback
+    name: "Nyra Close Feedback"
+    entity_category: diagnostic
+    on_press:
+      - script.execute: nyra_close_feedback_sequence
