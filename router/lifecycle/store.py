@@ -79,6 +79,10 @@ class RequestStateStore:
             row = conn.execute("SELECT * FROM request_states WHERE request_id=?", (str(request_id),)).fetchone()
         return self._decode(row)
 
+    def get_session_id_for_request(self, request_id: str | UUID) -> str | None:
+        state = self.get(request_id)
+        return state.session_id if state is not None else None
+
     def get_latest_for_session(self, session_id: str) -> PersistedRequestState | None:
         with self._connect() as conn:
             row = conn.execute(

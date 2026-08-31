@@ -6,7 +6,7 @@ Nyra v1.0-dev
 
 ## Current milestone
 
-Router Request Lifecycle v1 foundation implemented in the working package.
+Shared Protocol + Router Component Contract v1 foundation implemented in the working package.
 
 ## Implemented foundation
 
@@ -20,6 +20,9 @@ Router Request Lifecycle v1 foundation implemented in the working package.
 - Memory / Skill Check / Skill Execution / LLM interaction-state boundaries
 - persistent `WS /v1/events` with authentication, subscriptions, heartbeat, reconnect-compatible state resynchronization
 - lifecycle observability
+- shared Component Contract v1 protocol primitives for correlation, service status, RequestContext, semantics, execution, behaviors, and capabilities
+- Router `/health` and `/ready` standardized on shared service status contracts
+- central observability reconstructs authoritative session correlation from `request_id` / `origin_request_id`
 
 ## Deployment
 
@@ -34,4 +37,4 @@ Production Skills, Memory, Voice, and Home Assistant are not yet migrated to the
 
 ## Next step
 
-Validate and deploy the Request Lifecycle v1 Router package, then implement the thin Home Assistant adapter against `POST /v1/requests` and `WS /v1/events`.
+Validate and deploy the Shared Protocol + Router foundation before beginning one-at-a-time specialist component migrations.

@@ -48,7 +48,7 @@ def create_app(settings: RouterSettings | None = None):
     store = SQLiteObservabilityStore(settings.database_path)
     request_store = RequestStateStore(settings.database_path)
     event_broker = InteractionEventBroker(queue_size=settings.websocket_queue_size)
-    observability = ObservabilityService(store)
+    observability = ObservabilityService(store, request_store=request_store)
     lifecycle = RequestLifecycleService(
         store=request_store,
         broker=event_broker,
@@ -63,9 +63,14 @@ def create_app(settings: RouterSettings | None = None):
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        app.state.ready = False
         store.initialize()
         request_store.initialize()
-        yield
+        app.state.ready = True
+        try:
+            yield
+        finally:
+            app.state.ready = False
 
     app = FastAPI(title="Nyra Router", lifespan=lifespan)
     app.state.settings = settings
@@ -74,6 +79,7 @@ def create_app(settings: RouterSettings | None = None):
     app.state.observability = observability
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
+    app.state.ready = False
     app.state.uptime = lambda: round(monotonic() - started, 3)
     app.include_router(health_router)
     app.include_router(logs_router)

@@ -74,6 +74,14 @@ Operational context is resolved for every request. Examples include entity alias
 ### Semantic long-term memory
 Semantic memory is retrieved only when relevant. Downstream services do not directly access Memory; additional memory must be requested through a Router capability.
 
+## Component Contract v1 foundation
+
+Shared protocol contracts define correlation, service status, trusted `RequestContext`, semantic understanding, execution plans, platform-neutral behaviors, and typed capability primitives. They are common protocol building blocks, not a universal request payload.
+
+Distributed component calls carry only the correlation needed by the typed contract (`request_id` and/or `origin_request_id`, `trace_id`, optional `parent_span_id`). Child components do not own authoritative session context. Router reconstructs session correlation centrally from persisted request state so Admin can rebuild complete distributed activity.
+
+Service-to-service authentication is intentionally not introduced by Component Contract v1; the v1 trust boundary remains the documented trusted private network.
+
 ## Capability model
 
 Protected resources are accessed through Router capabilities, for example `Skills -> Router -> Home Assistant` and `LLM -> Router -> Memory`.

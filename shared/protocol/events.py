@@ -2,7 +2,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import StrEnum
 from pydantic import BaseModel, Field, field_validator
-from shared.protocol.requests import CloseReason, RequestSource, validate_prefixed_uuid
+from shared.protocol.ids import validate_prefixed_uuid
+from shared.protocol.requests import CloseReason, RequestSource
 
 
 class InteractionState(StrEnum):

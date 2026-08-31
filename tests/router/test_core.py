@@ -17,7 +17,7 @@ def test_ids_and_redaction():
 def test_health_ingest_query_and_redaction(tmp_path:Path):
     app=create_app(RouterSettings(database_path=tmp_path/'logs.db'))
     with TestClient(app) as c:
-        assert c.get('/health').json()['status']=='healthy'
+        assert c.get('/health').json()['status']=='HEALTHY'
         rec=sample(); assert c.post('/v1/logs/ingest',json={'records':[rec]}).json()['accepted']==1
         rows=c.get('/v1/logs',params={'trace_id':rec['trace_id']}).json(); assert len(rows)==1; assert rows[0]['params']['token']=='***REDACTED***'; assert rows[0]['payload']['authorization']=='***REDACTED***'
         assert c.get('/v1/traces/'+rec['trace_id']).status_code==200

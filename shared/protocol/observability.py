@@ -4,9 +4,7 @@ from enum import StrEnum
 from typing import Any
 import re
 from pydantic import BaseModel, Field, field_validator
-from shared.protocol.requests import validate_prefixed_uuid
-
-SPAN_RE = re.compile(r"^[A-Z0-9_-]+#[a-z0-9_]+#[A-Z0-9]{8}$")
+from shared.protocol.ids import SPAN_RE, validate_prefixed_uuid
 
 class LogLevel(StrEnum):
     TRACE="TRACE"; DEBUG="DEBUG"; INFO="INFO"; WARN="WARN"; ERROR="ERROR"; CRITICAL="CRITICAL"

@@ -1,7 +1,8 @@
 from __future__ import annotations
+from uuid import UUID
 from enum import StrEnum
 from typing import Any
-from uuid import UUID
+from shared.protocol.ids import validate_prefixed_uuid
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 

@@ -225,3 +225,25 @@ async def test_failed_decision_closes_lifecycle_span_with_fault(tmp_path):
     assert fault_record.result == "failed"
     assert fault_record.payload["status"] == "failed"
     assert not any(r.event == "REQUEST_COMPLETED" for r in collector.records)
+
+def test_lifecycle_constructs_authoritative_shared_request_context():
+    from shared.protocol.context import IdentityResolutionSource, RequestContext
+    from shared.protocol.ids import new_request_id, new_session_id, new_trace_id
+
+    svc = RequestLifecycleService(None, None, None, None, None, None, None)
+    req = NyraRequest.model_validate({
+        "type": "ha_assist",
+        "session_id": new_session_id(),
+        "request_id": new_request_id(),
+        "language": "it",
+        "source": {"id": "ha-voice", "area": "living_room"},
+        "identity": {"user_id": "user-123", "provider": "home_assistant", "confidence": 1.0},
+        "input": {"text": "accendi la luce"},
+    })
+    context = svc._build_request_context(
+        req, new_trace_id(), "user-123", ContextResult(data={"mode": "home"})
+    )
+    assert isinstance(context, RequestContext)
+    assert context.source == "ha-voice" and context.area == "living_room"
+    assert context.identity.user_id == "user-123"
+    assert context.identity.resolution_source is IdentityResolutionSource.TRUSTED_HA_IDENTITY

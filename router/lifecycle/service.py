@@ -7,7 +7,14 @@ from typing import Any, Protocol
 
 from router.lifecycle.identity import resolve_identity_outcome
 from router.lifecycle.models import PersistedRequestState
-from router.observability.ids import generate_span_id, generate_trace_id
+from shared.protocol.context import (
+    IdentityResolutionSource,
+    OperationalContext,
+    RequestContext,
+    RequestType,
+    ResolvedIdentity,
+)
+from shared.protocol.ids import new_span_id, new_trace_id
 from shared.protocol.events import InteractionState, InteractionStateChanged, SessionClosedEvent
 from shared.protocol.observability import LogKind, LogLevel, LogRecord
 from shared.protocol.requests import (
@@ -118,9 +125,50 @@ class RequestLifecycleService:
         self._log(request, trace_id, span_id, "INTERACTION_STATE_CHANGED", result=state.value,
                   params={"state": state.value, "source_id": request.source.id if request.source else None})
 
+    def _build_request_context(
+        self,
+        request: NyraRequest,
+        trace_id: str,
+        identity_user_id: str | None,
+        context: ContextResult,
+        previous_session_state: PersistedRequestState | None = None,
+    ) -> RequestContext:
+        if request.identity is not None:
+            identity_source = IdentityResolutionSource.TRUSTED_HA_IDENTITY
+        elif request.type is ExecutionType.HA_SPEAKER and identity_user_id not in (None, "guest"):
+            identity_source = IdentityResolutionSource.SPEAKER_IDENTIFICATION
+        elif (
+            previous_session_state is not None
+            and identity_user_id is not None
+            and identity_user_id == previous_session_state.identity_user_id
+        ):
+            identity_source = IdentityResolutionSource.SESSION_CONTINUITY
+        else:
+            identity_source = IdentityResolutionSource.GUEST_FALLBACK
+
+        identity = None
+        if request.type is not ExecutionType.JOB:
+            identity = ResolvedIdentity(
+                user_id=identity_user_id or "guest",
+                resolution_source=identity_source,
+            )
+
+        return RequestContext(
+            session_id=request.session_id,
+            request_id=request.request_id,
+            origin_request_id=request.origin_request_id,
+            trace_id=trace_id,
+            type=RequestType(request.type.value),
+            language=request.language,
+            source=request.source.id if request.source else None,
+            area=request.source.area if request.source else None,
+            identity=identity,
+            operational=OperationalContext(values=context.data),
+        )
+
     async def execute(self, request: NyraRequest) -> NyraRequestResponse:
-        trace_id = generate_trace_id()
-        span_id = generate_span_id("ROUTER", "request_lifecycle")
+        trace_id = new_trace_id()
+        span_id = new_span_id("ROUTER", "request_lifecycle")
         started = monotonic()
         self._log(request, trace_id, span_id, "REQUEST_RECEIVED", kind=LogKind.REQUEST,
                   payload={"type": request.type.value, "language": request.language,
@@ -186,6 +234,10 @@ class RequestLifecycleService:
                       params={"previous_user_id": resolution.previous_user_id,
                               "current_user_id": resolution.current_user_id})
 
+        request_context = self._build_request_context(
+            request, trace_id, identity_user_id, context, previous_session_state
+        )
+
         memory = None
         if context.semantic_memory_required:
             self._log(request, trace_id, span_id, "MEMORY_SEARCH", params={"required": True})
@@ -200,18 +252,18 @@ class RequestLifecycleService:
             await self._state(request, trace_id, span_id, InteractionState.LLM_REASONING)
             decision = await self.llm_port.reason(request, context, memory, pending_state)
 
-        if request.request_id is not None:
+        if request_context.request_id is not None:
             if existing is None:
                 persisted = PersistedRequestState(
-                    request_id=request.request_id,
-                    session_id=request.session_id,
+                    request_id=request_context.request_id,
+                    session_id=request_context.session_id,
                     type=request.type,
-                    language=request.language,
+                    language=request_context.language,
                     source=request.source,
-                    identity_user_id=identity_user_id,
+                    identity_user_id=request_context.identity.user_id if request_context.identity else None,
                     original_input=request.input.text,
                     status=decision.status,
-                    current_trace_id=trace_id,
+                    current_trace_id=request_context.trace_id,
                     pending_state=decision.pending_state,
                     created_at=now,
                     updated_at=now,
@@ -219,9 +271,9 @@ class RequestLifecycleService:
                 )
                 self.store.create(persisted)
             else:
-                existing.identity_user_id = identity_user_id
+                existing.identity_user_id = request_context.identity.user_id if request_context.identity else None
                 existing.status = decision.status
-                existing.current_trace_id = trace_id
+                existing.current_trace_id = request_context.trace_id
                 existing.pending_state = decision.pending_state
                 existing.updated_at = now
                 existing.expires_at = (now + timedelta(seconds=self.clarification_timeout_seconds)) if decision.status is RequestStatus.NEEDS_CLARIFICATION else None
@@ -233,9 +285,9 @@ class RequestLifecycleService:
             closed_event = SessionClosedEvent(
                 close_reason=decision.close_reason,
                 source=request.source,
-                session_id=request.session_id,
-                request_id=request.request_id,
-                trace_id=trace_id,
+                session_id=request_context.session_id,
+                request_id=request_context.request_id,
+                trace_id=request_context.trace_id,
             )
             await self.broker.publish_session_closed(closed_event)
             self._log(request, trace_id, span_id, "SESSION_CLOSED", result=decision.close_reason.value,
@@ -243,9 +295,9 @@ class RequestLifecycleService:
 
         return NyraRequestResponse(
             status=decision.status,
-            session_id=request.session_id,
-            request_id=request.request_id,
-            trace_id=trace_id,
+            session_id=request_context.session_id,
+            request_id=request_context.request_id,
+            trace_id=request_context.trace_id,
             response=NyraResponseBody(text=decision.text) if decision.text is not None else None,
             close_reason=decision.close_reason,
         )
