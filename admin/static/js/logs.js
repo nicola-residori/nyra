@@ -39,10 +39,26 @@ function copyButton(label,value){
   if(!value)return '';
   return `<button type="button" class="copy-button" data-copy="${esc(value)}">Copy ${esc(label)}</button>`;
 }
+async function writeClipboard(value){
+  const text=String(value??'');
+  if(navigator.clipboard&&typeof navigator.clipboard.writeText==='function'){
+    try{await navigator.clipboard.writeText(text);return true;}catch(_error){}
+  }
+  const textarea=document.createElement('textarea');
+  textarea.value=text;textarea.setAttribute('readonly','');
+  textarea.style.position='fixed';textarea.style.opacity='0';textarea.style.pointerEvents='none';
+  document.body.appendChild(textarea);textarea.focus();textarea.select();
+  let copied=false;
+  try{copied=document.execCommand('copy');}finally{document.body.removeChild(textarea);}
+  if(!copied)throw new Error('Clipboard copy failed');
+  return true;
+}
 function bindCopyButtons(root=document){
   root.querySelectorAll('[data-copy]').forEach(button=>button.onclick=async()=>{
-    await navigator.clipboard.writeText(button.dataset.copy||'');
-    const old=button.textContent;button.textContent='Copied';setTimeout(()=>button.textContent=old,900);
+    const old=button.textContent;
+    try{await writeClipboard(button.dataset.copy||'');button.textContent='Copied';}
+    catch(_error){button.textContent='Copy failed';}
+    setTimeout(()=>button.textContent=old,900);
   });
 }
 
