@@ -153,3 +153,30 @@ git check-ignore -v esphome/device_secrets/nyra-mansarda.yaml
 
 None of the real instance files should appear as untracked files in
 `git status`.
+
+## First boot, stable address, and Home Assistant onboarding
+
+After the first USB installation, complete the network and Home Assistant
+onboarding before treating the speaker as provisioned:
+
+1. Open the ESPHome Device Builder logs and verify that the speaker boots
+   successfully and connects to the expected Wi-Fi network.
+2. Note the speaker MAC address shown by ESPHome.
+3. In the local router/DHCP server, create a DHCP reservation for the speaker.
+   Use an installation-appropriate address; never commit the real MAC address
+   or reserved IP address to this public repository.
+4. Restart the speaker and verify in the ESPHome logs or router that it has
+   received the reserved address.
+5. Add/configure the discovered ESPHome device in Home Assistant.
+6. During Voice Satellite/voice assistant configuration, select **Nyra** as
+   the assistant for the speaker rather than leaving another/default assistant
+   selected.
+7. Verify that the ESPHome API is connected and that the expected speaker,
+   microphone, status-ring, restart, and voice-assistant entities are
+   available.
+8. After the initial USB installation and successful onboarding, use OTA for
+   normal firmware updates.
+
+A DHCP reservation is part of the recommended Nyra speaker provisioning
+baseline. Nyra configuration must still use logical device/source identity
+rather than depending on a hard-coded installation IP address.
