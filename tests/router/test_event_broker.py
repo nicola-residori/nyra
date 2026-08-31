@@ -1,7 +1,14 @@
 import asyncio
 import pytest
 from router.lifecycle.events import InteractionEventBroker
-from shared.protocol.events import EventCategory, InteractionState, InteractionStateChanged, SessionClosedEvent
+from shared.protocol.events import (
+    EventCategory,
+    IdentityFeedback,
+    IdentityFeedbackEvent,
+    InteractionState,
+    InteractionStateChanged,
+    SessionClosedEvent,
+)
 from shared.protocol.requests import CloseReason
 
 
@@ -10,13 +17,25 @@ async def test_broker_publishes_filters_and_resynchronizes_state():
     broker = InteractionEventBroker(queue_size=2)
     state_sub = await broker.subscribe({EventCategory.INTERACTION_STATE})
     session_sub = await broker.subscribe({EventCategory.SESSION})
-    event = InteractionStateChanged(state=InteractionState.MEMORY, source={"id":"speaker-a","area":"living-room"})
+    event = InteractionStateChanged(state=InteractionState.PROCESSING_LOCAL, source={"id":"speaker-a","area":"living-room"})
     await broker.publish_state(event)
-    assert (await asyncio.wait_for(state_sub.queue.get(), .2)).state is InteractionState.MEMORY
+    assert (await asyncio.wait_for(state_sub.queue.get(), .2)).state is InteractionState.PROCESSING_LOCAL
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(session_sub.queue.get(), .02)
     snaps = broker.snapshot("speaker-a")
-    assert len(snaps) == 1 and snaps[0].state is InteractionState.MEMORY
+    assert len(snaps) == 1 and snaps[0].state is InteractionState.PROCESSING_LOCAL
+
+
+@pytest.mark.asyncio
+async def test_identity_feedback_is_transient_and_not_snapshot_state():
+    broker = InteractionEventBroker(queue_size=2)
+    sub = await broker.subscribe({EventCategory.IDENTITY})
+    await broker.publish_identity_feedback(IdentityFeedbackEvent(
+        feedback=IdentityFeedback.IDENTITY_CHANGED, source={"id":"speaker-a"}
+    ))
+    event = await asyncio.wait_for(sub.queue.get(), .2)
+    assert event.feedback is IdentityFeedback.IDENTITY_CHANGED
+    assert broker.snapshot("speaker-a") == []
 
 
 @pytest.mark.asyncio
@@ -33,6 +52,6 @@ async def test_broker_session_closed_and_unsubscribe():
 async def test_slow_subscriber_is_dropped_instead_of_blocking():
     broker = InteractionEventBroker(queue_size=1)
     sub = await broker.subscribe({EventCategory.INTERACTION_STATE})
-    await broker.publish_state(InteractionStateChanged(state=InteractionState.PROCESSING))
-    await broker.publish_state(InteractionStateChanged(state=InteractionState.MEMORY))
+    await broker.publish_state(InteractionStateChanged(state=InteractionState.PROCESSING_LOCAL))
+    await broker.publish_state(InteractionStateChanged(state=InteractionState.PROCESSING_GLOBAL))
     assert sub not in broker.subscriptions

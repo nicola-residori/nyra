@@ -31,6 +31,16 @@ from shared.protocol.context import (
     ResolvedIdentity,
     TemporalContext,
 )
+from shared.protocol.events import (
+    EventCategory,
+    EventSubscription,
+    IdentityFeedback,
+    IdentityFeedbackEvent,
+    InteractionState,
+    InteractionStateChanged,
+    SessionClosedEvent,
+    StateSnapshot,
+)
 from shared.protocol.execution import (
     ExecutionPlan,
     ExecutionResult,
@@ -75,4 +85,6 @@ __all__ = [
     "ResolvedTarget", "StepResult", "StepStatus", "CorrelationContext", "new_request_id", "new_session_id",
     "new_span_id", "new_trace_id", "SemanticAction", "SemanticCondition", "SemanticConfidence", "SemanticParameter",
     "SemanticResult", "SemanticTarget", "SemanticTemporal", "SemanticTrigger", "ServiceState", "ServiceStatusResponse",
+    "EventCategory", "EventSubscription", "IdentityFeedback", "IdentityFeedbackEvent", "InteractionState",
+    "InteractionStateChanged", "SessionClosedEvent", "StateSnapshot",
 ]

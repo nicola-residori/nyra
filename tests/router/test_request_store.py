@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import sqlite3
+
 from router.lifecycle.models import PersistedRequestState
 from router.lifecycle.store import RequestStateStore
 from shared.protocol.requests import ExecutionType, RequestStatus
@@ -57,3 +59,34 @@ def test_store_returns_latest_request_for_session(tmp_path: Path):
     second.identity_user_id = "user-b"
     store.create(second)
     assert store.get_latest_for_session(first.session_id).request_id == second.request_id
+
+
+def test_store_explicitly_closes_connection_after_operation(tmp_path: Path):
+    store = RequestStateStore(tmp_path / "router.db")
+    raw = sqlite3.connect(tmp_path / "tracked.db")
+
+    class TrackingConnection:
+        def __init__(self, connection):
+            self.connection = connection
+            self.closed = False
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+        def __enter__(self):
+            self.connection.__enter__()
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return self.connection.__exit__(exc_type, exc, tb)
+
+        def close(self):
+            self.closed = True
+            self.connection.close()
+
+    tracked = TrackingConnection(raw)
+    store._connect = lambda: tracked
+
+    store.initialize()
+
+    assert tracked.closed is True

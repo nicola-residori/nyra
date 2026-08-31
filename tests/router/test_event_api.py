@@ -2,7 +2,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from router.app import create_app
 from router.config import RouterSettings
-from shared.protocol.events import InteractionState, InteractionStateChanged
+from shared.protocol.events import IdentityFeedback, IdentityFeedbackEvent, InteractionState, InteractionStateChanged
 import asyncio
 
 
@@ -10,12 +10,14 @@ def test_websocket_auth_subscribe_and_resync(tmp_path: Path):
     app=create_app(RouterSettings(database_path=tmp_path/"router.db", ingress_token="secret"))
     with TestClient(app) as client:
         with client.websocket_connect("/v1/events", headers={"Authorization":"Bearer secret"}) as ws:
-            ws.send_json({"action":"subscribe","categories":["interaction_state"]})
+            ws.send_json({"action":"subscribe","categories":["interaction_state","identity"]})
             assert ws.receive_json()["type"]=="subscribed"
-            asyncio.run(app.state.events.publish_state(InteractionStateChanged(state=InteractionState.MEMORY, source={"id":"speaker-a"})))
-            event=ws.receive_json(); assert event["event"]=="INTERACTION_STATE_CHANGED" and event["state"]=="MEMORY"
+            asyncio.run(app.state.events.publish_state(InteractionStateChanged(state=InteractionState.PROCESSING_LOCAL, source={"id":"speaker-a"})))
+            event=ws.receive_json(); assert event["event"]=="INTERACTION_STATE_CHANGED" and event["state"]=="PROCESSING_LOCAL"
+            asyncio.run(app.state.events.publish_identity_feedback(IdentityFeedbackEvent(feedback=IdentityFeedback.RECOGNIZED, source={"id":"speaker-a"})))
+            identity=ws.receive_json(); assert identity["event"]=="IDENTITY_FEEDBACK" and identity["feedback"]=="RECOGNIZED"
             ws.send_json({"action":"resync","source_id":"speaker-a"})
-            snap=ws.receive_json(); assert snap["type"]=="state_snapshot" and snap["states"][0]["state"]=="MEMORY"
+            snap=ws.receive_json(); assert snap["type"]=="state_snapshot" and snap["states"][0]["state"]=="PROCESSING_LOCAL"
 
 
 def test_websocket_rejects_bad_token(tmp_path: Path):

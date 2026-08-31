@@ -1,4 +1,5 @@
 from __future__ import annotations
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 import json
@@ -19,8 +20,17 @@ class RequestStateStore:
         conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
+    @contextmanager
+    def _connection(self):
+        conn = self._connect()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def initialize(self):
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute("""CREATE TABLE IF NOT EXISTS request_states (
                 request_id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
@@ -51,7 +61,7 @@ class RequestStateStore:
         )
 
     def create(self, state: PersistedRequestState) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute("""INSERT INTO request_states(
                 request_id,session_id,type,language,source_json,identity_user_id,original_input,status,
                 current_trace_id,pending_state_json,created_at,updated_at,expires_at)
@@ -59,7 +69,7 @@ class RequestStateStore:
 
     def update(self, state: PersistedRequestState) -> None:
         row = self._row(state)
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute("""UPDATE request_states SET
                 session_id=?,type=?,language=?,source_json=?,identity_user_id=?,original_input=?,status=?,
                 current_trace_id=?,pending_state_json=?,created_at=?,updated_at=?,expires_at=?
@@ -75,7 +85,7 @@ class RequestStateStore:
         return PersistedRequestState.model_validate(d)
 
     def get(self, request_id: str | UUID) -> PersistedRequestState | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute("SELECT * FROM request_states WHERE request_id=?", (str(request_id),)).fetchone()
         return self._decode(row)
 
@@ -84,7 +94,7 @@ class RequestStateStore:
         return state.session_id if state is not None else None
 
     def get_latest_for_session(self, session_id: str) -> PersistedRequestState | None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 "SELECT * FROM request_states WHERE session_id=? ORDER BY updated_at DESC, rowid DESC LIMIT 1",
                 (session_id,),
@@ -92,7 +102,7 @@ class RequestStateStore:
         return self._decode(row)
 
     def expire_due(self, now: datetime) -> int:
-        with self._connect() as conn:
+        with self._connection() as conn:
             cur = conn.execute("""UPDATE request_states SET status=?, updated_at=?
                 WHERE status=? AND expires_at IS NOT NULL AND expires_at<=?""",
                 (RequestStatus.EXPIRED.value, now.isoformat(), RequestStatus.NEEDS_CLARIFICATION.value, now.isoformat()))

@@ -1,0 +1,17 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nyra Router",
+        "description": "Connect Home Assistant to the Nyra Router.",
+        "data": {
+          "router_url": "Router URL",
+          "ingress_token": "Ingress token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to a ready Nyra Router"
+    }
+  }
+}

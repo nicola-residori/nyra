@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
-from router.lifecycle.identity import resolve_identity_outcome
+from router.lifecycle.identity import IdentityOutcome, resolve_identity_outcome
 from router.lifecycle.models import PersistedRequestState
 from shared.protocol.context import (
     IdentityResolutionSource,
@@ -15,7 +15,13 @@ from shared.protocol.context import (
     ResolvedIdentity,
 )
 from shared.protocol.ids import new_span_id, new_trace_id
-from shared.protocol.events import InteractionState, InteractionStateChanged, SessionClosedEvent
+from shared.protocol.events import (
+    IdentityFeedback,
+    IdentityFeedbackEvent,
+    InteractionState,
+    InteractionStateChanged,
+    SessionClosedEvent,
+)
 from shared.protocol.observability import LogKind, LogLevel, LogRecord
 from shared.protocol.requests import (
     CloseReason, ExecutionType, NyraRequest, NyraRequestResponse, NyraResponseBody, RequestStatus,
@@ -209,7 +215,7 @@ class RequestLifecycleService:
                     raise LifecycleConflict(f"request cannot resume from status {existing.status.value}")
                 pending_state = existing.pending_state
 
-        await self._state(request, trace_id, span_id, InteractionState.PROCESSING)
+        await self._state(request, trace_id, span_id, InteractionState.PROCESSING_LOCAL)
 
         previous_session_state = None
         if request.session_id is not None and existing is None:
@@ -222,7 +228,6 @@ class RequestLifecycleService:
             await self._state(request, trace_id, span_id, InteractionState.IDENTIFYING)
             identity_task = asyncio.create_task(self.identity_port.identify(request, trace_id))
 
-        await self._state(request, trace_id, span_id, InteractionState.MEMORY)
         context = await self.context_port.resolve(request, identity_user_id)
 
         if identity_task is not None:
@@ -233,6 +238,17 @@ class RequestLifecycleService:
                       result=resolution.current_user_id,
                       params={"previous_user_id": resolution.previous_user_id,
                               "current_user_id": resolution.current_user_id})
+            feedback = {
+                IdentityOutcome.IDENTIFIED: IdentityFeedback.RECOGNIZED,
+                IdentityOutcome.CONFIRMED: IdentityFeedback.RECOGNIZED,
+                IdentityOutcome.CHANGED: IdentityFeedback.IDENTITY_CHANGED,
+                IdentityOutcome.GUEST: IdentityFeedback.NOT_RECOGNIZED,
+            }[resolution.outcome]
+            await self.broker.publish_identity_feedback(IdentityFeedbackEvent(
+                feedback=feedback, source=request.source, session_id=request.session_id,
+                request_id=request.request_id, trace_id=trace_id,
+            ))
+            await self._state(request, trace_id, span_id, InteractionState.PROCESSING_LOCAL)
 
         request_context = self._build_request_context(
             request, trace_id, identity_user_id, context, previous_session_state
@@ -243,13 +259,11 @@ class RequestLifecycleService:
             self._log(request, trace_id, span_id, "MEMORY_SEARCH", params={"required": True})
             memory = await self.memory_port.search(request, identity_user_id, context)
 
-        await self._state(request, trace_id, span_id, InteractionState.SKILL_CHECK)
         match = await self.skill_port.check(request, context, memory, pending_state)
         if match.matched:
-            await self._state(request, trace_id, span_id, InteractionState.SKILL_EXECUTION)
             decision = await self.skill_port.execute(match, request, context, memory, pending_state)
         else:
-            await self._state(request, trace_id, span_id, InteractionState.LLM_REASONING)
+            await self._state(request, trace_id, span_id, InteractionState.PROCESSING_GLOBAL)
             decision = await self.llm_port.reason(request, context, memory, pending_state)
 
         if request_context.request_id is not None:
@@ -280,7 +294,7 @@ class RequestLifecycleService:
                 self.store.update(existing)
 
         if decision.status is RequestStatus.NEEDS_CLARIFICATION:
-            await self._state(request, trace_id, span_id, InteractionState.NEEDS_CLARIFICATION)
+            await self._state(request, trace_id, span_id, InteractionState.WAITING_CLARIFICATION)
         elif decision.status is RequestStatus.CLOSED:
             closed_event = SessionClosedEvent(
                 close_reason=decision.close_reason,

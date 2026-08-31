@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from enum import StrEnum
+
 from pydantic import BaseModel, Field, field_validator
+
 from shared.protocol.ids import validate_prefixed_uuid
 from shared.protocol.requests import CloseReason, RequestSource
 
@@ -9,19 +12,25 @@ from shared.protocol.requests import CloseReason, RequestSource
 class InteractionState(StrEnum):
     IDLE = "IDLE"
     LISTENING = "LISTENING"
-    SPEAKING = "SPEAKING"
-    PROCESSING = "PROCESSING"
+    TRANSCRIBING = "TRANSCRIBING"
     IDENTIFYING = "IDENTIFYING"
-    MEMORY = "MEMORY"
-    SKILL_CHECK = "SKILL_CHECK"
-    SKILL_EXECUTION = "SKILL_EXECUTION"
-    LLM_REASONING = "LLM_REASONING"
-    NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
+    PROCESSING_LOCAL = "PROCESSING_LOCAL"
+    PROCESSING_GLOBAL = "PROCESSING_GLOBAL"
+    USING_TOOL = "USING_TOOL"
+    WAITING_CLARIFICATION = "WAITING_CLARIFICATION"
+    SPEAKING = "SPEAKING"
     ERROR = "ERROR"
+
+
+class IdentityFeedback(StrEnum):
+    RECOGNIZED = "RECOGNIZED"
+    NOT_RECOGNIZED = "NOT_RECOGNIZED"
+    IDENTITY_CHANGED = "IDENTITY_CHANGED"
 
 
 class EventCategory(StrEnum):
     INTERACTION_STATE = "interaction_state"
+    IDENTITY = "identity"
     SESSION = "session"
 
 
@@ -51,6 +60,14 @@ class InteractionStateChanged(_CorrelationModel):
     category: EventCategory = EventCategory.INTERACTION_STATE
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     state: InteractionState
+    source: RequestSource | None = None
+
+
+class IdentityFeedbackEvent(_CorrelationModel):
+    event: str = "IDENTITY_FEEDBACK"
+    category: EventCategory = EventCategory.IDENTITY
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    feedback: IdentityFeedback
     source: RequestSource | None = None
 
 

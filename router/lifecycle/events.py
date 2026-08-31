@@ -1,7 +1,15 @@
 from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass
-from shared.protocol.events import EventCategory, InteractionStateChanged, SessionClosedEvent, StateSnapshot
+
+from shared.protocol.events import (
+    EventCategory,
+    IdentityFeedbackEvent,
+    InteractionStateChanged,
+    SessionClosedEvent,
+    StateSnapshot,
+)
 
 
 @dataclass(eq=False)
@@ -47,6 +55,9 @@ class InteractionEventBroker:
             trace_id=event.trace_id,
         )
         await self._publish(EventCategory.INTERACTION_STATE, event)
+
+    async def publish_identity_feedback(self, event: IdentityFeedbackEvent) -> None:
+        await self._publish(EventCategory.IDENTITY, event)
 
     async def publish_session_closed(self, event: SessionClosedEvent) -> None:
         await self._publish(EventCategory.SESSION, event)

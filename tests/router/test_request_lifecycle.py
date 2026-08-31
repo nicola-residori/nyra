@@ -9,7 +9,7 @@ from router.lifecycle.service import (
     LifecycleConflict,
 )
 from router.lifecycle.store import RequestStateStore
-from shared.protocol.events import EventCategory, InteractionState
+from shared.protocol.events import EventCategory, IdentityFeedback, InteractionState
 from shared.protocol.requests import CloseReason, NyraRequest, RequestStatus
 from router.observability.ids import generate_request_id, generate_session_id
 
@@ -163,8 +163,8 @@ async def test_memory_skill_and_llm_state_paths(tmp_path):
     assert result.response.text=="LLM done." and memory.calls==1 and skill.executed==0 and llm.calls==1
     states=[]
     while not sub.queue.empty(): states.append(sub.queue.get_nowait().state)
-    for required in [InteractionState.PROCESSING, InteractionState.MEMORY, InteractionState.SKILL_CHECK, InteractionState.LLM_REASONING]:
-        assert required in states
+    assert InteractionState.PROCESSING_LOCAL in states
+    assert InteractionState.PROCESSING_GLOBAL in states
 
 
 @pytest.mark.asyncio
@@ -247,3 +247,16 @@ def test_lifecycle_constructs_authoritative_shared_request_context():
     assert context.source == "ha-voice" and context.area == "living_room"
     assert context.identity.user_id == "user-123"
     assert context.identity.resolution_source is IdentityResolutionSource.TRUSTED_HA_IDENTITY
+
+@pytest.mark.asyncio
+async def test_speaker_identity_publishes_transient_identity_feedback(tmp_path):
+    identity=IdentityPort("user-a")
+    svc, _, broker=service(tmp_path, identity_port=identity)
+    sub=await broker.subscribe({EventCategory.IDENTITY})
+    req=request(); await svc.execute(req)
+    feedback=await asyncio.wait_for(sub.queue.get(), .2)
+    assert feedback.feedback is IdentityFeedback.RECOGNIZED
+    identity.detected="user-b"
+    await svc.execute(request(session_id=req.session_id))
+    changed=await asyncio.wait_for(sub.queue.get(), .2)
+    assert changed.feedback is IdentityFeedback.IDENTITY_CHANGED
