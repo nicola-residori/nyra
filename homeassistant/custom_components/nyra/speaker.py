@@ -37,6 +37,7 @@ class _SpeakerState:
     identity_task: asyncio.Task | None = None
 
 
+    speaking_active: bool = False
 class SpeakerStateMachine:
     def __init__(
         self,
@@ -87,30 +88,75 @@ class SpeakerStateMachine:
             return
         state = self._states.setdefault(source_id, _SpeakerState())
         current = event.state
+
         if current in {InteractionState.PROCESSING_LOCAL, InteractionState.PROCESSING_GLOBAL}:
             state.processing_state = current
+
+        if state.speaking_active:
+            if current is not InteractionState.SPEAKING:
+                state.pending_state = current
+            return
+
         if state.identity_task is not None and not state.identity_task.done():
             state.pending_state = current
             return
+
         await self._render_state(source_id, state, current)
 
     async def restore_processing(self, source_id: str) -> None:
         state = self._states.get(source_id)
         if state is None or state.processing_state is None:
             return
+
+        if state.speaking_active:
+            state.pending_state = state.processing_state
+            return
+
         if state.identity_task is not None and not state.identity_task.done():
             state.pending_state = state.processing_state
             return
+
         await self._render_state(source_id, state, state.processing_state)
+
+    async def begin_speaking(self, source_id: str) -> None:
+        state = self._states.setdefault(source_id, _SpeakerState())
+        state.speaking_active = True
+
+        if state.identity_task is not None and not state.identity_task.done():
+            state.identity_task.cancel()
+            state.identity_task = None
+
+    async def end_speaking(self, source_id: str) -> None:
+        state = self._states.get(source_id)
+        if state is None:
+            return
+
+        state.speaking_active = False
+        pending = state.pending_state
+        state.pending_state = None
+
+        if pending in {
+            InteractionState.PROCESSING_LOCAL,
+            InteractionState.PROCESSING_GLOBAL,
+        }:
+            return
+
+        if pending is not None and pending is not InteractionState.SPEAKING:
+            await self._render_state(source_id, state, pending)
 
     async def _finish_identity_feedback(self, source_id: str, state: _SpeakerState) -> None:
         try:
             await self._sleep(self._identity_feedback_seconds)
         except asyncio.CancelledError:
             return
+
         state.identity_task = None
+        if state.speaking_active:
+            return
+
         pending = state.pending_state
         state.pending_state = None
+
         if pending is not None:
             await self._render_state(source_id, state, pending)
         else:

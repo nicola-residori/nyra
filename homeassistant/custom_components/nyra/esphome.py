@@ -178,7 +178,7 @@ class EspHomeSpeakerOutput:
             )
 
     async def pulse_white_fast(self, source_id: str) -> None:
-        await self._effect(source_id, "nyra_listening_white_fast")
+        await self._effect(source_id, "Pulse Fast")
 
     async def comet_warm_white(self, source_id: str) -> None:
         await self._effect(source_id, "nyra_identifying_warm_white_comet")

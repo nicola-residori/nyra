@@ -196,3 +196,30 @@ async def test_concurrent_speakers_never_cross_target():
         ("comet_turquoise", "a"),
         ("comet_rainbow", "b"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_local_playback_does_not_restore_stale_processing_after_playback_ends():
+    out = Output()
+    sm = SpeakerStateMachine(out)
+    source = {"id": "speaker-a"}
+
+    await sm.handle_state(
+        InteractionStateChanged(
+            state=InteractionState.PROCESSING_GLOBAL,
+            source=source,
+        )
+    )
+    await sm.begin_speaking("speaker-a")
+
+    await sm.handle_state(
+        InteractionStateChanged(
+            state=InteractionState.PROCESSING_LOCAL,
+            source=source,
+        )
+    )
+    calls_before_end = list(out.calls)
+
+    await sm.end_speaking("speaker-a")
+
+    assert out.calls == calls_before_end

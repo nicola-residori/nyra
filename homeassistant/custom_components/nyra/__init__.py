@@ -16,6 +16,53 @@ class NyraRuntime:
     speaker: SpeakerStateMachine
     events: RouterEventClient
 
+    speaking_restore_unsubscribe: object | None = None
+
+
+
+def register_speaking_restore_listener(hass, speaker: SpeakerStateMachine):
+    """Give actual local playback priority over Router semantic visuals."""
+
+    def source_id_from(event) -> str | None:
+        source_id = event.data.get("source_id")
+        if not isinstance(source_id, str):
+            return None
+        source_id = source_id.strip()
+        return source_id or None
+
+    async def handle_speaking_started(event) -> None:
+        source_id = source_id_from(event)
+        if source_id:
+            await speaker.begin_speaking(source_id)
+
+    async def handle_speaking_ended(event) -> None:
+        source_id = source_id_from(event)
+        if source_id:
+            await speaker.end_speaking(source_id)
+
+    unsubscribe_started = hass.bus.async_listen(
+        "esphome.nyra_speaking_started",
+        handle_speaking_started,
+    )
+    unsubscribe_ended = hass.bus.async_listen(
+        "esphome.nyra_speaking_ended",
+        handle_speaking_ended,
+    )
+
+    def unsubscribe() -> None:
+        unsubscribe_started()
+        unsubscribe_ended()
+
+    return unsubscribe
+
+
+def unregister_speaking_restore_listener(runtime: NyraRuntime) -> None:
+    unsubscribe = runtime.speaking_restore_unsubscribe
+    if unsubscribe is None:
+        return
+    runtime.speaking_restore_unsubscribe = None
+    unsubscribe()
+
 
 async def async_setup_entry(hass, entry) -> bool:
     from homeassistant.const import Platform
@@ -82,6 +129,7 @@ async def async_setup_entry(hass, entry) -> bool:
         SessionManager(DEFAULT_SESSION_TTL_SECONDS),
         speaker,
         event_client,
+        register_speaking_restore_listener(hass, speaker),
     )
     await event_client.start()
     await hass.config_entries.async_forward_entry_setups(
@@ -95,6 +143,7 @@ async def async_unload_entry(hass, entry) -> bool:
     from homeassistant.const import Platform
 
     runtime = entry.runtime_data
+    unregister_speaking_restore_listener(runtime)
     await runtime.events.stop()
     unloaded = await hass.config_entries.async_unload_platforms(
         entry,

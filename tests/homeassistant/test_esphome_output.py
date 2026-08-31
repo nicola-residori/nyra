@@ -249,7 +249,7 @@ async def test_esphome_output_re_resolves_missing_source_without_reload():
             "turn_on",
             {
                 "entity_id": "light.speaker_b_led",
-                "effect": "nyra_listening_white_fast",
+                "effect": "Pulse Fast",
             },
         )
     ]

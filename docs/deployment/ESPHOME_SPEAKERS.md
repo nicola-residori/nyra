@@ -180,3 +180,22 @@ onboarding before treating the speaker as provisioned:
 A DHCP reservation is part of the recommended Nyra speaker provisioning
 baseline. Nyra configuration must still use logical device/source identity
 rather than depending on a hard-coded installation IP address.
+
+## Home Assistant ESPHome permissions
+
+After adding a Nyra speaker to Home Assistant through the ESPHome integration,
+open the ESPHome integration configuration for that device and enable:
+
+**Allow the device to perform Home Assistant actions**
+
+This permission is required for Nyra speaker behavior. The speaker sends
+Home Assistant events such as `esphome.nyra_speaking_started` and
+`esphome.nyra_speaking_ended` so that Home Assistant can coordinate the
+semantic LED state with the speaker's actual TTS playback lifecycle.
+
+Without this permission, those device-to-Home-Assistant actions are blocked and
+the LED state can be overwritten or restored at the wrong point during speech.
+
+The ESPHome option **Subscribe to logs from the device** is **not required** for
+Nyra operation. It may be enabled when device logs are useful for diagnostics or
+debugging, but it is optional.
