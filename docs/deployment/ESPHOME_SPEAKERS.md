@@ -122,4 +122,34 @@ Adding another identical speaker requires no copied firmware logic and no edits 
 python tools/new-speaker.py nyra-camera "Nyra Camera"
 ```
 
-Only the generated non-secret device definition/entrypoint and its gitignored private credentials are new.
+The generated speaker instance files and private credentials remain local to the installation and are ignored by Git.
+
+## Private installation instances
+
+Real speaker instances are local installation data and are intentionally not
+versioned in the public repository. `tools/new-speaker.py` may generate them
+inside the local checkout under `esphome/`; Git ignores the instance-specific
+entrypoint, device definition, and per-device secrets.
+
+For example:
+
+```text
+esphome/nyra-mansarda.yaml
+esphome/devices/nyra-mansarda.yaml
+esphome/device_secrets/nyra-mansarda.yaml
+```
+
+The reusable package, public example, provisioning tool, tests, and
+documentation remain versioned.
+
+After generating a speaker, verify the boundary with:
+
+```bash
+git status --short
+git check-ignore -v esphome/nyra-mansarda.yaml
+git check-ignore -v esphome/devices/nyra-mansarda.yaml
+git check-ignore -v esphome/device_secrets/nyra-mansarda.yaml
+```
+
+None of the real instance files should appear as untracked files in
+`git status`.
