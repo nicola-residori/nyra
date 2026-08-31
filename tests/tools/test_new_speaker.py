@@ -150,3 +150,30 @@ def test_cli_creates_device_wrapper_and_private_secret_by_default(tmp_path):
     assert (tmp_path / "esphome/nyra-mansarda.yaml").exists()
     assert (tmp_path / "esphome/device_secrets/nyra-mansarda.yaml").exists()
     assert "Created private device secrets" in result.stdout
+
+
+def test_common_package_does_not_override_upstream_wifi_hidden_option():
+    text = PACKAGE.read_text()
+
+    assert "hidden: ${hidden_ssid}" not in text
+
+
+def test_common_package_uses_upstream_default_wake_words():
+    text = PACKAGE.read_text()
+
+    assert "micro_wake_word:" not in text
+    assert "wakeword_model" not in text
+    assert "nira_model" not in text
+
+
+def test_generated_device_does_not_configure_custom_wake_word_or_hidden_ssid(tmp_path):
+    module = load_module()
+    output = tmp_path / "esphome" / "devices" / "nyra-mansarda.yaml"
+
+    module.create_device("nyra-mansarda", "Nyra Mansarda", output)
+
+    text = output.read_text()
+
+    assert "hidden_ssid" not in text
+    assert "wakeword_model" not in text
+    assert "nira.json" not in text

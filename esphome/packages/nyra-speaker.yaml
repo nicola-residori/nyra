@@ -10,15 +10,6 @@ packages:
       - base/core.yaml
     refresh: 1d
 
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  hidden: ${hidden_ssid}
-
-micro_wake_word:
-  models:
-    - model: ${wakeword_model}
-      id: nira_model
 
 # Router/HA owns semantic pipeline state. Firmware owns rendering only.
 # These public effect names are the contract consumed by the Nyra HA adapter.

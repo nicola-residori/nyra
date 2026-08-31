@@ -24,7 +24,7 @@ Do not commit either real shared or device-local secret values.
 
 - Home Assistant ESPHome Device Builder.
 - The Waveshare ESP32-S3 Audio board used by the Nyra speaker reference hardware.
-- `/config/esphome/wakewords/nira.json` installed locally.
+- Wake-word models are provided by the pinned Waveshare base package; no Nyra-specific wake-word file is required for Milestone 2.
 - `wifi_ssid` and `wifi_password` in the local `/config/esphome/secrets.yaml`.
 - `esphome/assets/nyra_close.wav` copied to `/config/esphome/assets/nyra_close.wav`.
 
