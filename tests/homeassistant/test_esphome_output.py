@@ -54,6 +54,45 @@ async def test_esphome_output_uses_standard_ha_services_and_target_mapping():
     ]
 
 
+@pytest.mark.asyncio
+async def test_esphome_output_never_falls_back_to_another_speaker():
+    calls = []
+    resolutions = 0
+
+    async def call(domain, service, data):
+        calls.append((domain, service, data))
+
+    async def resolve_targets():
+        nonlocal resolutions
+        resolutions += 1
+        return {
+            "speaker-b": SpeakerTarget(
+                "light.speaker_b_led",
+                "button.speaker_b_close",
+            )
+        }
+
+    output = EspHomeSpeakerOutput(
+        {
+            "speaker-a": SpeakerTarget(
+                "light.speaker_a_led",
+                "button.speaker_a_close",
+            )
+        },
+        call,
+        resolve_targets=resolve_targets,
+    )
+
+    await output.blink_identity(
+        "missing-speaker",
+        IdentityFeedback.NOT_RECOGNIZED,
+        2,
+    )
+
+    assert resolutions == 1
+    assert calls == []
+
+
 def test_discovery_joins_source_id_ring_and_close_feedback_by_device():
     devices = [{"id": "device-a", "name": "Bedroom Voice Assistant"}]
     entities = [
