@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+
 from typing import Any
 
 from shared.protocol.requests import (
@@ -14,7 +16,10 @@ from shared.protocol.requests import (
 )
 
 from .client import NyraRouterError
+from .esphome import resolve_nyra_source_id
 from .session import SessionManager
+
+
 
 
 @dataclass(frozen=True)
@@ -24,12 +29,13 @@ class AdapterInput:
     conversation_key: str
     device_id: str | None = None
     satellite_id: str | None = None
+    nyra_source_id: str | None = None
     area: str | None = None
     user_id: str | None = None
 
     @property
     def source_id(self) -> str:
-        return self.satellite_id or self.device_id or "home_assistant"
+        return self.nyra_source_id or self.satellite_id or self.device_id or "home_assistant"
 
     @property
     def is_speaker(self) -> bool:
@@ -84,8 +90,10 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
 
 async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
     """Set up the Home Assistant conversation platform."""
+
     from homeassistant.components import conversation
     from homeassistant.const import MATCH_ALL
+    from homeassistant.helpers import entity_registry as er
     from homeassistant.helpers import intent
 
     runtime = config_entry.runtime_data
@@ -108,12 +116,37 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
 
         async def _async_handle_message(self, user_input, chat_log):
             conversation_key = user_input.conversation_id or f"ha:{user_input.context.id}"
+
+            nyra_source_id = None
+            if user_input.satellite_id:
+                registry = er.async_get(self.hass)
+                entities = list(registry.entities.values())
+                source_entity_ids = {
+                    entity.entity_id
+                    for entity in entities
+                    if entity.platform == "esphome"
+                    and entity.original_name == "Nyra Source ID"
+                }
+                states = {
+                    entity_id: self.hass.states.get(entity_id).state
+                    for entity_id in source_entity_ids
+                    if self.hass.states.get(entity_id) is not None
+                }
+
+                nyra_source_id = resolve_nyra_source_id(
+                    user_input.satellite_id,
+                    entities,
+                    states,
+                )
+
+
             data = AdapterInput(
                 text=user_input.text,
                 language=user_input.language,
                 conversation_key=conversation_key,
                 device_id=user_input.device_id,
                 satellite_id=user_input.satellite_id,
+                nyra_source_id=nyra_source_id,
                 user_id=user_input.context.user_id,
             )
             result = await process_adapter_input(data, runtime.sessions, runtime.client)

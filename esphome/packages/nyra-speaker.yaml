@@ -11,8 +11,45 @@ packages:
     refresh: 1d
 
 
+
+# Stable, read-only source identity consumed by the Nyra Home Assistant adapter.
+# The value comes from the per-device `source_id` substitution created at provisioning.
+text_sensor:
+  - platform: template
+    id: nyra_source_id
+    name: "Nyra Source ID"
+    entity_category: diagnostic
+
+esphome:
+  on_boot:
+    - priority: 600
+      then:
+        - text_sensor.template.publish:
+            id: nyra_source_id
+            state: "${source_id}"
+
 # Router/HA owns semantic pipeline state. Firmware owns rendering only.
 # These public effect names are the contract consumed by the Nyra HA adapter.
+# Pre-Router voice phases are local to the satellite. Keep the ring in Nyra's
+# listening visual until the HA adapter/Router takes ownership after STT.
+voice_assistant:
+  on_listening:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_listening_white_fast"
+  on_stt_vad_start:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_listening_white_fast"
+  on_stt_vad_end:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_listening_white_fast"
+  on_stt_end:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_listening_white_fast"
+
 light:
   - id: !extend status_ring
     name: "Nyra Status Ring"

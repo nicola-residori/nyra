@@ -1,7 +1,40 @@
 {% extends "base.html" %}{% block content %}
-<h2>Logs</h2>
-<div class="filters"><input id="q" placeholder="Search"><input id="ct" placeholder="CT"><select id="level"><option value="">Level</option>{% for v in ['TRACE','DEBUG','INFO','WARN','ERROR','CRITICAL'] %}<option>{{v}}</option>{% endfor %}</select><select id="kind"><option value="">Kind</option>{% for v in ['REQUEST','RESPONSE','FAULT','EVENT'] %}<option>{{v}}</option>{% endfor %}</select><input id="event" placeholder="Event"><input id="result" placeholder="Result"><input id="session_id" placeholder="Session ID"><input id="request_id" placeholder="Request ID"><input id="trace_id" placeholder="Trace ID"><input id="span_id" placeholder="Span ID"><input id="from_ts" placeholder="From"><input id="to_ts" placeholder="To"><label><input type="checkbox" id="live"> Live</label><button id="apply">Apply</button></div>
+<div class="logs-heading">
+  <div>
+    <h2>Logs</h2>
+    <p class="muted">Distributed request activity and structured diagnostics.</p>
+  </div>
+  <div class="range-presets" aria-label="Time range">
+    <button type="button" data-range="15m">15m</button>
+    <button type="button" data-range="1h">1h</button>
+    <button type="button" data-range="6h">6h</button>
+    <button type="button" data-range="24h">24h</button>
+    <button type="button" data-range="all">All</button>
+  </div>
+</div>
+<div class="filters">
+  <input id="q" placeholder="Search">
+  <input id="ct" placeholder="CT">
+  <select id="level"><option value="">Level</option>{% for v in ['TRACE','DEBUG','INFO','WARN','ERROR','CRITICAL'] %}<option>{{v}}</option>{% endfor %}</select>
+  <select id="kind"><option value="">Kind</option>{% for v in ['REQUEST','RESPONSE','FAULT','EVENT'] %}<option>{{v}}</option>{% endfor %}</select>
+  <input id="event" placeholder="Event">
+  <input id="result" placeholder="Result">
+  <input id="session_id" placeholder="Session ID">
+  <input id="request_id" placeholder="Request ID">
+  <input id="trace_id" placeholder="Trace ID">
+  <input id="span_id" placeholder="Span ID">
+  <input id="from_ts" placeholder="From">
+  <input id="to_ts" placeholder="To">
+  <label><input type="checkbox" id="live"> Live</label>
+  <button id="apply">Apply</button>
+</div>
 <div id="error"></div>
-<div class="table-shell"><table class="logs-table"><thead><tr><th>Time</th><th>CT</th><th>Level</th><th>Kind</th><th>Session</th><th>Request</th><th>Trace</th><th>Span</th><th>Event</th><th>Elapsed</th><th>Result</th></tr></thead><tbody id="rows"></tbody></table></div>
-<div id="detail"></div>
+<div class="logs-workspace">
+  <div class="logs-list-pane">
+    <div class="table-shell"><table class="logs-table"><thead><tr><th>Time</th><th>CT</th><th>Level</th><th>Kind</th><th>Input</th><th>Session</th><th>Request</th><th>Trace</th><th>Span</th><th>Event</th><th>Elapsed</th><th>Result</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </div>
+  <aside id="detail" class="detail-panel" aria-live="polite">
+    <div class="detail-empty"><h3>Request detail</h3><p>Select a log row to inspect the correlated request without leaving this page.</p></div>
+  </aside>
+</div>
 {% endblock %}{% block scripts %}<script src="/static/js/logs.js"></script>{% endblock %}

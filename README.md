@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/nyra-banner.png" alt="N.Y.R.A. — Neural sYstem for Reasoning & Automation" width="100%">
+</p>
+
 # N.Y.R.A.
 
 **Neural sYstem for Reasoning & Automation**
