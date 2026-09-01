@@ -41,6 +41,12 @@ The previous implementation remains only a functional reference for specialist s
 - Custom local micro-wake-word model for `Nyra`, while retaining the base speaker wake words.
 - Physical end-to-end validation on a Nyra ESPHome speaker.
 
+
+## Documentation
+
+- [Nyra speakers](docs/SPEAKERS.md) — reference hardware, ESPHome, Home Assistant integration, provisioning, and speaker lifecycle.
+- [Wake words](docs/WAKE_WORDS.md) — the `nyra_it` / `nyra_en` model policy, Google Colab training notebooks, real and synthetic datasets, and how to train a custom wake word.
+
 ## Core principles
 
 - Centralized orchestration through Nyra Router.
