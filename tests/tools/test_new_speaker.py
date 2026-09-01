@@ -160,17 +160,12 @@ def test_common_package_does_not_override_upstream_wifi_hidden_option():
 
 def test_common_package_extends_upstream_wake_words_with_nyra():
     text = PACKAGE.read_text()
-
-    assert "micro_wake_word:" in text
     assert "model: /config/esphome/models/nyra_it.json" in text
-    assert "id: nyra" in text
-
-    # Alexa and Okay Nabu are inherited from the pinned upstream package.
-    # Redefining them here would produce duplicate ESPHome IDs.
+    assert "id: nyra_it" in text
+    assert "model: /config/esphome/models/nyra_en.json" in text
+    assert "id: nyra_en" in text
     assert "id: alexa" not in text
     assert "id: okay_nabu" not in text
-
-
 def test_generated_device_does_not_configure_custom_wake_word_or_hidden_ssid(tmp_path):
     module = load_module()
     output = tmp_path / "esphome" / "devices" / "nyra-mansarda.yaml"

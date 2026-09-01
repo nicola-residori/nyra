@@ -438,4 +438,6 @@ button:
 micro_wake_word:
   models:
     - model: /config/esphome/models/nyra_it.json
-      id: nyra
+      id: nyra_it
+    - model: /config/esphome/models/nyra_en.json
+      id: nyra_en
