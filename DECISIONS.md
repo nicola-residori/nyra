@@ -16,36 +16,24 @@ Services do not receive Home Assistant credentials or other protected external s
 ## ADR-004 - Operational context is resolved for every request
 **Status:** Accepted
 
-Entity aliases, custom names, mappings, and other deterministic operational context must always be available during request interpretation.
-
 ## ADR-005 - Semantic memory enrichment is conditional
 **Status:** Accepted
-
-Long-term semantic memory is retrieved only when relevant. A downstream component may request additional memory only through Router.
 
 ## ADR-006 - Centralized administration and observability
 **Status:** Accepted
 
-Router exposes the only Nyra administration and observability interface. Independent service UIs will be removed.
-
 ## ADR-007 - Centralized structured logging
 **Status:** Accepted
-
-All Nyra services send structured logs to Router.
 
 ## ADR-008 - Distributed tracing identifiers
 **Status:** Accepted
 
-Nyra logging uses `sessionId`, `requestId`, `traceId`, `spanId`, `parentSpanId`, and `originRequestId`.
-
-`spanId` format: `CT#operation#random`.
-
-Examples: `ROUTER#request_ingress#8F3A12`, `SKILLS#execute#73F0C1`, `MEMORY#context_resolve#02AA91`.
+Nyra logging uses `sessionId`, `requestId`, `traceId`, `spanId`, `parentSpanId`, and `originRequestId`. `spanId` format: `CT#operation#random`.
 
 ## ADR-009 - Structured log event types
 **Status:** Accepted
 
-Each log record has a `kind`: `REQUEST`, `RESPONSE`, `FAULT`, or `EVENT`. Log levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, and `CRITICAL`. Additional parameters use `name=value`. JSON payloads remain structured and are pretty-printed in the UI.
+Each log record has a `kind`: `REQUEST`, `RESPONSE`, `FAULT`, or `EVENT`. Log levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, and `CRITICAL`.
 
 ## ADR-010 - Timing metrics
 **Status:** Accepted
@@ -60,35 +48,32 @@ Chat conversations are not persistent technical documentation. Architecture deci
 ## ADR-012 - Repository content is written in English
 **Status:** Accepted
 
-Source code, comments, documentation, configuration examples, API names, log events, and commit messages are written in English.
----
-
 ## ADR-013 - Nyra Admin is a separate application
-
 **Status:** Accepted
 
-Nyra Admin is a separate application from Nyra Router.
-
-Nyra Admin contains the human-facing web interface and communicates with Router
-through Router APIs.
-
-Nyra Admin must not access Router databases directly.
-
-Router orchestration code and Admin UI code must not share the same application
-entry point.
-
----
+Nyra Admin is a separate application from Router, communicates through Router APIs, and must not access Router databases directly.
 
 ## ADR-014 - Initial Router and Admin ports
-
 **Status:** Accepted
 
-The initial deployment uses:
+Initial deployment uses Router `:8090` and Admin `:80`; they remain separate processes/services.
 
-```text
-Nyra Router :8090
-Nyra Admin  :80
-```
+## ADR-015 - Home Assistant is a thin platform adapter
+**Status:** Accepted
 
-Router and Admin may initially run in the same Proxmox container, but remain
-separate processes and separate systemd services.
+Home Assistant translates platform-specific conversation, authenticated user, source, speaker, and TTS information at the Nyra boundary. Router remains authoritative for orchestration, request lifecycle, traces, semantic interaction state, policies, identity outcomes, and protected capabilities. Speaker source and human identity are separate.
+
+## ADR-016 - Speaker real-time state uses the Router event stream
+**Status:** Accepted
+
+Request/response transport and real-time speaker feedback are separate paths. Router semantic events are bridged through Home Assistant to the exact ESPHome speaker identified by stable `source_id`. Actual TTS playback and protected identity transients may temporarily take precedence over semantic state.
+
+## ADR-017 - Nyra speaker source IDs are stable and read-only
+**Status:** Accepted
+
+Every Nyra ESPHome speaker exposes a read-only diagnostic `Nyra Source ID`, the deterministic join key between Router source metadata and the Home Assistant device.
+
+## ADR-018 - Custom wake-word models are local speaker assets
+**Status:** Accepted
+
+Nyra speakers may include repository-managed ESPHome micro-wake-word manifests and model binaries. Public configuration must not embed installation-specific room inventory, network addresses, credentials, or secrets.

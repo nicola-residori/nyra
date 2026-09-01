@@ -10,6 +10,9 @@ from shared.protocol.events import IdentityFeedback
 SOURCE_ID_NAME = "Nyra Source ID"
 STATUS_RING_NAME = "Nyra Status Ring"
 CLOSE_FEEDBACK_NAME = "Nyra Close Feedback"
+IDENTITY_RECOGNIZED_NAME = "Nyra Identity Recognized"
+IDENTITY_NOT_RECOGNIZED_NAME = "Nyra Identity Not Recognized"
+IDENTITY_CHANGED_NAME = "Nyra Identity Changed"
 
 
 
@@ -62,6 +65,9 @@ def resolve_nyra_source_id(
 class SpeakerTarget:
     light_entity: str
     close_feedback_button: str | None = None
+    identity_recognized_button: str | None = None
+    identity_not_recognized_button: str | None = None
+    identity_changed_button: str | None = None
 
 
 def _value(item: Any, field: str, default: Any = None) -> Any:
@@ -108,6 +114,12 @@ def discover_speaker_targets(
             by_device.setdefault(device_id, {})["ring"] = entity_id
         elif original_name == CLOSE_FEEDBACK_NAME:
             by_device.setdefault(device_id, {})["close"] = entity_id
+        elif original_name == IDENTITY_RECOGNIZED_NAME:
+            by_device.setdefault(device_id, {})["identity_recognized"] = entity_id
+        elif original_name == IDENTITY_NOT_RECOGNIZED_NAME:
+            by_device.setdefault(device_id, {})["identity_not_recognized"] = entity_id
+        elif original_name == IDENTITY_CHANGED_NAME:
+            by_device.setdefault(device_id, {})["identity_changed"] = entity_id
 
     targets: dict[str, SpeakerTarget] = {}
     for parts in by_device.values():
@@ -127,6 +139,9 @@ def discover_speaker_targets(
         targets[source_id] = SpeakerTarget(
             light_entity=ring_entity,
             close_feedback_button=parts.get("close"),
+            identity_recognized_button=parts.get("identity_recognized"),
+            identity_not_recognized_button=parts.get("identity_not_recognized"),
+            identity_changed_button=parts.get("identity_changed"),
         )
 
     return targets
@@ -189,12 +204,20 @@ class EspHomeSpeakerOutput:
         feedback: IdentityFeedback,
         count: int,
     ) -> None:
-        effect = {
-            IdentityFeedback.RECOGNIZED: "nyra_identity_green_2blink",
-            IdentityFeedback.NOT_RECOGNIZED: "nyra_identity_red_2blink",
-            IdentityFeedback.IDENTITY_CHANGED: "nyra_identity_blue_2blink",
+        target = await self._target(source_id)
+        if not target:
+            return
+        button = {
+            IdentityFeedback.RECOGNIZED: target.identity_recognized_button,
+            IdentityFeedback.NOT_RECOGNIZED: target.identity_not_recognized_button,
+            IdentityFeedback.IDENTITY_CHANGED: target.identity_changed_button,
         }[feedback]
-        await self._effect(source_id, effect)
+        if button:
+            await self._call_service(
+                "button",
+                "press",
+                {"entity_id": button},
+            )
 
     async def comet_turquoise(self, source_id: str) -> None:
         await self._effect(source_id, "nyra_processing_local_turquoise_comet")

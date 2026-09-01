@@ -18,9 +18,10 @@ async def test_esphome_output_uses_standard_ha_services_and_target_mapping():
     output = EspHomeSpeakerOutput(
         {
             "speaker-a": SpeakerTarget(
-                "light.speaker_a_led",
-                "button.speaker_a_close",
-            )
+                    light_entity="light.speaker_a_led",
+                    close_feedback_button="button.speaker_a_close",
+                    identity_changed_button="button.speaker_a_identity_changed",
+                )
         },
         call,
     )
@@ -43,12 +44,9 @@ async def test_esphome_output_uses_standard_ha_services_and_target_mapping():
             },
         ),
         (
-            "light",
-            "turn_on",
-            {
-                "entity_id": "light.speaker_a_led",
-                "effect": "nyra_identity_blue_2blink",
-            },
+            "button",
+            "press",
+            {"entity_id": "button.speaker_a_identity_changed"},
         ),
         ("button", "press", {"entity_id": "button.speaker_a_close"}),
     ]
