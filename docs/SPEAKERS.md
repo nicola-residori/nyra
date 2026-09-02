@@ -72,6 +72,20 @@ The shared Nyra speaker package is deployed to:
 
 Per-device YAML remains installation-specific and must not be committed to the public repository with real Wi-Fi credentials, room names, static addresses, or secrets.
 
+## Home Assistant adapter runtime prerequisite
+
+Nyra speakers depend on the Nyra Home Assistant custom integration for Router requests and real-time speaker state. The integration deployment is self-contained: it carries a synchronized copy of the canonical `shared/protocol` package under `custom_components/nyra/shared/protocol`.
+
+The adapter continues to import the canonical `shared.protocol` module name. During Home Assistant startup, Nyra uses the repository-level package when it is already importable; otherwise it exposes the bundled copy under that same canonical module name before loading the adapter. This avoids relying on `/config` being present in Home Assistant's global Python module search path and avoids creating a second protocol type identity.
+
+When the canonical protocol changes, run:
+
+```bash
+python3 tools/sync-ha-shared-protocol.py
+```
+
+before deploying the Home Assistant integration. Repository tests verify that the bundled runtime copy remains synchronized.
+
 ## Provision a speaker
 
 Every physical Nyra speaker must have its own stable source identifier. This value is used throughout the path:

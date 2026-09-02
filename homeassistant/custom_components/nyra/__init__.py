@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .protocol_bootstrap import ensure_shared_protocol
+
+ensure_shared_protocol()
+
 from .client import NyraRouterClient
 from .const import CONF_INGRESS_TOKEN, CONF_ROUTER_URL, DEFAULT_SESSION_TTL_SECONDS, DOMAIN
 from .events import RouterEventClient

@@ -29,6 +29,7 @@ The next milestone is Milestone 3 — Identity and Voice.
 ## Milestone 2 implemented
 
 - native Home Assistant `nyra` conversation adapter as a thin Router boundary
+- Home Assistant adapter carries a synchronized `shared.protocol` runtime fallback so protocol types keep one canonical Python module identity
 - synchronous Router ingress through `POST /v1/requests`
 - source and conversation metadata propagation
 - `ha_assist` authenticated Home Assistant user context
