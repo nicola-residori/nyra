@@ -1,6 +1,6 @@
 {
   "type": "micro",
-  "wake_word": "Nyra",
+  "wake_word": "Nyra IT",
   "author": "Nicola",
   "model": "nyra_it.tflite",
   "trained_languages": [

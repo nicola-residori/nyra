@@ -437,7 +437,7 @@ button:
 # only the local Nyra model is appended here to avoid duplicate model IDs.
 micro_wake_word:
   models:
-    - model: /config/esphome/models/nyra_it.json
-      id: nyra_it
-    - model: /config/esphome/models/nyra_en.json
-      id: nyra_en
+    - id: !extend alexa
+      model: /config/esphome/models/nyra_it.json
+    - id: !extend okay_nabu
+      model: /config/esphome/models/nyra_en.json

@@ -40,7 +40,7 @@ The next milestone is Milestone 3 — Identity and Voice.
 - protected two-blink identity feedback
 - actual announcement lifecycle owns SPEAKING while preserving identity transients
 - session-close sound and visual feedback
-- custom local Italian `Nyra` micro-wake-word model with stock base wake words retained
+- canonical local `Nyra IT` and `Nyra EN` micro-wake-word models, selectable through Home Assistant with the stock base wake-word models replaced
 - physical path validated: wake word -> ESPHome -> Home Assistant -> Router -> Home Assistant -> TTS/speaker
 
 ## Deployment

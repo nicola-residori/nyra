@@ -22,7 +22,7 @@ Nyra v1 is under active development.
 - **Milestone 2 — Home Assistant adapter and Nyra speaker integration: complete.**
 - **Milestone 3 — Identity and Voice: next.**
 
-Milestone 2 established the production Home Assistant ingress/egress boundary and the real-time speaker interaction path. A physical Nyra speaker has been validated end-to-end through Home Assistant and Router, including stable source identification, Router-driven interaction states, protected identity feedback, TTS lifecycle feedback, and the custom Italian `Nyra` wake word.
+Milestone 2 established the production Home Assistant ingress/egress boundary and the real-time speaker interaction path. A physical Nyra speaker has been validated end-to-end through Home Assistant and Router, including stable source identification, Router-driven interaction states, protected identity feedback, TTS lifecycle feedback, and the local `Nyra IT` and `Nyra EN` wake words.
 
 The previous implementation remains only a functional reference for specialist services that have not yet been migrated to the Nyra v1 lifecycle.
 
@@ -38,7 +38,7 @@ The previous implementation remains only a functional reference for specialist s
 - Protected two-blink identity feedback for recognized, unrecognized, and changed identity outcomes.
 - TTS playback lifecycle feedback without overwriting identity transients.
 - Session-close audio/visual feedback.
-- Custom local micro-wake-word model for `Nyra`, while retaining the base speaker wake words.
+- Canonical local micro-wake-word models `Nyra IT` and `Nyra EN`, selectable through Home Assistant while replacing the stock base wake-word models.
 - Physical end-to-end validation on a Nyra ESPHome speaker.
 
 

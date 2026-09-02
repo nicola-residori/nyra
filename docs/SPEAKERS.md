@@ -118,6 +118,26 @@ Identity feedback is a protected two-blink transient for recognized, unrecognize
 
 Wake-word recognition runs locally on the ESP32 through ESPHome `micro_wake_word`.
 
+The canonical Nyra speaker exposes two local wake-word choices:
+
+- **Nyra IT** — `nyra_it.json` / `nyra_it.tflite`
+- **Nyra EN** — `nyra_en.json` / `nyra_en.tflite`
+
+Both are exposed through Home Assistant's native ESPHome wake-word selection. The stock upstream Alexa and Okay Nabu models are replaced and are not presented as separate choices.
+
+The pinned Waveshare package also contains a `Wake word sensitivity` selector whose lambda refers directly to the upstream IDs `alexa` and `okay_nabu`. Nyra therefore preserves those IDs only as internal compatibility anchors and replaces their model definitions with `!extend`:
+
+```yaml
+micro_wake_word:
+  models:
+    - id: !extend alexa
+      model: /config/esphome/models/nyra_it.json
+    - id: !extend okay_nabu
+      model: /config/esphome/models/nyra_en.json
+```
+
+The manifests provide the user-visible names `Nyra IT` and `Nyra EN`. The inherited IDs are implementation details and must not be treated as the public wake-word names.
+
 Nyra's language-specific wake-word models and the training workflow are documented separately:
 
 - [Wake words and custom training](WAKE_WORDS.md)

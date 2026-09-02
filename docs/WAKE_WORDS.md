@@ -4,14 +4,14 @@ Nyra uses ESPHome `micro_wake_word` models that execute locally on the ESP32 spe
 
 The project defines two canonical language-specific Nyra wake words:
 
-| Model ID | Visible wake word | Target pronunciation | Training profile |
+| Model artifact | Home Assistant label | Target pronunciation | Training profile |
 | --- | --- | --- | --- |
-| `nyra_it` | Nyra | Italian “Nì-ra” | real + synthetic |
-| `nyra_en` | Nyra | English “NYE-ruh” | synthetic-only |
+| `nyra_it` | `Nyra IT` | Italian “Nì-ra” | real + synthetic |
+| `nyra_en` | `Nyra EN` | English “NYE-ruh” | synthetic-only |
 
-`nyra_it` is the first validated runtime model. `nyra_en` is the second canonical model and becomes part of the default speaker model set once its exported `.tflite` and manifest are committed.
+Both models are committed, deployed, and physically validated on the reference Nyra speaker.
 
-The two models intentionally share the human-facing word **Nyra** but are trained separately because pronunciation and acoustic distributions differ by language.
+The two models represent the same assistant name but are trained separately because pronunciation and acoustic distributions differ by language. Their manifest `wake_word` values are intentionally distinct (`Nyra IT` and `Nyra EN`) because Home Assistant uses those visible names when building the ESPHome wake-word selector.
 
 ## Repository layout
 
@@ -321,13 +321,23 @@ For the canonical Nyra pair, the intended local additions are:
 ```yaml
 micro_wake_word:
   models:
-    - model: /config/esphome/models/nyra_it.json
-      id: nyra_it
-    - model: /config/esphome/models/nyra_en.json
-      id: nyra_en
+    - id: !extend alexa
+      model: /config/esphome/models/nyra_it.json
+    - id: !extend okay_nabu
+      model: /config/esphome/models/nyra_en.json
 ```
 
-The runtime package should reference `nyra_en` only once the matching `nyra_en.json` and `nyra_en.tflite` artifacts exist.
+The technical IDs `alexa` and `okay_nabu` are inherited compatibility anchors from the pinned Waveshare package, not user-visible Nyra model IDs. The upstream `Wake word sensitivity` selector references those IDs directly, so preserving them allows Nyra to replace the stock models without breaking the inherited sensitivity logic.
+
+At runtime the expected model list is:
+
+```text
+Wake Word: Nyra IT
+Wake Word: Nyra EN
+VAD Model
+```
+
+Alexa and Okay Nabu must not appear as separate runtime wake-word choices.
 
 ## Deploy models to Home Assistant
 
@@ -360,13 +370,15 @@ Tune `probability_cutoff` and `sliding_window_size` only after collecting real d
 
 ## Nyra default policy
 
-Nyra's intended default local wake-word pair is:
+Nyra's default local wake-word pair is:
 
 ```text
-nyra_it
-nyra_en
+Nyra IT
+Nyra EN
 ```
 
-They are two acoustic models for the same assistant name, not aliases of one model.
+The corresponding repository artifacts remain `nyra_it` and `nyra_en`. They are two acoustic models for the same assistant name, not aliases of one model.
+
+Both choices must be selectable through Home Assistant and physically trigger the Assist pipeline before a speaker wake-word deployment is considered validated.
 
 This keeps pronunciation-specific training explicit while allowing the speaker to respond naturally to both Italian and English users.

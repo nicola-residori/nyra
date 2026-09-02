@@ -160,12 +160,12 @@ def test_common_package_does_not_override_upstream_wifi_hidden_option():
 
 def test_common_package_extends_upstream_wake_words_with_nyra():
     text = PACKAGE.read_text()
+
+    assert "id: !extend alexa" in text
     assert "model: /config/esphome/models/nyra_it.json" in text
-    assert "id: nyra_it" in text
+    assert "id: !extend okay_nabu" in text
     assert "model: /config/esphome/models/nyra_en.json" in text
-    assert "id: nyra_en" in text
-    assert "id: alexa" not in text
-    assert "id: okay_nabu" not in text
+
 def test_generated_device_does_not_configure_custom_wake_word_or_hidden_ssid(tmp_path):
     module = load_module()
     output = tmp_path / "esphome" / "devices" / "nyra-mansarda.yaml"
@@ -177,3 +177,30 @@ def test_generated_device_does_not_configure_custom_wake_word_or_hidden_ssid(tmp
     assert "hidden_ssid" not in text
     assert "wakeword_model" not in text
     assert "nira.json" not in text
+
+def test_nyra_wake_word_manifests_have_distinct_ui_names():
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    it = json.loads((root / "esphome/models/nyra_it.json").read_text())
+    en = json.loads((root / "esphome/models/nyra_en.json").read_text())
+
+    assert it["wake_word"] == "Nyra IT"
+    assert en["wake_word"] == "Nyra EN"
+    assert it["wake_word"] != en["wake_word"]
+    assert it["trained_languages"] == ["it"]
+    assert en["trained_languages"] == ["en"]
+
+def test_nyra_speaker_replaces_upstream_wake_word_models():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    package = (root / "esphome/packages/nyra-speaker.yaml").read_text()
+
+    assert "id: !extend alexa" in package
+    assert "id: !extend okay_nabu" in package
+    assert "model: /config/esphome/models/nyra_it.json" in package
+    assert "model: /config/esphome/models/nyra_en.json" in package
+    assert "id: !remove alexa" not in package
+    assert "id: !remove okay_nabu" not in package
