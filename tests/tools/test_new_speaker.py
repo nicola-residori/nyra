@@ -204,3 +204,17 @@ def test_nyra_speaker_replaces_upstream_wake_word_models():
     assert "model: /config/esphome/models/nyra_en.json" in package
     assert "id: !remove alexa" not in package
     assert "id: !remove okay_nabu" not in package
+
+def test_speaker_documentation_explains_provisioning_identity_and_area():
+    text = (ROOT / "docs" / "SPEAKERS.md").read_text()
+    assert 'python3 tools/new-speaker.py speaker-01 "Living Room Speaker"' in text
+    assert "unique and stable" in text
+    assert "Home Assistant Area" in text
+    assert "does not encode the room" in text
+    assert "esphome/devices/speaker-01.yaml" in text
+    assert "esphome/device_secrets/speaker-01.yaml" in text
+    assert "esphome/speaker-01.yaml" in text
+    assert "/config/esphome/packages/nyra-speaker.yaml" in text
+    assert "/config/esphome/models/nyra_it.json" in text
+    assert "/config/esphome/models/nyra_en.tflite" in text
+    assert "Allow the device to perform Home Assistant actions" in text

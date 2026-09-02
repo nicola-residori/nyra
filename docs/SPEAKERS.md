@@ -84,6 +84,109 @@ The value is exposed in Home Assistant as the read-only diagnostic entity **Nyra
 
 A speaker source is not a person. Nyra never treats the source ID as proof of human identity.
 
+### Create a new speaker
+
+Run the provisioning script from the repository root. The two positional parameters have different purposes:
+
+```bash
+python3 tools/new-speaker.py speaker-01 "Living Room Speaker"
+```
+
+In this example:
+
+| Parameter | Example | Purpose |
+| --- | --- | --- |
+| `device_name` | `speaker-01` | Unique and stable technical identifier for the physical speaker. Nyra also uses it as the speaker `source_id`. |
+| `friendly_name` | `Living Room Speaker` | Human-readable name shown by ESPHome and Home Assistant. It is not the Nyra protocol identity of the speaker. |
+
+The `device_name` / `source_id` must be unique across the Nyra speakers in one installation and should remain stable for the lifetime of that physical speaker.
+
+The identifier does not encode the room. The speaker's physical location is represented by its **Home Assistant Area**. For example, `speaker-01` can be assigned to the `Living Room` Area and later moved to the `Office` Area without changing its `source_id`.
+
+The exact accepted characters for `device_name` are enforced by the provisioning script and ESPHome; a room-based naming convention is not part of the Nyra architecture.
+
+With the default output location, the example command creates:
+
+```text
+esphome/devices/speaker-01.yaml
+esphome/device_secrets/speaker-01.yaml
+esphome/speaker-01.yaml
+```
+
+The files have different roles:
+
+- `esphome/devices/speaker-01.yaml` contains the non-secret per-device configuration and stable `source_id`.
+- `esphome/device_secrets/speaker-01.yaml` contains generated per-device secrets such as the API encryption key and OTA password. It is installation-specific, gitignored, and must never be committed.
+- `esphome/speaker-01.yaml` is the ESPHome Device Builder entrypoint for that physical speaker.
+
+The generator refuses to overwrite existing device or private-secret files.
+
+### Copy the required files to Home Assistant
+
+The generated per-speaker files depend on the shared Nyra ESPHome package and canonical wake-word artifacts.
+
+For `speaker-01`, Home Assistant should contain:
+
+```text
+/config/esphome/speaker-01.yaml
+/config/esphome/devices/speaker-01.yaml
+/config/esphome/device_secrets/speaker-01.yaml
+/config/esphome/packages/nyra-speaker.yaml
+/config/esphome/models/nyra_it.json
+/config/esphome/models/nyra_it.tflite
+/config/esphome/models/nyra_en.json
+/config/esphome/models/nyra_en.tflite
+```
+
+From the repository root on the development machine:
+
+```bash
+ssh root@homeassistant.local 'mkdir -p /config/esphome/devices /config/esphome/device_secrets /config/esphome/packages /config/esphome/models'
+
+scp esphome/speaker-01.yaml root@homeassistant.local:/config/esphome/
+scp esphome/devices/speaker-01.yaml root@homeassistant.local:/config/esphome/devices/
+scp esphome/device_secrets/speaker-01.yaml root@homeassistant.local:/config/esphome/device_secrets/
+scp esphome/packages/nyra-speaker.yaml root@homeassistant.local:/config/esphome/packages/
+scp esphome/models/nyra_it.json esphome/models/nyra_it.tflite esphome/models/nyra_en.json esphome/models/nyra_en.tflite root@homeassistant.local:/config/esphome/models/
+```
+
+The package and wake-word artifacts are shared by all Nyra speakers. They only need to exist once in the Home Assistant ESPHome tree, but they should match the repository version used to provision the speaker.
+
+### Validate, install, and configure
+
+In **ESPHome Device Builder**:
+
+1. Open the generated `speaker-01` device.
+2. Run **Validate**.
+3. Run **Install** and flash the physical board.
+4. Wait for the device to reconnect.
+
+Then in Home Assistant:
+
+1. Add the discovered ESPHome device.
+2. Assign the device to the correct **Home Assistant Area**. This is the speaker's room/location and is independent from `source_id`.
+3. Enable **Allow the device to perform Home Assistant actions** on the ESPHome integration entry.
+4. Select the Nyra conversation agent in the Assist pipeline used by the device.
+5. Confirm that the read-only diagnostic entity **Nyra Source ID** exists and matches `speaker-01`.
+6. Select `Nyra IT` or `Nyra EN` as the wake word.
+7. Trigger the wake word and verify the complete physical path through ESPHome, Home Assistant, Router, TTS, and the speaker.
+
+Subscribing to device logs is useful for diagnostics but is not required for normal operation.
+
+### New-speaker checklist
+
+1. Choose a unique and stable technical `device_name` / `source_id`.
+2. Choose a human-readable `friendly_name`.
+3. Run `tools/new-speaker.py`.
+4. Keep the generated `device_secrets` file private.
+5. Copy the three generated speaker files to Home Assistant.
+6. Ensure the shared package and both canonical wake-word models are present on Home Assistant.
+7. Validate and install the device from ESPHome Device Builder.
+8. Add it to Home Assistant and assign its Area.
+9. Enable Home Assistant actions for the ESPHome integration.
+10. Configure the Assist pipeline and wake word.
+11. Verify **Nyra Source ID** and perform a physical wake-to-response test.
+
 After provisioning:
 
 1. Build and install the ESPHome configuration.
