@@ -17,7 +17,7 @@ from shared.protocol.requests import (
 
 from .client import NyraRouterError
 from .esphome import resolve_nyra_source_id
-from .session import SessionManager
+from .session import SessionManager, speaker_conversation_key
 
 
 
@@ -48,6 +48,17 @@ class AdapterResult:
     conversation_key: str
     continue_conversation: bool
     response: NyraRequestResponse | None = None
+
+
+def conversation_key_for_input(
+    conversation_id: str | None,
+    context_id: str,
+    satellite_id: str | None,
+    nyra_source_id: str | None,
+) -> str:
+    if satellite_id and nyra_source_id:
+        return speaker_conversation_key(nyra_source_id)
+    return conversation_id or f"ha:{context_id}"
 
 
 def build_request(data: AdapterInput, sessions: SessionManager) -> NyraRequest:
@@ -115,8 +126,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
             await super().async_will_remove_from_hass()
 
         async def _async_handle_message(self, user_input, chat_log):
-            conversation_key = user_input.conversation_id or f"ha:{user_input.context.id}"
-
             nyra_source_id = None
             if user_input.satellite_id:
                 registry = er.async_get(self.hass)
@@ -139,6 +148,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                     states,
                 )
 
+            conversation_key = conversation_key_for_input(
+                user_input.conversation_id,
+                user_input.context.id,
+                user_input.satellite_id,
+                nyra_source_id,
+            )
 
             data = AdapterInput(
                 text=user_input.text,

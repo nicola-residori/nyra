@@ -13,7 +13,7 @@ from shared.audio_streaming import (
 )
 
 
-async def serve_audio(websocket: WebSocket, registry) -> None:
+async def serve_audio(websocket: WebSocket, registry, *, transform_start=None) -> None:
     await websocket.accept()
     connection_id = uuid4().hex
     stream_id = None
@@ -44,6 +44,8 @@ async def serve_audio(websocket: WebSocket, registry) -> None:
                 if action == 'START':
                     if stream_id is not None:
                         raise DuplicateAudioStream(stream_id)
+                    if transform_start is not None:
+                        message = transform_start(message)
                     metadata = AudioStreamStart.from_mapping(message)
                     attempted_id = metadata.audio_stream_id
                     await registry.start(metadata, connection_id=connection_id)

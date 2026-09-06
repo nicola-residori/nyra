@@ -5,6 +5,16 @@ Router and Speaker-ID. One WebSocket carries one recording. Home Assistant
 connects to Router; only Router connects to Speaker-ID. Use a single application
 worker per service: the active-stream registry is process-local.
 
+Task 11 adds the Home Assistant endpoint `GET /api/nyra/audio`. ESPHome sends
+the second copy of microphone audio to this WebSocket while its normal Assist
+path continues unchanged. The endpoint accepts identification streams only,
+validates the source and wire-audio metadata, associates HA-owned session and
+request IDs, and relays frames to Router with per-chunk backpressure. It never
+connects to Speaker-ID and never accepts device-provided correlation or human
+identity. When the Nyra ingress token is configured, ESPHome must send it as
+`Authorization: Bearer <token>`; otherwise Home Assistant applies its normal
+authenticated-view policy.
+
 Configure Router with `NYRA_SPEAKER_ID_STREAM_URL` (for example,
 `ws://speaker-id:8090/v1/audio/stream`). No host is assumed by default; an
 unconfigured relay returns `SPEAKER_ID_UNAVAILABLE`. Router accepts the same
@@ -12,8 +22,15 @@ unconfigured relay returns `SPEAKER_ID_UNAVAILABLE`. Router accepts the same
 as its other ingress endpoints. Speaker-ID follows the component contract's
 trusted private network boundary.
 
-Send a JSON START message, then binary audio frames, then a JSON END message.
-Wait for each acknowledgement before sending the next frame (backpressure).
+ESPHome sends a JSON START message containing `audio_stream_id`, purpose,
+`source_id`, language, and wire-audio fields, then binary audio frames and a
+JSON END message. Any `session_id`, `request_id`, `user_id`, or identity claim
+in this public START is ignored. Wait for each acknowledgement before sending
+the next frame (backpressure).
+
+Home Assistant associates `speaker:<source_id>` with its conversation session,
+adds the resulting canonical session/request IDs, and sends this START to
+Router:
 
 ```json
 {
@@ -23,9 +40,6 @@ Wait for each acknowledgement before sending the next frame (backpressure).
   "request_id": "req_<request ID>",
   "session_id": "ses_<conversation ID>",
   "source_id": "speaker-source",
-  "trace_id": "trc_<trace ID>",
-  "span_id": "upstream-operation-span",
-  "parent_span_id": "upstream-parent-span",
   "language": "en",
   "audio_format": "pcm_s16le",
   "sample_rate": 16000,
@@ -33,8 +47,11 @@ Wait for each acknowledgement before sending the next frame (backpressure).
 }
 ```
 
-`audio_stream_id`, `purpose`, `trace_id`, and `span_id` are required. Supported
-purposes and additional requirements:
+At Router ingress, `audio_stream_id` and `purpose` are required. Home Assistant
+also supplies the available source/session/request metadata. Router creates a
+new `trace_id` and its own audio-relay `span_id` before forwarding the stream,
+as required by the component contract. Supported purposes and additional
+requirements:
 
 - `IDENTIFICATION`: `request_id`.
 - `ENROLLMENT`: `enrollment_session_id`, canonical authenticated `user_id`.
@@ -42,8 +59,8 @@ purposes and additional requirements:
   `wake_word_text`, `language`.
 
 Conversation `session_id` does not substitute for a typed operation ID.
-Enrollment and wake capture metadata must originate from the authenticated HA
-workflow. This task provides the transport; HA workflow implementation is Task 11.
+Enrollment and wake capture metadata must originate from their authenticated HA
+workflows. The public ESPHome ingress remains limited to identification.
 
 Audio defaults to a WAV byte stream (`audio_format: "wav"`). For raw microphone
 samples use `pcm_s16le`, sample rate 8000–96000 Hz, and one or two channels.

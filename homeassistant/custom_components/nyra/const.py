@@ -8,3 +8,5 @@ DEFAULT_SESSION_TTL_SECONDS = 300.0
 REQUEST_PATH = "/v1/requests"
 READY_PATH = "/ready"
 EVENTS_PATH = "/v1/events"
+AUDIO_STREAM_PATH = "/v1/audio/stream"
+AUDIO_INGRESS_PATH = "/api/nyra/audio"

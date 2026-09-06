@@ -7,6 +7,12 @@ from .protocol_bootstrap import ensure_shared_protocol
 ensure_shared_protocol()
 
 from .client import NyraRouterClient
+from .audio import (
+    HomeAssistantAudioIngress,
+    RouterAudioStreamClient,
+    disable_audio_ingress_view,
+    register_audio_ingress_view,
+)
 from .const import CONF_INGRESS_TOKEN, CONF_ROUTER_URL, DEFAULT_SESSION_TTL_SECONDS, DOMAIN
 from .events import RouterEventClient
 from .session import SessionManager
@@ -19,6 +25,9 @@ class NyraRuntime:
     sessions: SessionManager
     speaker: SpeakerStateMachine
     events: RouterEventClient
+    audio_client: RouterAudioStreamClient
+    audio_ingress: HomeAssistantAudioIngress
+    audio_ingress_view: object | None
 
     speaking_restore_unsubscribe: object | None = None
 
@@ -66,6 +75,14 @@ def unregister_speaking_restore_listener(runtime: NyraRuntime) -> None:
         return
     runtime.speaking_restore_unsubscribe = None
     unsubscribe()
+
+
+async def unregister_audio_ingress(hass, runtime: NyraRuntime) -> None:
+    view = runtime.audio_ingress_view
+    if view is not None:
+        runtime.audio_ingress_view = None
+        disable_audio_ingress_view(hass, view)
+    await runtime.audio_ingress.async_shutdown()
 
 
 async def async_setup_entry(hass, entry) -> bool:
@@ -128,12 +145,28 @@ async def async_setup_entry(hass, entry) -> bool:
         connect,
         speaker,
     )
+    sessions = SessionManager(DEFAULT_SESSION_TTL_SECONDS)
+    audio_client = RouterAudioStreamClient(
+        entry.data[CONF_ROUTER_URL],
+        entry.data.get(CONF_INGRESS_TOKEN),
+        connect,
+    )
+    audio_ingress = HomeAssistantAudioIngress(audio_client, sessions)
+    audio_ingress_view = register_audio_ingress_view(
+        hass,
+        audio_ingress,
+        entry.data.get(CONF_INGRESS_TOKEN),
+        owner_entry_id=entry.entry_id,
+    )
     entry.runtime_data = NyraRuntime(
-        client,
-        SessionManager(DEFAULT_SESSION_TTL_SECONDS),
-        speaker,
-        event_client,
-        register_speaking_restore_listener(hass, speaker),
+        client=client,
+        sessions=sessions,
+        speaker=speaker,
+        events=event_client,
+        audio_client=audio_client,
+        audio_ingress=audio_ingress,
+        audio_ingress_view=audio_ingress_view,
+        speaking_restore_unsubscribe=register_speaking_restore_listener(hass, speaker),
     )
     await event_client.start()
     await hass.config_entries.async_forward_entry_setups(
@@ -148,6 +181,7 @@ async def async_unload_entry(hass, entry) -> bool:
 
     runtime = entry.runtime_data
     unregister_speaking_restore_listener(runtime)
+    await unregister_audio_ingress(hass, runtime)
     await runtime.events.stop()
     unloaded = await hass.config_entries.async_unload_platforms(
         entry,

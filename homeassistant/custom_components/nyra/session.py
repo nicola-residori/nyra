@@ -7,6 +7,10 @@ from typing import Callable
 from shared.protocol.ids import new_request_id, new_session_id
 
 
+def speaker_conversation_key(source_id: str) -> str:
+    return f"speaker:{source_id}"
+
+
 @dataclass
 class _Session:
     session_id: str

@@ -437,3 +437,21 @@ def test_downstream_reason_survives_websocket_error_envelope(tmp_path, reason):
     with TestClient(app) as client, client.websocket_connect('/v1/audio/stream') as ws:
         ws.send_json({'type': 'START', **metadata()})
         assert ws.receive_json()['reason_code'] == reason
+
+
+def test_router_creates_audio_trace_before_relay(tmp_path):
+    app, sink = ws_app(tmp_path)
+    incoming = metadata()
+    incoming.pop("trace_id")
+    incoming.pop("span_id")
+
+    with TestClient(app) as client, client.websocket_connect('/v1/audio/stream') as ws:
+        ws.send_json({'type': 'START', **incoming})
+        assert ws.receive_json()['type'] == 'STARTED'
+        ws.send_json({'type': 'END', 'audio_stream_id': 'audio-a'})
+        assert ws.receive_json()['type'] == 'RESULT'
+
+    relayed = sink.started[0]
+    assert relayed.trace_id.startswith("trc_")
+    assert relayed.span_id.startswith("ROUTER#audio_relay#")
+    assert relayed.request_id == incoming["request_id"]

@@ -1,8 +1,13 @@
 import pytest
 
-from homeassistant.custom_components.nyra.conversation import AdapterInput, build_request, process_adapter_input
+from homeassistant.custom_components.nyra.conversation import (
+    AdapterInput,
+    build_request,
+    conversation_key_for_input,
+    process_adapter_input,
+)
 from homeassistant.custom_components.nyra.esphome import resolve_nyra_source_id
-from homeassistant.custom_components.nyra.session import SessionManager
+from homeassistant.custom_components.nyra.session import SessionManager, speaker_conversation_key
 
 from shared.protocol.ids import new_trace_id
 from shared.protocol.requests import ExecutionType, NyraRequestResponse, NyraResponseBody, RequestStatus
@@ -52,6 +57,16 @@ def test_speaker_request_prefers_stable_nyra_source_id_over_ha_satellite_entity_
     assert speaker.type is ExecutionType.HA_SPEAKER
 
     assert speaker.source.id == "nyra-bedroom"
+
+
+def test_speaker_audio_and_conversation_share_the_source_correlation_key():
+    assert speaker_conversation_key("nyra-bedroom") == "speaker:nyra-bedroom"
+    assert conversation_key_for_input(
+        "ha-existing-conversation",
+        "context-a",
+        "assist_satellite.bedroom",
+        "nyra-bedroom",
+    ) == "speaker:nyra-bedroom"
 
 
 def test_resolve_nyra_source_id_joins_satellite_to_source_sensor_on_same_device():
