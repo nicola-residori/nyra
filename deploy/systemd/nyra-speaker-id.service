@@ -1,0 +1,16 @@
+[Unit]
+Description=Nyra Speaker ID
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nyra-speaker-id
+EnvironmentFile=-/opt/nyra-speaker-id/.env
+ExecStart=/opt/nyra-speaker-id/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8090
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
