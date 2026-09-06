@@ -7,12 +7,14 @@ from router.observability.service import ObservabilityService
 from router.lifecycle.events import InteractionEventBroker
 from router.lifecycle.service import RequestLifecycleService, ContextResult, SkillMatch, LifecycleDecision
 from router.lifecycle.store import RequestStateStore
+from router.identity_config import IdentityRuntimeConfigStore
 from shared.protocol.requests import RequestStatus
 from router.api.health import router as health_router
 from router.api.logs import router as logs_router
 from router.api.observability import router as obs_router
 from router.api.requests import router as requests_router
 from router.api.events import router as events_router
+from router.api.identity_config import router as identity_config_router
 
 
 class _IdentityPort:
@@ -47,6 +49,10 @@ def create_app(settings: RouterSettings | None = None):
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
     request_store = RequestStateStore(settings.database_path)
+    identity_config = IdentityRuntimeConfigStore(
+        settings.database_path,
+        settings.identification_timeout_seconds,
+    )
     event_broker = InteractionEventBroker(queue_size=settings.websocket_queue_size)
     observability = ObservabilityService(store, request_store=request_store)
     lifecycle = RequestLifecycleService(
@@ -59,6 +65,8 @@ def create_app(settings: RouterSettings | None = None):
         llm_port=_LlmPort(),
         clarification_timeout_seconds=settings.clarification_timeout_seconds,
         observability=observability,
+        identity_config=identity_config,
+        identification_timeout_seconds=settings.identification_timeout_seconds,
     )
 
     @asynccontextmanager
@@ -66,6 +74,7 @@ def create_app(settings: RouterSettings | None = None):
         app.state.ready = False
         store.initialize()
         request_store.initialize()
+        identity_config.initialize()
         app.state.ready = True
         try:
             yield
@@ -76,6 +85,7 @@ def create_app(settings: RouterSettings | None = None):
     app.state.settings = settings
     app.state.store = store
     app.state.request_store = request_store
+    app.state.identity_config = identity_config
     app.state.observability = observability
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
@@ -86,6 +96,7 @@ def create_app(settings: RouterSettings | None = None):
     app.include_router(obs_router)
     app.include_router(requests_router)
     app.include_router(events_router)
+    app.include_router(identity_config_router)
     return app
 
 

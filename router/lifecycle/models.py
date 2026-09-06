@@ -12,6 +12,7 @@ class PersistedRequestState(BaseModel):
     language: str
     source: RequestSource | None = None
     identity_user_id: str | None = None
+    last_trusted_user_id: str | None = None
     original_input: str
     status: RequestStatus
     current_trace_id: str

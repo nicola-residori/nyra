@@ -12,6 +12,7 @@ class RouterSettings:
     database_path: Path = Path("data/logs.db")
     version: str = "0.1.0"
     clarification_timeout_seconds: int = 120
+    identification_timeout_seconds: float = 2.0
     websocket_queue_size: int = 100
     websocket_heartbeat_seconds: int = 30
     ingress_token: str | None = None
@@ -29,6 +30,9 @@ class RouterSettings:
             version=os.getenv("NYRA_ROUTER_VERSION", data.get("version", "0.1.0")),
             clarification_timeout_seconds=int(os.getenv(
                 "NYRA_CLARIFICATION_TIMEOUT_SECONDS", data.get("clarification_timeout_seconds", 120)
+            )),
+            identification_timeout_seconds=float(os.getenv(
+                "NYRA_IDENTIFICATION_TIMEOUT_SECONDS", data.get("identification_timeout_seconds", 2.0)
             )),
             websocket_queue_size=int(os.getenv(
                 "NYRA_WEBSOCKET_QUEUE_SIZE", data.get("websocket_queue_size", 100)

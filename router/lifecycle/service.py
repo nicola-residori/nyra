@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
-from router.lifecycle.identity import IdentityOutcome, resolve_identity_outcome
+from router.lifecycle.identity import IdentityOutcome, resolve_speaker_identity
+from router.speaker_identity import SpeakerIdentityOutcome, SpeakerIdentityResult
 from router.lifecycle.models import PersistedRequestState
 from shared.protocol.context import (
     IdentityResolutionSource,
@@ -65,7 +66,7 @@ class LifecycleDecision:
 
 
 class SpeakerIdentityPort(Protocol):
-    async def identify(self, request: NyraRequest, trace_id: str) -> str | None: ...
+    async def identify(self, request: NyraRequest, trace_id: str) -> SpeakerIdentityResult: ...
 
 
 class ContextPort(Protocol):
@@ -88,7 +89,8 @@ class LlmPort(Protocol):
 class RequestLifecycleService:
     def __init__(self, store, broker, identity_port: SpeakerIdentityPort, context_port: ContextPort,
                  memory_port: MemoryPort, skill_port: SkillPort, llm_port: LlmPort,
-                 clock=None, clarification_timeout_seconds: int = 120, observability=None):
+                 clock=None, clarification_timeout_seconds: int = 120, observability=None,
+               identity_config=None, identification_timeout_seconds: float = 2.0):
         self.store = store
         self.broker = broker
         self.identity_port = identity_port
@@ -99,6 +101,8 @@ class RequestLifecycleService:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.clarification_timeout_seconds = clarification_timeout_seconds
         self.observability = observability
+        self.identity_config = identity_config
+        self.identification_timeout_seconds = float(identification_timeout_seconds)
 
     def _log(self, request: NyraRequest, trace_id: str, span_id: str, event: str,
              kind: LogKind = LogKind.EVENT, result: str | None = None,
@@ -138,19 +142,15 @@ class RequestLifecycleService:
         identity_user_id: str | None,
         context: ContextResult,
         previous_session_state: PersistedRequestState | None = None,
+        identity_source: IdentityResolutionSource | None = None,
     ) -> RequestContext:
-        if request.identity is not None:
-            identity_source = IdentityResolutionSource.TRUSTED_HA_IDENTITY
-        elif request.type is ExecutionType.HA_SPEAKER and identity_user_id not in (None, "guest"):
-            identity_source = IdentityResolutionSource.SPEAKER_IDENTIFICATION
-        elif (
-            previous_session_state is not None
-            and identity_user_id is not None
-            and identity_user_id == previous_session_state.identity_user_id
-        ):
-            identity_source = IdentityResolutionSource.SESSION_CONTINUITY
-        else:
-            identity_source = IdentityResolutionSource.GUEST_FALLBACK
+        if identity_source is None:
+            if request.identity is not None:
+                identity_source = IdentityResolutionSource.TRUSTED_HA_IDENTITY
+            elif request.type is ExecutionType.HA_SPEAKER and identity_user_id not in (None, "guest"):
+                identity_source = IdentityResolutionSource.SPEAKER_IDENTIFICATION
+            else:
+                identity_source = IdentityResolutionSource.GUEST_FALLBACK
 
         identity = None
         if request.type is not ExecutionType.JOB:
@@ -220,40 +220,110 @@ class RequestLifecycleService:
         previous_session_state = None
         if request.session_id is not None and existing is None:
             previous_session_state = self.store.get_latest_for_session(request.session_id)
-        identity_user_id = request.identity.user_id if request.identity else (
-            existing.identity_user_id if existing else (previous_session_state.identity_user_id if previous_session_state else None)
+        last_trusted_user_id = request.identity.user_id if request.identity else (
+            existing.last_trusted_user_id if existing else (
+                previous_session_state.last_trusted_user_id if previous_session_state else None
+            )
         )
-        identity_task = None
+        identity_user_id = request.identity.user_id if request.identity else (
+            existing.identity_user_id if existing else last_trusted_user_id
+        )
+        identity_source = (
+            IdentityResolutionSource.TRUSTED_HA_IDENTITY
+            if request.identity is not None
+            else None
+        )
+
         if request.type is ExecutionType.HA_SPEAKER:
             await self._state(request, trace_id, span_id, InteractionState.IDENTIFYING)
+            snapshot = self.identity_config.snapshot() if self.identity_config is not None else None
+            timeout_seconds = (
+                snapshot.identification_timeout_seconds
+                if snapshot is not None
+                else self.identification_timeout_seconds
+            )
             identity_task = asyncio.create_task(self.identity_port.identify(request, trace_id))
+            done, _ = await asyncio.wait({identity_task}, timeout=timeout_seconds)
+            timed_out = identity_task not in done
 
-        context = await self.context_port.resolve(request, identity_user_id)
+            if timed_out:
+                def _consume_late_identity(task):
+                    try:
+                        task.result()
+                    except BaseException:
+                        pass
+                identity_task.add_done_callback(_consume_late_identity)
+                raw_identity_result = None
+            else:
+                raw_identity_result = identity_task.result()
 
-        if identity_task is not None:
-            detected = await identity_task
-            resolution = resolve_identity_outcome(identity_user_id, detected)
+            if isinstance(raw_identity_result, SpeakerIdentityResult):
+                identity_result = raw_identity_result
+            elif isinstance(raw_identity_result, str):
+                identity_result = SpeakerIdentityResult(
+                    outcome=SpeakerIdentityOutcome.IDENTIFIED,
+                    identified_user_id=raw_identity_result,
+                    best_score=None,
+                    diagnostic_id=None,
+                    reason_code=None,
+                )
+            else:
+                identity_result = None
+
+            resolution = resolve_speaker_identity(
+                last_trusted_user_id,
+                identity_result,
+                timed_out=timed_out,
+            )
             identity_user_id = resolution.current_user_id
-            self._log(request, trace_id, span_id, resolution.outcome.value,
-                      result=resolution.current_user_id,
-                      params={"previous_user_id": resolution.previous_user_id,
-                              "current_user_id": resolution.current_user_id})
+            last_trusted_user_id = resolution.last_trusted_user_id
+            identity_source = resolution.resolution_source
+
+            self._log(
+                request,
+                trace_id,
+                span_id,
+                resolution.outcome.value,
+                result=resolution.current_user_id,
+                params={
+                    "previous_user_id": resolution.previous_user_id,
+                    "current_user_id": resolution.current_user_id,
+                    "last_trusted_user_id": resolution.last_trusted_user_id,
+                    "timed_out": resolution.timed_out,
+                    "speaker_identity_outcome": (
+                        identity_result.outcome.value
+                        if identity_result is not None
+                        else None
+                    ),
+                    "config_revision": snapshot.revision if snapshot is not None else None,
+                },
+            )
+
             feedback = {
                 IdentityOutcome.IDENTIFIED: IdentityFeedback.RECOGNIZED,
                 IdentityOutcome.CONFIRMED: IdentityFeedback.RECOGNIZED,
                 IdentityOutcome.CHANGED: IdentityFeedback.IDENTITY_CHANGED,
+                IdentityOutcome.CONTINUITY: IdentityFeedback.NOT_RECOGNIZED,
                 IdentityOutcome.GUEST: IdentityFeedback.NOT_RECOGNIZED,
             }[resolution.outcome]
             await self.broker.publish_identity_feedback(IdentityFeedbackEvent(
-                feedback=feedback, source=request.source, session_id=request.session_id,
-                request_id=request.request_id, trace_id=trace_id,
+                feedback=feedback,
+                source=request.source,
+                session_id=request.session_id,
+                request_id=request.request_id,
+                trace_id=trace_id,
             ))
             await self._state(request, trace_id, span_id, InteractionState.PROCESSING_LOCAL)
 
+        context = await self.context_port.resolve(request, identity_user_id)
         request_context = self._build_request_context(
-            request, trace_id, identity_user_id, context, previous_session_state
+            request,
+            trace_id,
+            identity_user_id,
+            context,
+            previous_session_state,
+            identity_source,
         )
-
         memory = None
         if context.semantic_memory_required:
             self._log(request, trace_id, span_id, "MEMORY_SEARCH", params={"required": True})
@@ -275,6 +345,7 @@ class RequestLifecycleService:
                     language=request_context.language,
                     source=request.source,
                     identity_user_id=request_context.identity.user_id if request_context.identity else None,
+                    last_trusted_user_id=last_trusted_user_id,
                     original_input=request.input.text,
                     status=decision.status,
                     current_trace_id=request_context.trace_id,
@@ -286,6 +357,7 @@ class RequestLifecycleService:
                 self.store.create(persisted)
             else:
                 existing.identity_user_id = request_context.identity.user_id if request_context.identity else None
+                existing.last_trusted_user_id = last_trusted_user_id
                 existing.status = decision.status
                 existing.current_trace_id = request_context.trace_id
                 existing.pending_state = decision.pending_state

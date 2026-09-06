@@ -38,6 +38,7 @@ class RequestStateStore:
                 language TEXT NOT NULL,
                 source_json TEXT,
                 identity_user_id TEXT,
+                last_trusted_user_id TEXT,
                 original_input TEXT NOT NULL,
                 status TEXT NOT NULL,
                 current_trace_id TEXT NOT NULL,
@@ -46,6 +47,9 @@ class RequestStateStore:
                 updated_at TEXT NOT NULL,
                 expires_at TEXT
             )""")
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(request_states)")}
+            if "last_trusted_user_id" not in columns:
+                conn.execute("ALTER TABLE request_states ADD COLUMN last_trusted_user_id TEXT")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_request_states_session_id ON request_states(session_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_request_states_status ON request_states(status)")
 
@@ -55,7 +59,7 @@ class RequestStateStore:
         return (
             d["request_id"], d["session_id"], d["type"], d["language"],
             json.dumps(d["source"], ensure_ascii=False) if d["source"] is not None else None,
-            d["identity_user_id"], d["original_input"], d["status"], d["current_trace_id"],
+            d["identity_user_id"], d.get("last_trusted_user_id"), d["original_input"], d["status"], d["current_trace_id"],
             json.dumps(d["pending_state"], ensure_ascii=False) if d["pending_state"] is not None else None,
             d["created_at"], d["updated_at"], d["expires_at"],
         )
@@ -63,15 +67,15 @@ class RequestStateStore:
     def create(self, state: PersistedRequestState) -> None:
         with self._connection() as conn:
             conn.execute("""INSERT INTO request_states(
-                request_id,session_id,type,language,source_json,identity_user_id,original_input,status,
+                request_id,session_id,type,language,source_json,identity_user_id,last_trusted_user_id,original_input,status,
                 current_trace_id,pending_state_json,created_at,updated_at,expires_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", self._row(state))
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", self._row(state))
 
     def update(self, state: PersistedRequestState) -> None:
         row = self._row(state)
         with self._connection() as conn:
             conn.execute("""UPDATE request_states SET
-                session_id=?,type=?,language=?,source_json=?,identity_user_id=?,original_input=?,status=?,
+                session_id=?,type=?,language=?,source_json=?,identity_user_id=?,last_trusted_user_id=?,original_input=?,status=?,
                 current_trace_id=?,pending_state_json=?,created_at=?,updated_at=?,expires_at=?
                 WHERE request_id=?""", row[1:] + (row[0],))
 

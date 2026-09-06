@@ -207,7 +207,7 @@ async def test_new_request_in_same_session_confirms_or_changes_previous_identity
     assert any(r.event=="IDENTITY_CHANGED" and r.params.get("current_user_id")=="user-b" for r in collector.records)
     identity.detected=None
     fourth=request(session_id=first.session_id); await svc.execute(fourth)
-    assert any(r.event=="IDENTITY_GUEST" and r.params.get("current_user_id")=="guest" for r in collector.records)
+    assert any(r.event=="IDENTITY_CONTINUITY" and r.params.get("current_user_id")=="user-b" for r in collector.records)
 
 @pytest.mark.asyncio
 async def test_failed_decision_closes_lifecycle_span_with_fault(tmp_path):
