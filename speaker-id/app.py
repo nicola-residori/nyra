@@ -8,7 +8,11 @@ from pathlib import Path
 from threading import Lock
 from time import monotonic
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
+from shared.audio_streaming import AudioStreamRegistry
+from shared.audio_websocket import serve_audio
+import importlib.util
+import sys
 from pydantic import BaseModel, Field
 
 
@@ -111,6 +115,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     )
     store = SQLiteConfigStore(root / "speaker-id.sqlite3")
     started = monotonic()
+    module_name = "nyra_speaker_audio_streaming"
+    module_spec = importlib.util.spec_from_file_location(module_name, Path(__file__).with_name("audio_streaming.py"))
+    streaming = importlib.util.module_from_spec(module_spec)
+    sys.modules[module_name] = streaming
+    module_spec.loader.exec_module(streaming)
+    audio_sink = streaming.SpeakerAudioSink(store, root)
+    audio_streams = AudioStreamRegistry(audio_sink, float(os.getenv("NYRA_AUDIO_STREAM_TIMEOUT_SECONDS", "30")))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -123,12 +134,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             yield
         finally:
             app.state.ready = False
+            await app.state.audio_streams.close()
 
     app = FastAPI(title="Nyra Speaker ID", lifespan=lifespan)
+    app.state.audio_streams = audio_streams
+    app.state.audio_sink = audio_sink
     app.state.data_root = root
     app.state.config_store = store
     app.state.ready = False
     app.state.model_state = "not_loaded"
+
+    @app.websocket("/v1/audio/stream")
+    async def audio_stream(websocket: WebSocket):
+        await serve_audio(websocket, app.state.audio_streams)
 
     @app.get("/health")
     def health():

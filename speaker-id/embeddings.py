@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from typing import Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ class SpeechBrainECAPAEngine:
                 "torch and torchaudio are required for production ECAPA embeddings"
             ) from exc
 
-        waveform, sample_rate = torchaudio.load(audio.wav_bytes)
+        waveform, sample_rate = torchaudio.load(io.BytesIO(audio.wav_bytes))
         if sample_rate != audio.sample_rate:
             raise RuntimeError("processed audio sample rate mismatch")
 

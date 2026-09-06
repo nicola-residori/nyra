@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from time import monotonic
 from fastapi import FastAPI
 from router.config import RouterSettings
+from router.audio_streaming import AudioStreamRegistry, SpeakerAudioRelay
 from router.storage.sqlite import SQLiteObservabilityStore
 from router.observability.service import ObservabilityService
 from router.lifecycle.events import InteractionEventBroker
@@ -13,6 +14,7 @@ from router.api.health import router as health_router
 from router.api.logs import router as logs_router
 from router.api.observability import router as obs_router
 from router.api.requests import router as requests_router
+from router.api.audio import router as audio_router
 from router.api.events import router as events_router
 from router.api.identity_config import router as identity_config_router
 
@@ -44,7 +46,7 @@ class _LlmPort:
         return LifecycleDecision(status=RequestStatus.FAILED)
 
 
-def create_app(settings: RouterSettings | None = None):
+def create_app(settings: RouterSettings | None = None, *, audio_sink=None):
     settings = settings or RouterSettings.load()
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
@@ -80,8 +82,13 @@ def create_app(settings: RouterSettings | None = None):
             yield
         finally:
             app.state.ready = False
+            await app.state.audio_streams.close()
 
     app = FastAPI(title="Nyra Router", lifespan=lifespan)
+    app.state.audio_streams = AudioStreamRegistry(
+        audio_sink if audio_sink is not None else SpeakerAudioRelay(settings.speaker_id_stream_url),
+        settings.audio_stream_timeout_seconds,
+    )
     app.state.settings = settings
     app.state.store = store
     app.state.request_store = request_store
@@ -96,6 +103,7 @@ def create_app(settings: RouterSettings | None = None):
     app.include_router(obs_router)
     app.include_router(requests_router)
     app.include_router(events_router)
+    app.include_router(audio_router)
     app.include_router(identity_config_router)
     return app
 
