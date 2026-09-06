@@ -404,6 +404,17 @@ Identification always compares against all profiles. Presence, area,
 device or contextual probability never restrict candidates. Speaker ID
 owns thresholds and classification:
 
+The identification threshold and margin are persistent Speaker ID runtime configuration.
+Router owns a separate persistent identification timeout.
+All three values are editable at runtime without service restart. Each
+identification operation uses an immutable configuration snapshot at operation start:
+Speaker ID snapshots threshold and margin, while Router snapshots its
+identification timeout. A configuration change therefore affects only
+operations started after the change.
+
+Admin may edit these values through Router APIs; Admin never reads or
+writes Speaker ID storage directly.
+
 ``` text
 IDENTIFIED
 NOT_RECOGNIZED
@@ -420,26 +431,31 @@ IDENTIFIED(user_id)
 -> user_id / SPEAKER_IDENTIFICATION
 
 NOT_RECOGNIZED or FAILED
--> previous certainly identified user in SAME session?
-   yes -> previous user / SESSION_CONTINUITY
+-> latest certainly identified user in SAME session?
+   yes -> latest user / SESSION_CONTINUITY
    no  -> GUEST / GUEST_FALLBACK
 ```
 
 Continuity never crosses sessions.
 
 Speaker ID temporarily stores processed identification audio and all
-candidate scores for diagnostics. Default configurable audio TTL:
+candidate scores for diagnostics. Detailed diagnostic retention is:
 
 ``` text
-IDENTIFIED       -> 1 hour
+IDENTIFIED       -> 15 minutes
 NOT_RECOGNIZED   -> 24 hours
 FAILED           -> 24 hours
 ```
 
-Expiration physically deletes audio. The technical record may remain for
-general observability retention. Admin may listen and manually delete
-audio while preserving the record. `identified_user_id` records only the
-biometric result, never Router continuity resolution.
+At expiry, processed diagnostic audio and candidate scores expire with
+the detailed diagnostic and are physically deleted. If processing fails
+before processed audio exists, no diagnostic audio is created. A small
+synthetic diagnostic record may remain under the same general N.Y.R.A.
+observability retention policy (`NYRA_RETENTION_DAYS`, currently 30
+days); it contains no audio, embeddings, or full candidate matrix. Admin
+may listen while detailed audio is available and may manually delete
+audio while preserving the synthetic record. `identified_user_id`
+records only the biometric result, never Router continuity resolution.
 
 ## 11. Wake Word Dataset
 
@@ -448,10 +464,13 @@ collects cleaned **positive** wake-word samples for later external use
 such as Colab. Negative samples are generated separately/automatically.
 It does not own wake-word runtime or training.
 
-`WakeWordRecordingSession` groups collection history. `WakeWordSample`
-stores sample ID, recording session, wake word, processed audio path,
-timestamp, device/speaker metadata, recorded-by metadata, audio metadata
-and preprocessing metadata.
+A `WakeWordRecordingSession` represents exactly one capture attempt and
+can create at most one permanent WakeWordSample. ACCEPTED, REJECTED, and
+FAILED are terminal outcomes for that session; collecting another sample
+requires a new session. `WakeWordSample` stores sample ID, recording
+session, wake word, processed audio path, timestamp, device/speaker
+metadata, recorded-by metadata, audio metadata and preprocessing
+metadata.
 
 `recorded_by` and speaker/device are descriptive metadata only. There is
 **no foreign key, ownership, lifecycle, or functional relationship**
@@ -464,7 +483,9 @@ Admin can list/filter/listen/select/delete samples, visually show
 speaker/device and recorded-by tags, and export all or arbitrary
 selected samples. Export is produced through Speaker ID APIs and
 conceptually contains `audio/*.wav` plus `metadata.json`.
-RecordingSession is a useful grouping, not an export boundary.
+Admin does not start enrollment or wake-word capture. Home Assistant starts both workflows and binds enrollment to the authenticated HA user;
+Admin remains a management and diagnostics surface. A wake-word session
+is an operational correlation boundary, not an export boundary.
 
 ## 12. Device presentation
 
