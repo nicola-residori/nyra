@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "esphome/packages/nyra-speaker.yaml"
 ENROLLMENT_PACKAGE = ROOT / "esphome/packages/nyra-enrollment.yaml"
 COMPONENT = ROOT / "esphome/components/nyra_audio_ingress"
+VENDORED_WAVESHARE_CORE = ROOT / "esphome/vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml"
 
 
 def test_enrollment_overlay_streams_the_existing_microphone_only_to_home_assistant():
@@ -29,14 +30,27 @@ def test_enrollment_overlay_uses_mansarda_measured_voice_activity_levels():
     assert "trailing_silence: 900ms" in text
 
 
-def test_experimental_overlay_correlates_normal_assist_audio_for_identification():
+def test_identification_captures_the_complete_clean_assist_listening_window():
     text = ENROLLMENT_PACKAGE.read_text(encoding="utf-8")
     voice = text.split("voice_assistant:", 1)[1]
 
-    assert "on_listening:" in voice
-    assert "start_identification_stream();" in voice
-    assert "on_stt_vad_end:" in voice
-    assert "end_stream();" in voice
+    listening = voice.split("on_listening:", 1)[1].split("on_stt_vad_start:", 1)[0]
+    assert "start_identification_stream();" in listening
+    vad_start = voice.split("on_stt_vad_start:", 1)[1].split("on_stt_vad_end:", 1)[0] if "on_stt_vad_start:" in voice else ""
+    assert "start_identification_stream();" not in vad_start
+    vad_end = voice.split("on_stt_vad_end:", 1)[1].split("button:", 1)[0]
+    assert "end_stream();" in vad_end
+
+
+def test_wake_cue_finishes_before_assist_starts():
+    package = PACKAGE.read_text(encoding="utf-8")
+    core = VENDORED_WAVESHARE_CORE.read_text(encoding="utf-8")
+
+    assert "../vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml" in package
+    wake = core.split("# Otherwise: beep, then start Assist.", 1)[1].split("voice_assistant:", 1)[0]
+    assert "delay: 1000ms" in wake
+    assert "delay: 300ms" not in wake
+    assert wake.index("delay: 1000ms") < wake.index("voice_assistant.start:")
 
 
 def test_stable_speaker_package_cannot_enable_experimental_enrollment():

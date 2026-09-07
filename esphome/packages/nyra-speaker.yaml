@@ -1,13 +1,8 @@
 # Shared Nyra ESPHome speaker package.
-# Hardware is provided by the pinned Waveshare ESP32-S3 Audio VA package.
+# Hardware is provided by the vendored Waveshare ESP32-S3 Audio VA v1.0.0 core.
 # Room/device identity belongs only in esphome/devices/*.yaml.
 packages:
-  waveshare_audio_va:
-    url: https://github.com/MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va
-    ref: v1.0.0
-    files:
-      - base/core.yaml
-    refresh: 1d
+  waveshare_audio_va: !include ../vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml
 
 # Stable, read-only source identity consumed by the Nyra Home Assistant adapter.
 # The value comes from the per-device `source_id` substitution created at provisioning.

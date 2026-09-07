@@ -55,6 +55,8 @@ nyra_audio_ingress:
 # Normal Assist keeps its own STT path; the same captured PCM is correlated to
 # the Router request solely for speaker identification.
 voice_assistant:
+  # The vendored base waits for the complete local cue before Assist starts, so
+  # this window contains the command from its clean beginning through VAD end.
   on_listening:
     - lambda: 'id(nyra_audio_tee).start_identification_stream();'
   on_stt_vad_end:
