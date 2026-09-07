@@ -17,6 +17,7 @@ class RouterSettings:
     websocket_heartbeat_seconds: int = 30
     ingress_token: str | None = None
     speaker_id_stream_url: str | None = None
+    speaker_id_http_url: str | None = None
     audio_stream_timeout_seconds: float = 30.0
 
     @classmethod
@@ -43,6 +44,7 @@ class RouterSettings:
                 "NYRA_WEBSOCKET_HEARTBEAT_SECONDS", data.get("websocket_heartbeat_seconds", 30)
             )),
             speaker_id_stream_url=os.getenv("NYRA_SPEAKER_ID_STREAM_URL", data.get("speaker_id_stream_url")),
+            speaker_id_http_url=os.getenv("NYRA_SPEAKER_ID_HTTP_URL", data.get("speaker_id_http_url")),
             audio_stream_timeout_seconds=float(os.getenv("NYRA_AUDIO_STREAM_TIMEOUT_SECONDS", data.get("audio_stream_timeout_seconds", 30.0))),
             ingress_token=os.getenv("NYRA_ROUTER_INGRESS_TOKEN", data.get("ingress_token")),
         )

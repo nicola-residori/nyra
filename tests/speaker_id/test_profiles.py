@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from datetime import datetime, timezone
 
 ROOT = Path(__file__).parents[2]
 
@@ -118,3 +119,21 @@ def test_deleting_last_sample_deletes_profile(tmp_path):
 
     assert store.get_profile("u") is None
     assert store.list_samples("u") == []
+
+
+def test_enrollment_sample_exposes_admin_playback_metadata(tmp_path):
+    profiles = load_module("profiles.py", "nyra_speaker_profiles_admin")
+    store = profiles.ProfileStore(tmp_path)
+    store.initialize()
+    created_at = datetime(2026, 9, 7, 18, 0, tzinfo=timezone.utc)
+
+    sample = store.add_sample(
+        user_id="u", source_id="nyra-mansarda", wav_bytes=b"wav",
+        embedding=[1.0], quality={"rms": 0.12}, duration_seconds=1.75,
+        created_at=created_at,
+    )
+
+    assert sample.created_at == created_at
+    assert sample.duration_seconds == 1.75
+    assert store.list_profiles()[0].user_id == "u"
+    assert store.list_samples("u")[0].quality == {"rms": 0.12}

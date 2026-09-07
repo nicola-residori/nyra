@@ -4,6 +4,7 @@ from homeassistant.custom_components.nyra.esphome import (
     EspHomeSpeakerOutput,
     SpeakerTarget,
     discover_speaker_targets,
+    SpeakerUnavailable,
 )
 from shared.protocol.events import IdentityFeedback
 
@@ -112,6 +113,12 @@ def test_discovery_joins_source_id_ring_and_close_feedback_by_device():
             "platform": "esphome",
             "original_name": "Nyra Close Feedback",
         },
+        {
+            "device_id": "device-a",
+            "entity_id": "button.user_renamed_enrollment_capture",
+            "platform": "esphome",
+            "original_name": "Nyra Enrollment Capture",
+        },
     ]
     states = {"sensor.renamed_source_identity": "nyra-bedroom"}
 
@@ -119,8 +126,47 @@ def test_discovery_joins_source_id_ring_and_close_feedback_by_device():
         "nyra-bedroom": SpeakerTarget(
             light_entity="light.user_renamed_ring",
             close_feedback_button="button.user_renamed_close",
+            enrollment_capture_button="button.user_renamed_enrollment_capture",
         )
     }
+
+
+@pytest.mark.asyncio
+async def test_record_enrollment_presses_discovered_capture_button():
+    calls = []
+
+    async def call(domain, service, data):
+        calls.append((domain, service, data))
+
+    output = EspHomeSpeakerOutput(
+        {
+            "nyra-mansarda": SpeakerTarget(
+                light_entity="light.nyra_status_ring",
+                enrollment_capture_button="button.nyra_enrollment_capture",
+            )
+        },
+        call,
+    )
+
+    await output.record_enrollment_sample("nyra-mansarda")
+
+    assert calls == [
+        ("button", "press", {"entity_id": "button.nyra_enrollment_capture"})
+    ]
+
+
+@pytest.mark.asyncio
+async def test_record_enrollment_fails_when_capture_button_is_unavailable():
+    async def call(domain, service, data):
+        raise AssertionError("service must not be called")
+
+    output = EspHomeSpeakerOutput(
+        {"nyra-mansarda": SpeakerTarget(light_entity="light.nyra_status_ring")},
+        call,
+    )
+
+    with pytest.raises(SpeakerUnavailable, match="capture button"):
+        await output.record_enrollment_sample("nyra-mansarda")
 
 
 def test_discovery_accepts_status_ring_without_close_feedback():

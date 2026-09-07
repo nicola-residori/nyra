@@ -11,6 +11,11 @@ from fastapi.testclient import TestClient
 APP_PATH = Path(__file__).parents[2] / "speaker-id" / "app.py"
 
 
+class ReadyEngine:
+    def load(self):
+        return self
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location("nyra_speaker_id_app", APP_PATH)
     if spec is None or spec.loader is None:
@@ -23,7 +28,7 @@ def load_module():
 
 def test_identification_config_has_bootstrap_defaults_and_revision(tmp_path):
     module = load_module()
-    app = module.create_app(data_root=tmp_path)
+    app = module.create_app(data_root=tmp_path, embedding_engine=ReadyEngine())
 
     with TestClient(app) as client:
         response = client.get("/v1/config")
@@ -41,7 +46,7 @@ def test_identification_config_has_bootstrap_defaults_and_revision(tmp_path):
 def test_identification_config_persists_across_app_restart(tmp_path):
     module = load_module()
 
-    first_app = module.create_app(data_root=tmp_path)
+    first_app = module.create_app(data_root=tmp_path, embedding_engine=ReadyEngine())
     with TestClient(first_app) as client:
         response = client.put(
             "/v1/config/identification",
@@ -54,7 +59,7 @@ def test_identification_config_persists_across_app_restart(tmp_path):
             "revision": 2,
         }
 
-    restarted_app = module.create_app(data_root=tmp_path)
+    restarted_app = module.create_app(data_root=tmp_path, embedding_engine=ReadyEngine())
     with TestClient(restarted_app) as client:
         body = client.get("/v1/config").json()
 
@@ -67,7 +72,7 @@ def test_identification_config_persists_across_app_restart(tmp_path):
 
 def test_identification_snapshot_is_immutable_and_revisioned(tmp_path):
     module = load_module()
-    app = module.create_app(data_root=tmp_path)
+    app = module.create_app(data_root=tmp_path, embedding_engine=ReadyEngine())
 
     with TestClient(app) as client:
         before = app.state.config_store.identification_snapshot()

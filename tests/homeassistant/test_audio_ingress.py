@@ -270,6 +270,16 @@ def test_public_ingress_accepts_identification_metadata_only():
 
     assert parsed.source_id == "speaker-a"
     assert not hasattr(parsed, "user_id")
+    direct = audio().IdentificationAudioStart.from_mapping({
+        "type": "START",
+        "audio_stream_id": "audio-direct",
+        "purpose": "ENROLLMENT_CAPTURE",
+        "session_id": new_session_id(),
+        "request_id": new_request_id(),
+        "source_id": "speaker-a",
+        "language": "it-IT",
+    })
+    assert direct.capture_purpose == "ENROLLMENT_CAPTURE"
     with pytest.raises(audio().InvalidAudioIngressStart):
         audio().IdentificationAudioStart.from_mapping({
             "type": "START",
@@ -483,6 +493,114 @@ async def test_ha_websocket_ingress_relays_start_chunks_and_end():
 
 
 @pytest.mark.asyncio
+async def test_ha_buffers_device_audio_before_opening_slow_router_stream():
+    start = identification_start(capture_purpose="ENROLLMENT_CAPTURE")
+    events = []
+
+    class RouterSession:
+        def __init__(self):
+            self.chunks = []
+
+        async def async_chunk(self, chunk):
+            self.chunks.append(chunk)
+
+        async def async_end(self):
+            events.append(("router", self.chunks))
+            return {"status": "REJECTED", "user_id": "user-1", "reason_code": "TOO_SHORT"}
+
+        async def async_close(self):
+            pass
+
+    class Client:
+        async def async_open(self, metadata):
+            return RouterSession()
+
+    class Enrollment:
+        def audio_metadata(self, metadata):
+            return type("EnrollmentStart", (), {
+                **metadata.__dict__, "purpose": "ENROLLMENT", "user_id": "user-1"
+            })()
+
+        async def async_record_result(self, metadata, result):
+            events.append(("result", result["status"]))
+
+    class Incoming:
+        def __init__(self):
+            self.frames = [
+                {"type": "TEXT", "data": start.to_wire()},
+                {"type": "BINARY", "data": b"one"},
+                {"type": "BINARY", "data": b"two"},
+                {"type": "TEXT", "data": {"type": "END", "audio_stream_id": "audio-a"}},
+            ]
+            self.sent = []
+
+        async def receive(self):
+            frame = self.frames.pop(0)
+            events.append(("receive", frame["type"]))
+            return frame
+
+        async def send_json(self, value):
+            self.sent.append(value)
+            events.append(("reply", value["type"]))
+
+        async def close(self):
+            pass
+
+    incoming = Incoming()
+    await audio().HomeAssistantAudioIngress(
+        Client(), SessionManager(), enrollment=Enrollment()
+    ).async_handle(incoming)
+
+    assert events.index(("receive", "TEXT"), 1) < events.index(("router", [b"one", b"two"]))
+    assert incoming.sent[:3] == [
+        {"type": "STARTED", "audio_stream_id": "audio-a"},
+        {"type": "CHUNK", "audio_stream_id": "audio-a"},
+        {"type": "CHUNK", "audio_stream_id": "audio-a"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_direct_enrollment_capture_without_session_returns_stable_error_before_router_open():
+    from homeassistant.custom_components.nyra.enrollment import EnrollmentCoordinator
+
+    start = identification_start(capture_purpose="ENROLLMENT_CAPTURE")
+
+    class Client:
+        opened = []
+
+        async def async_open(self, metadata):
+            self.opened.append(metadata)
+            raise AssertionError("Router must not be opened")
+
+    class Incoming:
+        def __init__(self):
+            self.sent = []
+
+        async def receive(self):
+            return {"type": "TEXT", "data": start.to_wire()}
+
+        async def send_json(self, value):
+            self.sent.append(value)
+
+        async def close(self):
+            pass
+
+    client = Client()
+    incoming = Incoming()
+    coordinator = EnrollmentCoordinator(object())
+
+    await audio().HomeAssistantAudioIngress(
+        client, SessionManager(), enrollment=coordinator
+    ).async_handle(incoming)
+
+    assert client.opened == []
+    assert incoming.sent == [{
+        "type": "ERROR", "audio_stream_id": None, "outcome": "FAILED",
+        "reason_code": "NO_ACTIVE_ENROLLMENT",
+    }]
+
+
+@pytest.mark.asyncio
 async def test_ha_websocket_disconnect_closes_router_stream():
     start = identification_start()
 
@@ -516,7 +634,7 @@ async def test_ha_websocket_disconnect_closes_router_stream():
 
     await audio().HomeAssistantAudioIngress(Client(), SessionManager()).async_handle(Incoming())
 
-    assert router_session.closed
+    assert not router_session.closed
 
 
 @pytest.mark.asyncio
@@ -559,7 +677,7 @@ async def test_ha_ingress_times_out_idle_device_and_closes_router_stream():
 
     assert incoming.sent[-1]["reason_code"] == "TIMEOUT"
     assert incoming.sent[-1]["audio_stream_id"] == "audio-a"
-    assert router_session.closed
+    assert not router_session.closed
     assert incoming.closed
 
 
@@ -611,7 +729,7 @@ async def test_ingress_capacity_and_shutdown_close_active_connections():
 
     await ingress.async_shutdown()
     await asyncio.gather(active_task, return_exceptions=True)
-    assert router_session.closed
+    assert not router_session.closed
     assert active.closed
 
 

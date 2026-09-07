@@ -225,3 +225,39 @@ def test_delete_single_and_multiple_remove_rows_and_wavs(tmp_path):
     assert deleted == 2
     assert store.list_samples() == []
     assert all(not path.exists() for path in paths)
+
+
+def test_dataset_count_is_grouped_by_normalized_wake_word(tmp_path):
+    wake_words = load_module("wake_words.py", "nyra_ww_count")
+    store = wake_words.WakeWordStore(tmp_path)
+    store.initialize()
+    for index, text in enumerate(("Nyra", " NYRA ", "Gina")):
+        store.complete_capture(
+            capture_id=f"count-{index}", status="ACCEPTED", wake_word_text=text,
+            user_id="u", source_id="s", language="it",
+            created_at=datetime(2026, 9, 6, 14, index, tzinfo=timezone.utc),
+            processed_audio=ProcessedAudio(b"wav"),
+        )
+
+    assert store.count_samples("nyra") == 2
+    assert store.count_samples("gina") == 1
+
+
+def test_wake_word_sample_exposes_duration_and_quality_for_admin(tmp_path):
+    wake_words = load_module("wake_words.py", "nyra_ww_admin_metadata")
+    store = wake_words.WakeWordStore(tmp_path)
+    store.initialize()
+
+    processed = ProcessedAudio(b"wav")
+    object.__setattr__(processed, "duration_seconds", 1.2)
+    object.__setattr__(processed, "quality", {"rms": 0.2})
+    result = store.complete_capture(
+        capture_id="admin-1", status="ACCEPTED", wake_word_text="Nyra",
+        user_id="u", source_id="nyra-mansarda", language="it",
+        created_at=datetime(2026, 9, 7, 18, 0, tzinfo=timezone.utc),
+        processed_audio=processed,
+    )
+
+    sample = store.get_sample(result.sample_id)
+    assert sample.duration_seconds == 1.2
+    assert sample.quality == {"rms": 0.2}

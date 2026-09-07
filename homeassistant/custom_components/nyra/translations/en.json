@@ -13,5 +13,28 @@
     "error": {
       "cannot_connect": "Cannot connect to a ready Nyra Router"
     }
+  },
+  "services": {
+    "start_enrollment": {
+      "name": "Start voice enrollment",
+      "description": "Enroll the authenticated Home Assistant user's voice.",
+      "fields": {
+        "source_id": {"name": "Speaker", "description": "Nyra speaker used to record samples."},
+        "sample_count": {"name": "Samples", "description": "Number of accepted voice samples required."},
+        "language": {"name": "Voice language", "description": "Language used for the enrollment phrases."}
+      }
+    },
+    "record_enrollment_sample": {
+      "name": "Record sample",
+      "description": "Record the next sample without a wake word or Assist.",
+      "fields": {
+        "session_id": {"name": "Enrollment session", "description": "Session that will receive the sample."}
+      }
+    },
+    "terminate_enrollment": {
+      "name": "Stop voice enrollment",
+      "description": "Stop your active voice enrollment.",
+      "fields": {"session_id": {"name": "Enrollment session", "description": "Session to stop."}}
+    }
   }
 }

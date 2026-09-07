@@ -17,6 +17,14 @@ from .const import CONF_INGRESS_TOKEN, CONF_ROUTER_URL, DEFAULT_SESSION_TTL_SECO
 from .events import RouterEventClient
 from .session import SessionManager
 from .speaker import SpeakerStateMachine
+from .enrollment import (
+    EnrollmentCoordinator,
+    localized_enrollment_message,
+    register_enrollment_services,
+    unregister_enrollment_services,
+)
+from .panel import async_register_enrollment_panel, async_unregister_enrollment_panel
+from .wake_word_capture import WakeWordCaptureCoordinator
 
 
 @dataclass
@@ -28,6 +36,9 @@ class NyraRuntime:
     audio_client: RouterAudioStreamClient
     audio_ingress: HomeAssistantAudioIngress
     audio_ingress_view: object | None
+    enrollment: EnrollmentCoordinator
+    wake_word_capture: WakeWordCaptureCoordinator
+    enrollment_panel_registered: bool = False
 
     speaking_restore_unsubscribe: object | None = None
 
@@ -151,7 +162,40 @@ async def async_setup_entry(hass, entry) -> bool:
         entry.data.get(CONF_INGRESS_TOKEN),
         connect,
     )
-    audio_ingress = HomeAssistantAudioIngress(audio_client, sessions)
+
+    async def enrollment_updated(session):
+        hass.bus.async_fire("nyra_enrollment_updated", session)
+        source_id = session["source_id"]
+        status = session["status"]
+        if status == "COMPLETED":
+            await output.announce(
+                source_id,
+                localized_enrollment_message(session["language"], status),
+            )
+        elif status == "TERMINATED":
+            await output.close_feedback(source_id)
+
+    enrollment = EnrollmentCoordinator(
+        client,
+        on_update=enrollment_updated,
+        record_output=output,
+    )
+    async def wake_word_updated(session):
+        hass.bus.async_fire("nyra_wake_word_capture_updated", session)
+
+    wake_word_capture = WakeWordCaptureCoordinator(
+        client, on_update=wake_word_updated, record_output=output
+    )
+    await enrollment.async_restore(targets.keys())
+    async def current_source_ids():
+        return (await resolve_speaker_targets()).keys()
+
+    await async_register_enrollment_panel(
+        hass, enrollment, current_source_ids, wake_word_capture
+    )
+    audio_ingress = HomeAssistantAudioIngress(
+        audio_client, sessions, enrollment=enrollment, wake_word=wake_word_capture
+    )
     audio_ingress_view = register_audio_ingress_view(
         hass,
         audio_ingress,
@@ -166,8 +210,12 @@ async def async_setup_entry(hass, entry) -> bool:
         audio_client=audio_client,
         audio_ingress=audio_ingress,
         audio_ingress_view=audio_ingress_view,
+        enrollment=enrollment,
+        wake_word_capture=wake_word_capture,
+        enrollment_panel_registered=True,
         speaking_restore_unsubscribe=register_speaking_restore_listener(hass, speaker),
     )
+    register_enrollment_services(hass, enrollment)
     await event_client.start()
     await hass.config_entries.async_forward_entry_setups(
         entry,
@@ -180,6 +228,10 @@ async def async_unload_entry(hass, entry) -> bool:
     from homeassistant.const import Platform
 
     runtime = entry.runtime_data
+    if runtime.enrollment_panel_registered:
+        async_unregister_enrollment_panel(hass)
+        runtime.enrollment_panel_registered = False
+    unregister_enrollment_services(hass)
     unregister_speaking_restore_listener(runtime)
     await unregister_audio_ingress(hass, runtime)
     await runtime.events.stop()

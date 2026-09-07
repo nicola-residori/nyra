@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -33,6 +34,8 @@ class WakeWordSample:
     created_at: datetime
     preprocessing_version: str
     wav_path: str
+    duration_seconds: float | None = None
+    quality: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -92,7 +95,9 @@ class WakeWordStore:
                     language TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     preprocessing_version TEXT NOT NULL,
-                    wav_path TEXT NOT NULL
+                    wav_path TEXT NOT NULL,
+                    duration_seconds REAL,
+                    quality_json TEXT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_wake_word_samples_identity_created
@@ -102,6 +107,14 @@ class WakeWordStore:
                     ON wake_word_samples(created_at DESC);
                 """
             )
+            self._ensure_column(connection, "wake_word_samples", "duration_seconds", "REAL")
+            self._ensure_column(connection, "wake_word_samples", "quality_json", "TEXT")
+
+    @staticmethod
+    def _ensure_column(connection, table: str, column: str, sql_type: str) -> None:
+        columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
@@ -171,7 +184,8 @@ class WakeWordStore:
                             sample_id, capture_id, wake_word_id, wake_word_text,
                             user_id, source_id, language, created_at,
                             preprocessing_version, wav_path
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            , duration_seconds, quality_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             sample_id,
@@ -184,6 +198,8 @@ class WakeWordStore:
                             _serialize_datetime(created_at),
                             processed_audio.preprocessing_version,
                             str(wav_path),
+                            getattr(processed_audio, "duration_seconds", None),
+                            json.dumps(getattr(processed_audio, "quality", None), default=lambda value: value.__dict__),
                         ),
                     )
                 connection.commit()
@@ -207,6 +223,7 @@ class WakeWordStore:
                 SELECT sample_id, capture_id, wake_word_id, wake_word_text,
                        user_id, source_id, language, created_at,
                        preprocessing_version, wav_path
+                       , duration_seconds, quality_json
                 FROM wake_word_samples
                 WHERE sample_id = ?
                 """,
@@ -233,6 +250,7 @@ class WakeWordStore:
                     SELECT sample_id, capture_id, wake_word_id, wake_word_text,
                            user_id, source_id, language, created_at,
                            preprocessing_version, wav_path
+                           , duration_seconds, quality_json
                     FROM wake_word_samples
                     ORDER BY created_at DESC, sample_id DESC
                     """
@@ -244,6 +262,7 @@ class WakeWordStore:
                     SELECT sample_id, capture_id, wake_word_id, wake_word_text,
                            user_id, source_id, language, created_at,
                            preprocessing_version, wav_path
+                           , duration_seconds, quality_json
                     FROM wake_word_samples
                     WHERE wake_word_id = ?
                     ORDER BY created_at DESC, sample_id DESC
@@ -252,6 +271,15 @@ class WakeWordStore:
                 ).fetchall()
 
         return [self._sample_from_row(row) for row in rows]
+
+    def count_samples(self, wake_word_text: str) -> int:
+        wake_word_id, _ = normalize_wake_word_text(wake_word_text)
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM wake_word_samples WHERE wake_word_id = ?",
+                (wake_word_id,),
+            ).fetchone()
+        return int(row[0])
 
     def delete_sample(self, sample_id: str) -> bool:
         sample = self.get_sample(sample_id)
@@ -296,4 +324,7 @@ class WakeWordStore:
             created_at=_parse_datetime(row["created_at"]),
             preprocessing_version=row["preprocessing_version"],
             wav_path=row["wav_path"],
+            duration_seconds=(float(row["duration_seconds"])
+                              if row["duration_seconds"] is not None else None),
+            quality=(json.loads(row["quality_json"]) if row["quality_json"] else None),
         )

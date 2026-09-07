@@ -35,6 +35,11 @@ class DiagnosticRecord:
     created_at: datetime
     detail_expires_at: datetime
     diagnostic_wav_path: str | None
+    source_id: str | None = None
+    request_id: str | None = None
+    session_id: str | None = None
+    trace_id: str | None = None
+    span_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -127,6 +132,8 @@ class DiagnosticStore:
             self._ensure_column(connection, "identification_diagnostics", "created_at", "TEXT")
             self._ensure_column(connection, "identification_diagnostics", "detail_expires_at", "TEXT")
             self._ensure_column(connection, "identification_diagnostics", "diagnostic_wav_path", "TEXT")
+            for column in ("source_id", "request_id", "session_id", "trace_id", "span_id"):
+                self._ensure_column(connection, "identification_diagnostics", column, "TEXT")
 
     def _ensure_column(
         self,
@@ -165,6 +172,11 @@ class DiagnosticStore:
         config_snapshot: ConfigSnapshot,
         created_at: datetime | None = None,
         diagnostic_wav_path: str | Path | None = None,
+        source_id: str | None = None,
+        request_id: str | None = None,
+        session_id: str | None = None,
+        trace_id: str | None = None,
+        span_id: str | None = None,
     ) -> str:
         created = created_at or _utc_now()
         expires = created + _detail_ttl(outcome)
@@ -186,7 +198,8 @@ class DiagnosticStore:
                         reason_code, preprocessing_version, model_revision,
                         config_revision, threshold, margin,
                         created_at, detail_expires_at, diagnostic_wav_path
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        , source_id, request_id, session_id, trace_id, span_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         diagnostic_id,
@@ -202,6 +215,7 @@ class DiagnosticStore:
                         _serialize_datetime(created),
                         _serialize_datetime(expires),
                         wav_path,
+                        source_id, request_id, session_id, trace_id, span_id,
                     ),
                 )
                 connection.executemany(
@@ -230,6 +244,7 @@ class DiagnosticStore:
                        reason_code, preprocessing_version, model_revision,
                        config_revision, threshold, margin,
                        created_at, detail_expires_at, diagnostic_wav_path
+                       , source_id, request_id, session_id, trace_id, span_id
                 FROM identification_diagnostics
                 WHERE diagnostic_id = ?
                 """,
@@ -264,7 +279,30 @@ class DiagnosticStore:
             created_at=created_at,
             detail_expires_at=detail_expires_at,
             diagnostic_wav_path=row["diagnostic_wav_path"],
+            source_id=row["source_id"], request_id=row["request_id"],
+            session_id=row["session_id"], trace_id=row["trace_id"],
+            span_id=row["span_id"],
         )
+
+    def list(self, *, source_id: str | None = None, outcome: str | None = None,
+             user_id: str | None = None, limit: int = 100) -> list[DiagnosticRecord]:
+        clauses: list[str] = []
+        values: list[object] = []
+        for column, value in (
+            ("source_id", source_id), ("outcome", outcome),
+            ("identified_user_id", user_id),
+        ):
+            if value:
+                clauses.append(f"{column} = ?")
+                values.append(value)
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        values.append(max(1, min(int(limit), 500)))
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT diagnostic_id FROM identification_diagnostics" + where
+                + " ORDER BY created_at DESC, rowid DESC LIMIT ?", values,
+            ).fetchall()
+        return [record for row in rows if (record := self.get(row["diagnostic_id"])) is not None]
 
     def list_candidates(self, diagnostic_id: str) -> list[DiagnosticCandidate]:
         with self._connect() as connection:

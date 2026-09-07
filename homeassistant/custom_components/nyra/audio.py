@@ -10,10 +10,13 @@ from shared.protocol.ids import validate_prefixed_uuid
 
 from .const import AUDIO_INGRESS_PATH, AUDIO_STREAM_PATH, DOMAIN
 from .session import SessionManager, speaker_conversation_key
+from .enrollment import EnrollmentAudioStart, EnrollmentConflict
+from .wake_word_capture import WakeWordAudioStart
 
 
 MAX_JSON_BYTES = 16 * 1024
 MAX_CHUNK_BYTES = 256 * 1024
+MAX_CAPTURE_BYTES = 1024 * 1024
 
 
 class InvalidAudioIngressStart(ValueError):
@@ -43,16 +46,24 @@ class IdentificationAudioStart:
     request_id: str
     source_id: str
     language: str
+    capture_purpose: str = "IDENTIFICATION"
     audio_format: str = "pcm_s16le"
     sample_rate: int = 16000
     channels: int = 1
+
+    @property
+    def purpose(self) -> str:
+        return "IDENTIFICATION"
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "IdentificationAudioStart":
         if value.get("type") not in (None, "START"):
             raise InvalidAudioIngressStart("expected START")
-        if value.get("purpose") != "IDENTIFICATION":
-            raise InvalidAudioIngressStart("public speaker ingress supports identification only")
+        capture_purpose = value.get("purpose")
+        if capture_purpose not in {
+            "IDENTIFICATION", "ENROLLMENT_CAPTURE", "WAKE_WORD_CAPTURE"
+        }:
+            raise InvalidAudioIngressStart("unsupported speaker capture purpose")
 
         strings: dict[str, str] = {}
         for name in (
@@ -85,6 +96,7 @@ class IdentificationAudioStart:
 
         return cls(
             **strings,
+            capture_purpose=capture_purpose,
             audio_format=audio_format,
             sample_rate=sample_rate,
             channels=channels,
@@ -94,7 +106,7 @@ class IdentificationAudioStart:
         return {
             "type": "START",
             "audio_stream_id": self.audio_stream_id,
-            "purpose": "IDENTIFICATION",
+            "purpose": self.capture_purpose,
             "session_id": self.session_id,
             "request_id": self.request_id,
             "source_id": self.source_id,
@@ -137,7 +149,7 @@ class RouterAudioSession:
     def __init__(
         self,
         websocket: JsonBinaryWebSocket,
-        metadata: IdentificationAudioStart,
+        metadata: IdentificationAudioStart | EnrollmentAudioStart | WakeWordAudioStart,
     ):
         self._websocket = websocket
         self._metadata = metadata
@@ -163,7 +175,7 @@ class RouterAudioSession:
                 "audio_stream_id": self._metadata.audio_stream_id,
             })
             response = await self._expect("RESULT")
-            return _validate_identification_result(response.get("result"))
+            return _validate_audio_result(self._metadata, response.get("result"))
         except AudioIngressError:
             raise
         except Exception as exc:
@@ -213,7 +225,7 @@ class RouterAudioStreamClient:
 
     async def async_open(
         self,
-        metadata: IdentificationAudioStart,
+        metadata: IdentificationAudioStart | EnrollmentAudioStart | WakeWordAudioStart,
     ) -> RouterAudioSession:
         websocket = None
         try:
@@ -246,7 +258,7 @@ class RouterAudioStreamClient:
 
     async def async_stream(
         self,
-        metadata: IdentificationAudioStart,
+        metadata: IdentificationAudioStart | EnrollmentAudioStart | WakeWordAudioStart,
         chunks: Iterable[bytes] | AsyncIterable[bytes],
     ) -> dict[str, Any]:
         session = await self.async_open(metadata)
@@ -288,6 +300,21 @@ def _validate_identification_result(value: Any) -> dict[str, Any]:
     return value
 
 
+def _validate_audio_result(metadata, value: Any) -> dict[str, Any]:
+    if getattr(metadata, "purpose", None) == "IDENTIFICATION":
+        return _validate_identification_result(value)
+    if not isinstance(value, dict) or value.get("status") not in {"ACCEPTED", "REJECTED", "FAILED"}:
+        raise AudioIngressInvalidResponse("Router returned an invalid capture result")
+    if getattr(metadata, "purpose", None) == "ENROLLMENT" and value.get("user_id") != metadata.user_id:
+        raise AudioIngressInvalidResponse("Router returned a mismatched enrollment user")
+    if (getattr(metadata, "purpose", None) == "WAKE_WORD_CAPTURE"
+            and value.get("capture_id") != metadata.wake_word_session_id):
+        raise AudioIngressInvalidResponse("Router returned a mismatched wake-word capture")
+    if value.get("status") == "ACCEPTED" and not value.get("sample_id"):
+        raise AudioIngressInvalidResponse("Router returned an accepted sample without an ID")
+    return value
+
+
 class HomeAssistantAudioIngress:
     def __init__(
         self,
@@ -296,11 +323,15 @@ class HomeAssistantAudioIngress:
         *,
         timeout_seconds: float = 30.0,
         max_active_streams: int = 32,
+        enrollment=None,
+        wake_word=None,
     ):
         self.client = client
         self.sessions = sessions
         self.timeout_seconds = timeout_seconds
         self.max_active_streams = max_active_streams
+        self.enrollment = enrollment
+        self.wake_word = wake_word
         self._active: dict[Any, RouterAudioSession | None] = {}
         self._stream_ids: dict[Any, str | None] = {}
         self._tasks: set[asyncio.Task] = set()
@@ -331,25 +362,36 @@ class HomeAssistantAudioIngress:
                 self._tasks.discard(task)
 
     async def _async_relay(self, websocket) -> None:
-        router_session = None
         stream_id = None
         try:
             frame_type, data = _incoming_frame(await websocket.receive())
             if frame_type != "TEXT":
                 raise InvalidAudioIngressStart("first frame must be START JSON")
             metadata = correlate_identification_start(_json_object(data), self.sessions)
+            if self.enrollment is not None:
+                metadata = self.enrollment.audio_metadata(metadata)
+            if self.wake_word is not None:
+                metadata = self.wake_word.audio_metadata(metadata)
             stream_id = metadata.audio_stream_id
             self._stream_ids[websocket] = stream_id
-            router_session = await self.client.async_open(metadata)
-            self._active[websocket] = router_session
             await websocket.send_json({"type": "STARTED", "audio_stream_id": stream_id})
+            chunks: list[bytes] = []
+            capture_bytes = 0
 
             while True:
                 frame_type, data = _incoming_frame(await websocket.receive())
                 if frame_type in {"CLOSE", "CLOSED", "CLOSING", "ERROR"}:
                     return
                 if frame_type == "BINARY":
-                    await router_session.async_chunk(bytes(data))
+                    chunk = bytes(data)
+                    if not chunk:
+                        raise AudioIngressRejected("audio chunks must be non-empty bytes")
+                    if len(chunk) > MAX_CHUNK_BYTES:
+                        raise AudioIngressRejected("audio chunk is too large")
+                    capture_bytes += len(chunk)
+                    if capture_bytes > MAX_CAPTURE_BYTES:
+                        raise AudioIngressRejected("audio capture is too large")
+                    chunks.append(chunk)
                     await websocket.send_json({"type": "CHUNK", "audio_stream_id": stream_id})
                     continue
                 if frame_type != "TEXT":
@@ -357,20 +399,26 @@ class HomeAssistantAudioIngress:
                 message = _json_object(data)
                 if message != {"type": "END", "audio_stream_id": stream_id}:
                     raise AudioIngressRejected("invalid END frame")
-                result = await self._end_or_disconnect(websocket, router_session)
+                result = await self._stream_or_disconnect(websocket, metadata, chunks)
                 if result is None:
                     return
+                if self.enrollment is not None:
+                    await self.enrollment.async_record_result(metadata, result)
+                if self.wake_word is not None:
+                    await self.wake_word.async_record_result(metadata, result)
                 await websocket.send_json({
                     "type": "RESULT",
                     "audio_stream_id": stream_id,
                     "result": result,
                 })
                 return
-        except (InvalidAudioIngressStart, AudioIngressError, ValueError) as exc:
+        except (InvalidAudioIngressStart, AudioIngressError, EnrollmentConflict, ValueError) as exc:
             await self._send_error(websocket, stream_id, _reason_code(exc))
 
-    async def _end_or_disconnect(self, websocket, router_session):
-        ending = asyncio.create_task(router_session.async_end())
+    async def _stream_or_disconnect(self, websocket, metadata, chunks):
+        ending = asyncio.create_task(
+            self._async_flush_capture(websocket, metadata, chunks)
+        )
         receiving = asyncio.create_task(websocket.receive())
         try:
             done, _ = await asyncio.wait(
@@ -390,6 +438,13 @@ class HomeAssistantAudioIngress:
                 if not task.done():
                     task.cancel()
             await asyncio.gather(ending, receiving, return_exceptions=True)
+
+    async def _async_flush_capture(self, websocket, metadata, chunks):
+        router_session = await self.client.async_open(metadata)
+        self._active[websocket] = router_session
+        for chunk in chunks:
+            await router_session.async_chunk(chunk)
+        return await router_session.async_end()
 
     async def _send_error(self, websocket, stream_id, reason_code: str) -> None:
         try:
@@ -444,6 +499,10 @@ def _json_object(value: Any) -> dict[str, Any]:
 
 
 def _reason_code(exc: Exception) -> str:
+    if isinstance(exc, EnrollmentConflict):
+        if "no active enrollment" in str(exc).lower():
+            return "NO_ACTIVE_ENROLLMENT"
+        return "ENROLLMENT_SOURCE_MISMATCH"
     if isinstance(exc, InvalidAudioIngressStart):
         return "INVALID_START"
     if isinstance(exc, AudioIngressRejected):

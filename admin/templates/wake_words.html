@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h2>Campioni wake word</h2><p class="muted">Dataset positivi raccolti da Home Assistant per il successivo uso esterno.</p></div></div>
+<form class="filters" method="get"><input name="wake_word_text" placeholder="Wake word" value="{{request.query_params.get('wake_word_text','')}}"><input name="user_id" placeholder="Registrato da" value="{{request.query_params.get('user_id','')}}"><input name="source_id" placeholder="Speaker" value="{{request.query_params.get('source_id','')}}"><button>Filtra</button></form>
+{% if error %}<div class="fault">{{error}}</div>{% endif %}
+<div class="management-actions"><label><input id="select-all-wake" type="checkbox"> Seleziona tutti i risultati</label><button id="delete-wake">Elimina selezionati</button><button id="export-wake">Esporta selezionati (.tar.gz)</button></div>
+<div class="sample-grid">
+{% for item in items %}<article class="card sample-card">
+  <label class="select-row"><input class="wake-sample" type="checkbox" value="{{item.sample_id}}"> Seleziona</label><div class="group-head"><h3>{{item.wake_word_text}}</h3><span class="badge">{{item.language}}</span></div>
+  <audio controls preload="none" src="/admin-api/speaker-identity/wake-words/samples/{{item.sample_id}}/audio"></audio>
+  <dl><dt>Registrato</dt><dd data-nyra-timestamp="{{item.created_at}}">{{item.created_at}}</dd><dt>Utente</dt><dd>{{item.user_id}}</dd><dt>Speaker</dt><dd><span class="badge">{{item.source_id}}</span></dd><dt>Durata</dt><dd>{{item.duration_seconds or '—'}} s</dd><dt>Qualità</dt><dd><code>{{item.quality|tojson}}</code></dd></dl>
+  <button class="small-delete" data-delete-wake-sample="{{item.sample_id}}">Elimina campione</button>
+</article>{% else %}<div class="card muted">Nessun campione wake word disponibile.</div>{% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/identity.js"></script>{% endblock %}

@@ -1,0 +1,98 @@
+# Experimental push-to-record enrollment overlay.
+# Deliberately separate from nyra-speaker.yaml so normal firmware cannot enable
+# the capture component accidentally.
+substitutions:
+  nyra_audio_ingress_url: "ws://homeassistant.local:8123/api/nyra/audio"
+  nyra_language: "it-IT"
+
+external_components:
+  - source:
+      type: local
+      path: /config/esphome/components
+    components: [nyra_audio_ingress]
+
+nyra_audio_ingress:
+  id: nyra_audio_tee
+  microphone: i2s_mics
+  url: ${nyra_audio_ingress_url}
+  token: !secret nyra_ingress_token
+  source_id: "${source_id}"
+  language: "${nyra_language}"
+  timeout: 60s
+  # Calibrated from Mansarda: noise median 6 PCM counts, speech P90 83.
+  speech_rms: 45
+  continuation_rms: 20
+  speech_on: 100ms
+  trailing_silence: 900ms
+  on_accepted:
+    - microphone.stop_capture: i2s_mics
+    - micro_wake_word.start:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_identity_green_2blink"
+    - delay: 650ms
+    - lambda: 'id(nyra_ring_owned) = false;'
+    - light.turn_off: status_ring
+  on_rejected:
+    - microphone.stop_capture: i2s_mics
+    - micro_wake_word.start:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_identity_red_2blink"
+    - delay: 650ms
+    - lambda: 'id(nyra_ring_owned) = false;'
+    - light.turn_off: status_ring
+  on_failed:
+    - microphone.stop_capture: i2s_mics
+    - micro_wake_word.start:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_identity_red_2blink"
+    - delay: 650ms
+    - lambda: 'id(nyra_ring_owned) = false;'
+    - light.turn_off: status_ring
+
+# Normal Assist keeps its own STT path; the same captured PCM is correlated to
+# the Router request solely for speaker identification.
+voice_assistant:
+  on_listening:
+    - lambda: 'id(nyra_audio_tee).start_identification_stream();'
+  on_stt_vad_end:
+    - lambda: 'id(nyra_audio_tee).end_stream();'
+
+button:
+  - platform: template
+    id: nyra_enrollment_capture
+    name: "Nyra Enrollment Capture"
+    entity_category: diagnostic
+    on_press:
+      - micro_wake_word.stop:
+      - wait_until:
+          condition:
+            not:
+              micro_wake_word.is_running:
+          timeout: 5s
+      - lambda: 'id(nyra_ring_owned) = true;'
+      - light.turn_on:
+          id: status_ring
+          effect: "nyra_listening_white_fast"
+      - microphone.capture: i2s_mics
+      - lambda: 'id(nyra_audio_tee).start_enrollment_capture();'
+
+  - platform: template
+    id: nyra_wake_word_capture
+    name: "Nyra Wake Word Capture"
+    entity_category: diagnostic
+    on_press:
+      - micro_wake_word.stop:
+      - wait_until:
+          condition:
+            not:
+              micro_wake_word.is_running:
+          timeout: 5s
+      - lambda: 'id(nyra_ring_owned) = true;'
+      - light.turn_on:
+          id: status_ring
+          effect: "nyra_listening_white_fast"
+      - microphone.capture: i2s_mics
+      - lambda: 'id(nyra_audio_tee).start_wake_word_capture();'

@@ -13,6 +13,12 @@ CLOSE_FEEDBACK_NAME = "Nyra Close Feedback"
 IDENTITY_RECOGNIZED_NAME = "Nyra Identity Recognized"
 IDENTITY_NOT_RECOGNIZED_NAME = "Nyra Identity Not Recognized"
 IDENTITY_CHANGED_NAME = "Nyra Identity Changed"
+ENROLLMENT_CAPTURE_NAME = "Nyra Enrollment Capture"
+WAKE_WORD_CAPTURE_NAME = "Nyra Wake Word Capture"
+
+
+class SpeakerUnavailable(RuntimeError):
+    pass
 
 
 
@@ -68,6 +74,9 @@ class SpeakerTarget:
     identity_recognized_button: str | None = None
     identity_not_recognized_button: str | None = None
     identity_changed_button: str | None = None
+    assist_satellite_entity: str | None = None
+    enrollment_capture_button: str | None = None
+    wake_word_capture_button: str | None = None
 
 
 def _value(item: Any, field: str, default: Any = None) -> Any:
@@ -110,6 +119,8 @@ def discover_speaker_targets(
 
         if original_name == SOURCE_ID_NAME:
             by_device.setdefault(device_id, {})["source"] = entity_id
+        elif entity_id.startswith("assist_satellite."):
+            by_device.setdefault(device_id, {})["assist_satellite"] = entity_id
         elif original_name == STATUS_RING_NAME:
             by_device.setdefault(device_id, {})["ring"] = entity_id
         elif original_name == CLOSE_FEEDBACK_NAME:
@@ -120,6 +131,10 @@ def discover_speaker_targets(
             by_device.setdefault(device_id, {})["identity_not_recognized"] = entity_id
         elif original_name == IDENTITY_CHANGED_NAME:
             by_device.setdefault(device_id, {})["identity_changed"] = entity_id
+        elif original_name == ENROLLMENT_CAPTURE_NAME:
+            by_device.setdefault(device_id, {})["enrollment_capture"] = entity_id
+        elif original_name == WAKE_WORD_CAPTURE_NAME:
+            by_device.setdefault(device_id, {})["wake_word_capture"] = entity_id
 
     targets: dict[str, SpeakerTarget] = {}
     for parts in by_device.values():
@@ -142,6 +157,9 @@ def discover_speaker_targets(
             identity_recognized_button=parts.get("identity_recognized"),
             identity_not_recognized_button=parts.get("identity_not_recognized"),
             identity_changed_button=parts.get("identity_changed"),
+            assist_satellite_entity=parts.get("assist_satellite"),
+            enrollment_capture_button=parts.get("enrollment_capture"),
+            wake_word_capture_button=parts.get("wake_word_capture"),
         )
 
     return targets
@@ -196,7 +214,7 @@ class EspHomeSpeakerOutput:
         await self._effect(source_id, "Pulse Fast")
 
     async def comet_warm_white(self, source_id: str) -> None:
-        await self._effect(source_id, "nyra_identifying_warm_white_comet")
+        await self._effect(source_id, "nyra_identifying_white_comet")
 
     async def blink_identity(
         self,
@@ -241,4 +259,30 @@ class EspHomeSpeakerOutput:
                 "button",
                 "press",
                 {"entity_id": target.close_feedback_button},
+            )
+
+    async def record_enrollment_sample(self, source_id: str) -> None:
+        target = await self._target(source_id)
+        if target is None or target.enrollment_capture_button is None:
+            raise SpeakerUnavailable("enrollment capture button is unavailable")
+        await self._call_service(
+            "button",
+            "press",
+            {"entity_id": target.enrollment_capture_button},
+        )
+
+    async def record_wake_word_sample(self, source_id: str) -> None:
+        target = await self._target(source_id)
+        if target is None or target.wake_word_capture_button is None:
+            raise SpeakerUnavailable("wake-word capture button is unavailable")
+        await self._call_service(
+            "button", "press", {"entity_id": target.wake_word_capture_button}
+        )
+
+    async def announce(self, source_id: str, message: str) -> None:
+        target = await self._target(source_id)
+        if target and target.assist_satellite_entity:
+            await self._call_service(
+                "assist_satellite", "announce",
+                {"entity_id": target.assist_satellite_entity, "message": message},
             )

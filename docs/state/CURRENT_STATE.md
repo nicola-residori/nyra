@@ -8,7 +8,10 @@ Nyra v1.0-dev
 
 Milestone 2 — Home Assistant adapter and Nyra speaker integration — is complete.
 
-The next milestone is Milestone 3 — Identity and Voice.
+Milestone 3 — Identity and Voice — is in progress. Speaker-ID, physical
+enrollment, identity validation, wake-word sample capture, and the identity
+management views in Nyra Admin are deployed. Broader M3 observability and
+regression tasks remain.
 
 ## Implemented foundation
 
@@ -46,8 +49,31 @@ The next milestone is Milestone 3 — Identity and Voice.
 
 ## Deployment
 
-- `nyra-router`: port `8090`
-- `nyra-admin`: port `80`
+- `nyra-router`: CT `108`, `192.168.0.16`, port `8090`
+- `nyra-admin`: CT `108`, `192.168.0.16`, port `80`
+- `nyra-speaker-id`: CT `106`, `192.168.0.14`, port `8090`
+
+The Speaker-ID container is a fresh Debian 12 deployment built by
+`deploy/bootstrap/speaker-id.sh`. It runs as the unprivileged
+`nyra-speaker-id` user, persists data and the ECAPA model cache under
+`/var/lib/nyra-speaker-id`, and reports ready only after a real model inference
+succeeds. Router streams audio to
+`ws://192.168.0.14:8090/v1/audio/stream`.
+
+Deployment verification completed on 2026-09-07: Router, Nyra Admin,
+Speaker-ID, and Home Assistant report healthy/ready; Nicola's profile contains
+six accepted Mansarda samples and a physical Assist request produced
+`IDENTIFIED` before the deployment. Nyra Admin exposes profile audio and
+metadata, recent identity diagnostics with retention-aware detail, and
+wake-word sample listening/deletion/export through Router APIs only.
+
+Nyra Mansarda runs the ESPHome 2026.8.2 enrollment/wake-capture firmware built
+on 2026-09-07. The OTA image SHA-256 is
+`736c0d2fb179fd8b85944113cd253d97e9e0455a12184f7437faf056ffbd9048`
+(ESPHome build hash `0x5e1a538a`). OTA completed successfully only on
+`192.168.0.141`; the device passed the 60-second boot-loop guard and restored
+its encrypted ESPHome API connection. Home Assistant `ha core check` passed,
+and the automated repository suite reports 423 passed tests.
 
 Router and Admin remain separate applications. Installation-specific Home Assistant and ESPHome values are intentionally not committed as project defaults.
 
@@ -59,7 +85,9 @@ Home Assistant is migrated to the Nyra v1 Router lifecycle for Milestone 2. Prod
 
 These items do not block Milestone 2:
 
-- migrate Voice and identity processing in Milestone 3
+- perform one physical wake-word sample capture and verify playback/metadata in Nyra Admin
+- perform an additional unknown-speaker physical identity check
+- complete the remaining Milestone 3 observability, settings, and E2E work
 - migrate Memory in Milestone 4
 - migrate Skills and Router-owned Home Assistant capabilities in Milestone 5
 - migrate LLM access in Milestone 6
@@ -69,4 +97,5 @@ These items do not block Milestone 2:
 
 ## Next step
 
-Begin Milestone 3 — Identity and Voice — from the completed Home Assistant/speaker boundary.
+Capture one wake-word sample from Home Assistant, verify it in Nyra Admin, then
+continue the remaining Milestone 3 observability and regression tasks.

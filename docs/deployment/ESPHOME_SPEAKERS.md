@@ -26,7 +26,11 @@ Do not commit either real shared or device-local secret values.
 - The Waveshare ESP32-S3 Audio board used by the Nyra speaker reference hardware.
 - Wake-word models are provided by the pinned Waveshare base package; no Nyra-specific wake-word file is required for Milestone 2.
 - `wifi_ssid` and `wifi_password` in the local `/config/esphome/secrets.yaml`.
+- `nyra_ingress_token` in that same file, equal to the ingress token configured
+  in the Nyra Home Assistant integration.
 - `esphome/assets/nyra_close.wav` copied to `/config/esphome/assets/nyra_close.wav`.
+- `esphome/components/nyra_audio_ingress/` copied to
+  `/config/esphome/components/nyra_audio_ingress/`.
 
 If `/config/esphome/secrets.yaml` does not exist yet, create it only for shared ESPHome secrets:
 
@@ -34,6 +38,7 @@ If `/config/esphome/secrets.yaml` does not exist yet, create it only for shared 
 cat > /config/esphome/secrets.yaml <<'EOF'
 wifi_ssid: "YOUR_WIFI_SSID"
 wifi_password: "YOUR_WIFI_PASSWORD"
+nyra_ingress_token: "THE_EXISTING_NYRA_INGRESS_TOKEN"
 EOF
 chmod 600 /config/esphome/secrets.yaml
 ```
@@ -82,10 +87,19 @@ Create the target directories once:
 mkdir -p /config/esphome/packages \
              /config/esphome/devices \
              /config/esphome/device_secrets \
-             /config/esphome/assets
+             /config/esphome/assets \
+             /config/esphome/components/nyra_audio_ingress
 ```
 
-Copy the common package/assets and the selected speaker's three instance files to the corresponding paths under `/config/esphome/`. Keep `device_secrets/<device>.yaml` private on the machines that need to compile/manage that device.
+Copy the common package/assets, `components/nyra_audio_ingress`, and the selected
+speaker's three instance files to the corresponding paths under
+`/config/esphome/`. Keep `device_secrets/<device>.yaml` private on the machines
+that need to compile/manage that device.
+
+At runtime the passive component receives the same mono 16 kHz PCM samples as
+Home Assistant Assist. It sends its bounded copy only to Home Assistant at
+`/api/nyra/audio`; Home Assistant and Router own correlation and the onward
+Speaker-ID path. Nyra ingress failure therefore does not replace or stop Assist.
 
 Then validate and install the top-level configuration, for example:
 

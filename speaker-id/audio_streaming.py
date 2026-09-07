@@ -108,6 +108,17 @@ class SpeakerAudioSink:
                 savedir=str(self.data_root / 'models' / 'ecapa'))
         return self.engine
 
+    def prepare_model(self):
+        engine = self._engine()
+        validator = getattr(engine, 'validate', None)
+        if validator is not None:
+            validator()
+            return
+        loader = getattr(engine, 'load', None)
+        if loader is None:
+            raise RuntimeError('embedding engine does not expose model readiness')
+        loader()
+
     @staticmethod
     def _wav(metadata, raw):
         audio_format = getattr(metadata, 'audio_format', 'wav')
@@ -164,7 +175,7 @@ class SpeakerAudioSink:
     def _process(self, metadata, snapshot, processed, embedding, reason, centroids):
         mode = _MODES[metadata.purpose]
         if mode == 'identification':
-            return self._identify(processed, embedding, snapshot, reason, centroids)
+            return self._identify(metadata, processed, embedding, snapshot, reason, centroids)
         if mode == 'enrollment':
             if reason:
                 return {'status': 'FAILED' if reason == 'PROCESSING_FAILED' else 'REJECTED', 'sample_id': None,
@@ -176,7 +187,8 @@ class SpeakerAudioSink:
                     user_id=metadata.user_id, source_id=metadata.source_id,
                     wav_bytes=processed.wav_bytes, embedding=embedding,
                     quality=asdict(processed.quality),
-                    preprocessing_version=processed.preprocessing_version)
+                    preprocessing_version=processed.preprocessing_version,
+                    duration_seconds=processed.speech_seconds)
                 return {'status': 'ACCEPTED', 'sample_id': sample.sample_id, 'user_id': sample.user_id}
             except Exception:
                 return {'status': 'FAILED', 'sample_id': None,
@@ -206,7 +218,7 @@ class SpeakerAudioSink:
             rows = connection.execute('SELECT user_id, centroid_json FROM speaker_profiles').fetchall()
         return {user_id: json.loads(centroid) for user_id, centroid in rows}
 
-    def _identify(self, processed, embedding, snapshot, reason, centroids):
+    def _identify(self, metadata, processed, embedding, snapshot, reason, centroids):
         identification = _module('identification')
         scores = {}
         if reason is None:
@@ -231,7 +243,12 @@ class SpeakerAudioSink:
                 best_score=result.best_score, reason_code=result.reason_code,
                 candidate_scores=scores, preprocessing_version=processed.preprocessing_version if processed else '1',
                 model_revision='speechbrain/spkrec-ecapa-voxceleb', config_snapshot=snapshot,
-                diagnostic_wav_path=wav_path)
+                diagnostic_wav_path=wav_path,
+                source_id=getattr(metadata, 'source_id', None),
+                request_id=getattr(metadata, 'request_id', None),
+                session_id=getattr(metadata, 'session_id', None),
+                trace_id=getattr(metadata, 'trace_id', None),
+                span_id=getattr(metadata, 'span_id', None))
         except Exception:
             if wav_path is not None:
                 wav_path.unlink(missing_ok=True)

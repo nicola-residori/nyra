@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 from typing import Any
@@ -99,6 +99,13 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
     return AdapterResult(text, data.conversation_key, continuing, response)
 
 
+def needs_home_assistant_fallback(result: AdapterResult) -> bool:
+    return result.response is None or result.response.status in {
+        RequestStatus.FAILED,
+        RequestStatus.EXPIRED,
+    }
+
+
 async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
     """Set up the Home Assistant conversation platform."""
 
@@ -165,6 +172,18 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                 user_id=user_input.context.user_id,
             )
             result = await process_adapter_input(data, runtime.sessions, runtime.client)
+            if needs_home_assistant_fallback(result):
+                default_agent = conversation.async_get_agent(
+                    self.hass, conversation.HOME_ASSISTANT_AGENT
+                )
+                if default_agent is not None and default_agent is not self:
+                    fallback_input = replace(
+                        user_input,
+                        agent_id=conversation.HOME_ASSISTANT_AGENT,
+                    )
+                    return await default_agent._async_handle_message(  # noqa: SLF001
+                        fallback_input, chat_log
+                    )
             response = intent.IntentResponse(language=user_input.language)
             response.async_set_speech(result.text)
             return conversation.ConversationResult(

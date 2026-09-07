@@ -97,7 +97,7 @@ def test_common_package_exposes_adapter_effect_contract():
     text = PACKAGE.read_text()
     expected = {
         "nyra_listening_white_fast",
-        "nyra_identifying_warm_white_comet",
+        "nyra_identifying_white_comet",
         "nyra_identity_green_2blink",
         "nyra_identity_red_2blink",
         "nyra_identity_blue_2blink",

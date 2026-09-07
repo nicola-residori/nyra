@@ -5,12 +5,17 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
+User=nyra-speaker-id
+Group=nyra-speaker-id
 WorkingDirectory=/opt/nyra-speaker-id
 EnvironmentFile=-/opt/nyra-speaker-id/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=NYRA_SPEAKER_ID_DATA_ROOT=/var/lib/nyra-speaker-id
+Environment=HF_HOME=/var/lib/nyra-speaker-id/models/huggingface
 ExecStart=/opt/nyra-speaker-id/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8090
 Restart=on-failure
 RestartSec=2
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target

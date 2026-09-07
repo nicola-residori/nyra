@@ -65,3 +65,17 @@ async def test_invalid_payload_is_rejected():
     with pytest.raises(NyraRouterInvalidResponse):
         await NyraRouterClient("http://router:8090", client=raw).async_execute(req())
     await raw.aclose()
+
+
+@pytest.mark.asyncio
+async def test_active_enrollment_lookup_returns_none_only_for_404():
+    async def handler(request):
+        assert request.url.path == "/v1/enrollments/active/nyra-mansarda"
+        return httpx.Response(404, json={"detail": "active enrollment not found"})
+
+    raw = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    assert await NyraRouterClient("http://router:8090", client=raw).async_get_active_enrollment(
+        "nyra-mansarda"
+    ) is None
+    await raw.aclose()

@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nyra Router",
+        "description": "Collega Home Assistant a Nyra Router.",
+        "data": {"router_url": "URL del Router", "ingress_token": "Token di ingresso"}
+      }
+    },
+    "error": {"cannot_connect": "Impossibile collegarsi a un Nyra Router pronto"}
+  },
+  "services": {
+    "start_enrollment": {
+      "name": "Avvia registrazione vocale",
+      "description": "Registra la voce dell'utente Home Assistant autenticato.",
+      "fields": {
+        "source_id": {"name": "Speaker", "description": "Speaker Nyra usato per registrare i campioni."},
+        "sample_count": {"name": "Campioni", "description": "Numero di campioni vocali accettati richiesti."},
+        "language": {"name": "Lingua della voce", "description": "Lingua delle frasi di registrazione."}
+      }
+    },
+    "record_enrollment_sample": {
+      "name": "Registra campione",
+      "description": "Registra il prossimo campione senza wake word né Assist.",
+      "fields": {
+        "session_id": {"name": "Sessione di registrazione", "description": "Sessione che riceverà il campione."}
+      }
+    },
+    "terminate_enrollment": {
+      "name": "Interrompi registrazione vocale",
+      "description": "Interrompe la registrazione vocale attiva.",
+      "fields": {"session_id": {"name": "Sessione di registrazione", "description": "Sessione da interrompere."}}
+    }
+  }
+}

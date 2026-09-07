@@ -129,7 +129,7 @@ light:
             it.all() = Color(level, level, level);
 
       - addressable_lambda:
-          name: "nyra_identifying_warm_white_comet"
+          name: "nyra_identifying_white_comet"
           update_interval: 75ms
           lambda: |-
             static int head = 0;
@@ -139,7 +139,7 @@ light:
             const float tail[] = {1.0f, 0.55f, 0.25f};
             for (int d = 0; d < 3 && d < n; d++) {
               const int p = (head - d + n) % n;
-              it[p] = Color(255 * tail[d], 215 * tail[d], 150 * tail[d]);
+              it[p] = Color(255 * tail[d], 255 * tail[d], 255 * tail[d]);
             }
             head = (head + 1) % n;
 

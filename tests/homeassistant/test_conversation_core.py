@@ -5,6 +5,7 @@ from homeassistant.custom_components.nyra.conversation import (
     build_request,
     conversation_key_for_input,
     process_adapter_input,
+    needs_home_assistant_fallback,
 )
 from homeassistant.custom_components.nyra.esphome import resolve_nyra_source_id
 from homeassistant.custom_components.nyra.session import SessionManager, speaker_conversation_key
@@ -144,3 +145,21 @@ async def test_clarification_preserves_request_terminal_clears_it():
     await process_adapter_input(data,sessions,done)
 
     assert done.requests[1].request_id != req_id
+
+
+@pytest.mark.asyncio
+async def test_failed_router_result_requests_home_assistant_fallback():
+    sessions = SessionManager()
+    failed = Client(RequestStatus.FAILED)
+    result = await process_adapter_input(AdapterInput("che ore sono", "it-IT", "speaker"), sessions, failed)
+
+    assert needs_home_assistant_fallback(result)
+
+
+@pytest.mark.asyncio
+async def test_completed_router_result_does_not_fallback():
+    sessions = SessionManager()
+    completed = Client(RequestStatus.COMPLETED)
+    result = await process_adapter_input(AdapterInput("accendi la luce", "it-IT", "speaker"), sessions, completed)
+
+    assert not needs_home_assistant_fallback(result)

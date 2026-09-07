@@ -12,7 +12,7 @@ MODEL_MIN_SECONDS = 1.0
 MIN_REAL_SPEECH_FOR_IDENTIFICATION = 0.25
 MIN_REAL_SPEECH_FOR_ENROLLMENT = 0.35
 MIN_REAL_SPEECH_FOR_WAKE_WORD = 0.15
-ENROLLMENT_MIN_RMS = 0.02
+ENROLLMENT_MIN_RMS = 0.0015
 SPEECH_ACTIVITY_THRESHOLD = 0.003
 PREPROCESSING_VERSION = "1"
 
@@ -53,11 +53,10 @@ def preprocess_audio(
     mono = _to_mono(samples)
     resampled = _resample(mono, source_rate)
 
-    input_quality = _quality(resampled)
-    if mode == "enrollment" and input_quality.rms < ENROLLMENT_MIN_RMS:
-        raise AudioRejected("LOW_SIGNAL")
-
     trimmed, speech_seconds = _trim_to_signal(resampled)
+    quality = _quality(trimmed)
+    if mode == "enrollment" and quality.rms < ENROLLMENT_MIN_RMS:
+        raise AudioRejected("LOW_SIGNAL")
 
     minimum_real_speech = {
         "identification": MIN_REAL_SPEECH_FOR_IDENTIFICATION,
@@ -67,8 +66,6 @@ def preprocess_audio(
 
     if speech_seconds < minimum_real_speech:
         raise AudioRejected("TOO_SHORT")
-
-    quality = _quality(trimmed)
 
     normalized = _normalize(trimmed)
     padded = _pad_for_model(normalized)

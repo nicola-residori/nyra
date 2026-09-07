@@ -151,23 +151,31 @@ def test_embedding_failure_returns_failed_and_cleans_stream(tmp_path):
     asyncio.run(run())
 
 
-def test_ecapa_adapter_decodes_wav_from_file_object_without_model_download(monkeypatch):
+def test_ecapa_adapter_decodes_pcm_wav_without_torchaudio_or_model_download(monkeypatch):
     path = Path(__file__).parents[2] / 'speaker-id' / 'embeddings.py'
     spec = importlib.util.spec_from_file_location('speaker_embedding_stream_test', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     from contextlib import nullcontext
-    def decode(source):
-        with wave.open(source, 'rb') as wav:
-            assert wav.getframerate() == 16000
-        return 'waveform', 16000
+    class Waveform:
+        def unsqueeze(self, dimension):
+            assert dimension == 0
+            return self
+        def __truediv__(self, value):
+            assert value == 32768.0
+            return self
+    def tensor(samples, dtype):
+        assert len(samples) == 8000
+        assert dtype == 'float32'
+        return Waveform()
     class Vector:
         def squeeze(self): return self
         def detach(self): return self
         def cpu(self): return self
         def tolist(self): return [.8, .6]
-    monkeypatch.setitem(sys.modules, 'torch', SimpleNamespace(no_grad=nullcontext))
-    monkeypatch.setitem(sys.modules, 'torchaudio', SimpleNamespace(load=decode))
+    monkeypatch.setitem(sys.modules, 'torch', SimpleNamespace(
+        no_grad=nullcontext, tensor=tensor, float32='float32'))
+    monkeypatch.setitem(sys.modules, 'torchaudio', None)
     engine = module.SpeechBrainECAPAEngine()
     engine._classifier = SimpleNamespace(encode_batch=lambda waveform: Vector())
     assert engine.embed(SimpleNamespace(wav_bytes=wav_bytes(), sample_rate=16000)) == [.8, .6]

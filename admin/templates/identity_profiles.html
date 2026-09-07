@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h2>Profili vocali</h2><p class="muted">Campioni usati per riconoscere le persone. I profili sono raggruppati per utente.</p></div></div>
+{% if error %}<div class="fault">{{error}}</div>{% endif %}
+{% for profile in profiles %}
+<section class="card identity-group">
+  <div class="group-head"><div><span class="eyebrow">Utente</span><h3>{{profile.user_id}}</h3></div><span class="badge">{{profile.sample_count}} campioni</span></div>
+  <label class="select-row"><input type="checkbox" data-select-profile="{{profile.user_id}}"> Seleziona tutti i campioni del profilo</label>
+  <div class="sample-grid">
+  {% for sample in profile.samples %}
+    <article class="sample-card">
+      <label class="select-row"><input class="profile-sample" type="checkbox" value="{{sample.sample_id}}" data-user="{{profile.user_id}}"> Seleziona</label>
+      <audio controls preload="none" src="/admin-api/speaker-identity/profiles/{{profile.user_id}}/samples/{{sample.sample_id}}/audio"></audio>
+      <dl><dt>Registrato</dt><dd data-nyra-timestamp="{{sample.created_at}}">{{sample.created_at or 'Dato storico'}}</dd><dt>Durata</dt><dd>{{sample.duration_seconds or '—'}} s</dd><dt>Speaker</dt><dd><span class="badge">{{sample.source_id or '—'}}</span></dd><dt>Qualità</dt><dd><code>{{sample.quality|tojson}}</code></dd><dt>Preprocessing</dt><dd>{{sample.preprocessing_version}}</dd></dl>
+      <button class="small-delete" data-delete-profile-sample="{{sample.sample_id}}" data-user="{{profile.user_id}}">Elimina campione</button>
+    </article>
+  {% endfor %}
+  </div>
+  <div class="management-actions"><button data-delete-profile-samples="{{profile.user_id}}">Elimina selezionati</button><button class="danger" data-delete-profile="{{profile.user_id}}">Elimina profilo</button></div>
+</section>
+{% else %}<div class="card muted">Nessun profilo vocale registrato.</div>{% endfor %}
+{% endblock %}
+{% block scripts %}<script src="/static/js/identity.js"></script>{% endblock %}

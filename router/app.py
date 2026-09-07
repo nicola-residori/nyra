@@ -2,13 +2,22 @@ from contextlib import asynccontextmanager
 from time import monotonic
 from fastapi import FastAPI
 from router.config import RouterSettings
-from router.audio_streaming import AudioStreamRegistry, SpeakerAudioRelay
+from router.audio_streaming import (
+    AudioStreamRegistry,
+    CorrelatedIdentityAudioSink,
+    SpeakerAudioRelay,
+)
 from router.storage.sqlite import SQLiteObservabilityStore
 from router.observability.service import ObservabilityService
 from router.lifecycle.events import InteractionEventBroker
 from router.lifecycle.service import RequestLifecycleService, ContextResult, SkillMatch, LifecycleDecision
 from router.lifecycle.store import RequestStateStore
 from router.identity_config import IdentityRuntimeConfigStore
+from router.enrollment import EnrollmentService, EnrollmentSessionStore
+from router.wake_word_capture import (
+    SpeakerWakeWordDatasetClient, WakeWordCaptureService,
+    WakeWordCaptureSessionStore, speaker_id_http_url,
+)
 from shared.protocol.requests import RequestStatus
 from router.api.health import router as health_router
 from router.api.logs import router as logs_router
@@ -17,11 +26,10 @@ from router.api.requests import router as requests_router
 from router.api.audio import router as audio_router
 from router.api.events import router as events_router
 from router.api.identity_config import router as identity_config_router
-
-
-class _IdentityPort:
-    async def identify(self, request, trace_id):
-        return None
+from router.api.enrollments import router as enrollments_router
+from router.api.wake_word_captures import router as wake_word_captures_router
+from router.api.speaker_id_admin import router as speaker_id_admin_router
+from router.speaker_id_admin import SpeakerIdAdminClient
 
 
 class _ContextPort:
@@ -46,7 +54,8 @@ class _LlmPort:
         return LifecycleDecision(status=RequestStatus.FAILED)
 
 
-def create_app(settings: RouterSettings | None = None, *, audio_sink=None):
+def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phrase_generator=None,
+               wake_word_dataset=None, speaker_id_admin=None):
     settings = settings or RouterSettings.load()
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
@@ -55,12 +64,26 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None):
         settings.database_path,
         settings.identification_timeout_seconds,
     )
+    enrollment_store = EnrollmentSessionStore(settings.database_path)
+    enrollments = EnrollmentService(enrollment_store, phrase_generator=phrase_generator)
+    wake_word_capture_store = WakeWordCaptureSessionStore(settings.database_path)
+    wake_word_captures = WakeWordCaptureService(wake_word_capture_store)
+    wake_word_dataset = wake_word_dataset or SpeakerWakeWordDatasetClient(
+        speaker_id_http_url(settings.speaker_id_http_url, settings.speaker_id_stream_url)
+    )
+    speaker_id_admin = speaker_id_admin or SpeakerIdAdminClient(
+        speaker_id_http_url(settings.speaker_id_http_url, settings.speaker_id_stream_url)
+    )
     event_broker = InteractionEventBroker(queue_size=settings.websocket_queue_size)
     observability = ObservabilityService(store, request_store=request_store)
+    audio_relay = CorrelatedIdentityAudioSink(
+        audio_sink if audio_sink is not None else SpeakerAudioRelay(settings.speaker_id_stream_url),
+        wait_timeout_seconds=settings.audio_stream_timeout_seconds,
+    )
     lifecycle = RequestLifecycleService(
         store=request_store,
         broker=event_broker,
-        identity_port=_IdentityPort(),
+        identity_port=audio_relay,
         context_port=_ContextPort(),
         memory_port=_MemoryPort(),
         skill_port=_SkillPort(),
@@ -77,6 +100,8 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None):
         store.initialize()
         request_store.initialize()
         identity_config.initialize()
+        enrollment_store.initialize()
+        wake_word_capture_store.initialize()
         app.state.ready = True
         try:
             yield
@@ -86,13 +111,18 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None):
 
     app = FastAPI(title="Nyra Router", lifespan=lifespan)
     app.state.audio_streams = AudioStreamRegistry(
-        audio_sink if audio_sink is not None else SpeakerAudioRelay(settings.speaker_id_stream_url),
-        settings.audio_stream_timeout_seconds,
+        audio_relay, settings.audio_stream_timeout_seconds
     )
     app.state.settings = settings
     app.state.store = store
     app.state.request_store = request_store
     app.state.identity_config = identity_config
+    app.state.enrollment_store = enrollment_store
+    app.state.enrollments = enrollments
+    app.state.wake_word_capture_store = wake_word_capture_store
+    app.state.wake_word_captures = wake_word_captures
+    app.state.wake_word_dataset = wake_word_dataset
+    app.state.speaker_id_admin = speaker_id_admin
     app.state.observability = observability
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
@@ -105,6 +135,9 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None):
     app.include_router(events_router)
     app.include_router(audio_router)
     app.include_router(identity_config_router)
+    app.include_router(enrollments_router)
+    app.include_router(wake_word_captures_router)
+    app.include_router(speaker_id_admin_router)
     return app
 
 

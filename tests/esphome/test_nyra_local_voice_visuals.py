@@ -31,6 +31,16 @@ def test_listening_visual_is_a_continuous_fast_white_fade():
     assert "const bool on" not in effect
 
 
+def test_identification_uses_neutral_white_comet_distinct_from_yellow_tool():
+    text = _speaker_yaml()
+    effect = text.split('name: "nyra_identifying_white_comet"', 1)[1].split(
+        "- addressable_lambda:", 1
+    )[0]
+
+    assert "Color(255 * tail[d], 255 * tail[d], 255 * tail[d])" in effect
+    assert "215 * tail[d]" not in effect
+
+
 def test_voice_assistant_end_releases_nyra_ring_ownership():
     text = _speaker_yaml()
     voice = text.split("voice_assistant:", 1)[1].split("light:", 1)[0]

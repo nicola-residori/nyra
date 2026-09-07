@@ -119,3 +119,22 @@ def test_empty_candidate_set_is_persisted_without_fake_rows(tmp_path):
 
     assert store.list_candidates(diagnostic_id) == []
     assert store.get(diagnostic_id).reason_code == "NO_PROFILES"
+
+
+def test_diagnostics_list_supports_admin_filters_and_correlation(tmp_path):
+    diagnostics = load_module("diagnostics.py", "nyra_diagnostics_admin")
+    store = diagnostics.DiagnosticStore(tmp_path)
+    store.initialize()
+    diagnostic_id = store.record(
+        outcome="IDENTIFIED", identified_user_id="alice", best_score=.88,
+        reason_code=None, candidate_scores={"alice": .88},
+        preprocessing_version="prep-1", model_revision="model-1",
+        config_snapshot=ConfigSnapshot(threshold=.4, margin=.07, revision=1),
+        source_id="nyra-mansarda", request_id="req_1", session_id="ses_1",
+        trace_id="trc_1", span_id="SPEAKER_ID#identify#1",
+    )
+
+    rows = store.list(source_id="nyra-mansarda", outcome="IDENTIFIED", user_id="alice")
+    assert [row.diagnostic_id for row in rows] == [diagnostic_id]
+    assert rows[0].request_id == "req_1"
+    assert rows[0].trace_id == "trc_1"

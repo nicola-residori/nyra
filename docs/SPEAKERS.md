@@ -70,6 +70,12 @@ The shared Nyra speaker package is deployed to:
 /config/esphome/packages/nyra-speaker.yaml
 ```
 
+The package also loads the reusable `nyra_audio_ingress` external component
+from `/config/esphome/components/nyra_audio_ingress`. That component registers
+a passive listener on the same 16 kHz microphone source used by Assist and
+streams a second, bounded copy to Home Assistant. The speaker never connects
+directly to Speaker-ID.
+
 Per-device YAML remains installation-specific and must not be committed to the public repository with real Wi-Fi credentials, room names, static addresses, or secrets.
 
 ## Home Assistant adapter runtime prerequisite
@@ -146,6 +152,9 @@ For `speaker-01`, Home Assistant should contain:
 /config/esphome/devices/speaker-01.yaml
 /config/esphome/device_secrets/speaker-01.yaml
 /config/esphome/packages/nyra-speaker.yaml
+/config/esphome/components/nyra_audio_ingress/__init__.py
+/config/esphome/components/nyra_audio_ingress/nyra_audio_ingress.h
+/config/esphome/components/nyra_audio_ingress/nyra_audio_ingress.cpp
 /config/esphome/models/nyra_it.json
 /config/esphome/models/nyra_it.tflite
 /config/esphome/models/nyra_en.json
@@ -155,14 +164,22 @@ For `speaker-01`, Home Assistant should contain:
 From the repository root on the development machine:
 
 ```bash
-ssh root@homeassistant.local 'mkdir -p /config/esphome/devices /config/esphome/device_secrets /config/esphome/packages /config/esphome/models'
+ssh root@homeassistant.local 'mkdir -p /config/esphome/devices /config/esphome/device_secrets /config/esphome/packages /config/esphome/components/nyra_audio_ingress /config/esphome/assets /config/esphome/models'
 
 scp esphome/speaker-01.yaml root@homeassistant.local:/config/esphome/
 scp esphome/devices/speaker-01.yaml root@homeassistant.local:/config/esphome/devices/
 scp esphome/device_secrets/speaker-01.yaml root@homeassistant.local:/config/esphome/device_secrets/
 scp esphome/packages/nyra-speaker.yaml root@homeassistant.local:/config/esphome/packages/
+scp esphome/components/nyra_audio_ingress/* root@homeassistant.local:/config/esphome/components/nyra_audio_ingress/
 scp esphome/models/nyra_it.json esphome/models/nyra_it.tflite esphome/models/nyra_en.json esphome/models/nyra_en.tflite root@homeassistant.local:/config/esphome/models/
 ```
+
+Set `nyra_ingress_token` in `/config/esphome/secrets.yaml` to the same ingress
+token configured in the Nyra Home Assistant integration. Keep this shared
+installation secret out of Git. Each device inherits the Home Assistant audio
+URL and language through `nyra_audio_ingress_url` and `nyra_language`; override
+those substitutions only when the installation uses a different Home Assistant
+address or language.
 
 The package and wake-word artifacts are shared by all Nyra speakers. They only need to exist once in the Home Assistant ESPHome tree, but they should match the repository version used to provision the speaker.
 
@@ -194,7 +211,7 @@ Subscribing to device logs is useful for diagnostics but is not required for nor
 3. Run `tools/new-speaker.py`.
 4. Keep the generated `device_secrets` file private.
 5. Copy the three generated speaker files to Home Assistant.
-6. Ensure the shared package and both canonical wake-word models are present on Home Assistant.
+6. Ensure the shared package, external component, and both canonical wake-word models are present on Home Assistant.
 7. Validate and install the device from ESPHome Device Builder.
 8. Add it to Home Assistant and assign its Area.
 9. Enable Home Assistant actions for the ESPHome integration.

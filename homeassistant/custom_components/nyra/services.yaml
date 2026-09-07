@@ -1,0 +1,42 @@
+start_enrollment:
+  name: Start voice enrollment
+  description: Start enrollment for the authenticated Home Assistant user.
+  fields:
+    source_id:
+      name: Speaker
+      required: true
+      selector:
+        text:
+    sample_count:
+      name: Samples
+      default: 6
+      selector:
+        number:
+          min: 1
+          max: 24
+          mode: box
+    language:
+      name: Voice language
+      default: it-IT
+      selector:
+        language:
+
+terminate_enrollment:
+  name: Stop voice enrollment
+  description: Stop an active enrollment owned by the authenticated Home Assistant user.
+  fields:
+    session_id:
+      name: Enrollment session
+      required: true
+      selector:
+        text:
+
+record_enrollment_sample:
+  name: Record enrollment sample
+  description: Record the next sample without using the wake word or Assist.
+  fields:
+    session_id:
+      name: Enrollment session
+      required: true
+      selector:
+        text:

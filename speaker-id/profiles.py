@@ -4,7 +4,9 @@ import json
 import sqlite3
 import threading
 import uuid
+import wave
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -24,6 +26,8 @@ class EnrollmentSample:
     embedding: list[float]
     quality: dict
     preprocessing_version: str
+    created_at: datetime | None = None
+    duration_seconds: float | None = None
 
 
 class ProfileStore:
@@ -60,6 +64,35 @@ class ProfileStore:
                     ON enrollment_samples(user_id);
                 """
             )
+            self._ensure_column(connection, "enrollment_samples", "created_at", "TEXT")
+            self._ensure_column(connection, "enrollment_samples", "duration_seconds", "REAL")
+            rows = connection.execute(
+                "SELECT sample_id, wav_path FROM enrollment_samples WHERE created_at IS NULL OR duration_seconds IS NULL"
+            ).fetchall()
+            for row in rows:
+                path = Path(row["wav_path"])
+                created_at = (datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+                              if path.exists() else datetime.now(timezone.utc).isoformat())
+                duration = None
+                if path.exists():
+                    try:
+                        with wave.open(str(path), "rb") as audio:
+                            duration = audio.getnframes() / audio.getframerate()
+                    except (wave.Error, OSError, ZeroDivisionError):
+                        pass
+                connection.execute(
+                    """UPDATE enrollment_samples
+                       SET created_at=COALESCE(created_at, ?),
+                           duration_seconds=COALESCE(duration_seconds, ?)
+                       WHERE sample_id=?""",
+                    (created_at, duration, row["sample_id"]),
+                )
+
+    @staticmethod
+    def _ensure_column(connection, table: str, column: str, sql_type: str) -> None:
+        columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
@@ -75,6 +108,8 @@ class ProfileStore:
         embedding: list[float],
         quality: dict,
         preprocessing_version: str = "unknown",
+        duration_seconds: float | None = None,
+        created_at: datetime | None = None,
     ) -> EnrollmentSample:
         if not user_id:
             raise ValueError("user_id is required")
@@ -82,6 +117,9 @@ class ProfileStore:
             raise ValueError("embedding is required")
 
         sample_id = uuid.uuid4().hex
+        created_at = created_at or datetime.now(timezone.utc)
+        if created_at.tzinfo is None:
+            raise ValueError("created_at must be timezone-aware")
         user_dir = self.samples_root / _safe_path_component(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
         wav_path = user_dir / f"{sample_id}.wav"
@@ -100,6 +138,8 @@ class ProfileStore:
                     embedding=embedding,
                     quality=quality,
                     preprocessing_version=preprocessing_version,
+                    created_at=created_at,
+                    duration_seconds=duration_seconds,
                 )
                 self._rebuild_profile(connection, user_id)
                 connection.commit()
@@ -118,6 +158,8 @@ class ProfileStore:
             embedding=list(embedding),
             quality=dict(quality),
             preprocessing_version=preprocessing_version,
+            created_at=created_at.astimezone(timezone.utc),
+            duration_seconds=duration_seconds,
         )
 
     def _insert_sample_metadata(
@@ -131,13 +173,16 @@ class ProfileStore:
         embedding: list[float],
         quality: dict,
         preprocessing_version: str,
+        created_at: datetime,
+        duration_seconds: float | None,
     ) -> None:
         connection.execute(
             """
             INSERT INTO enrollment_samples (
                 sample_id, user_id, source_id, wav_path,
-                embedding_json, quality_json, preprocessing_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                embedding_json, quality_json, preprocessing_version,
+                created_at, duration_seconds
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sample_id,
@@ -147,6 +192,8 @@ class ProfileStore:
                 json.dumps(list(embedding)),
                 json.dumps(quality),
                 preprocessing_version,
+                created_at.astimezone(timezone.utc).isoformat(),
+                duration_seconds,
             ),
         )
 
@@ -169,14 +216,40 @@ class ProfileStore:
             rows = connection.execute(
                 """
                 SELECT sample_id, user_id, source_id, wav_path,
-                       embedding_json, quality_json, preprocessing_version
+                       embedding_json, quality_json, preprocessing_version,
+                       created_at, duration_seconds
                 FROM enrollment_samples
                 WHERE user_id = ?
-                ORDER BY rowid
+                ORDER BY created_at DESC, rowid DESC
                 """,
                 (user_id,),
             ).fetchall()
         return [_row_to_sample(row) for row in rows]
+
+    def list_profiles(self) -> list[SpeakerProfile]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT user_id, centroid_json, sample_count FROM speaker_profiles ORDER BY user_id"
+            ).fetchall()
+        return [SpeakerProfile(
+            user_id=row["user_id"], centroid=list(json.loads(row["centroid_json"])),
+            sample_count=int(row["sample_count"]),
+        ) for row in rows]
+
+    def get_sample(self, user_id: str, sample_id: str) -> EnrollmentSample | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT sample_id, user_id, source_id, wav_path, embedding_json,
+                          quality_json, preprocessing_version, created_at, duration_seconds
+                   FROM enrollment_samples WHERE user_id = ? AND sample_id = ?""",
+                (user_id, sample_id),
+            ).fetchone()
+        return None if row is None else _row_to_sample(row)
+
+    def delete_profile(self, user_id: str) -> int:
+        return self.delete_samples(
+            user_id, [sample.sample_id for sample in self.list_samples(user_id)]
+        )
 
     def delete_samples(self, user_id: str, sample_ids: list[str]) -> int:
         unique_ids = list(dict.fromkeys(sample_ids))
@@ -265,6 +338,10 @@ def _row_to_sample(row: sqlite3.Row) -> EnrollmentSample:
         embedding=list(json.loads(row["embedding_json"])),
         quality=dict(json.loads(row["quality_json"])),
         preprocessing_version=row["preprocessing_version"],
+        created_at=(datetime.fromisoformat(row["created_at"]).astimezone(timezone.utc)
+                    if row["created_at"] else None),
+        duration_seconds=(float(row["duration_seconds"])
+                          if row["duration_seconds"] is not None else None),
     )
 
 

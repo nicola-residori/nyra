@@ -77,6 +77,8 @@ substitutions:
   volume_min: "0.4"
   volume_max: "0.8"
   nyra_assets_dir: "/config/esphome/assets"
+  nyra_audio_ingress_url: "ws://homeassistant.local:8123/api/nyra/audio"
+  nyra_language: "it-IT"
 
 packages:
   nyra: !include ../packages/nyra-speaker.yaml

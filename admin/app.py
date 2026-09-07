@@ -10,7 +10,7 @@ from admin.routes.pages import router as pages_router
 
 def create_app(settings:AdminSettings|None=None, router_client:RouterClient|None=None):
     settings=settings or AdminSettings.load(); started=monotonic(); base=Path(__file__).parent
-    app=FastAPI(title="Nyra Admin"); app.state.settings=settings; app.state.router_client=router_client or RouterClient(settings.router_url); app.state.templates=Jinja2Templates(directory=str(base/"templates"))
+    app=FastAPI(title="Nyra Admin"); app.state.settings=settings; app.state.router_client=router_client or RouterClient(settings.router_url,token=settings.router_token); app.state.templates=Jinja2Templates(directory=str(base/"templates"))
     app.mount("/static",StaticFiles(directory=str(base/"static")),name="static")
     @app.get("/health")
     def health(): return {"service":"nyra-admin","version":settings.version,"status":"healthy","uptime":round(monotonic()-started,3),"timestamp":datetime.now(timezone.utc).isoformat()}

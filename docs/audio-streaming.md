@@ -100,6 +100,6 @@ outstanding preprocessing/inference jobs, including cancelled jobs until their
 worker actually exits; overload fails without queuing unbounded recordings.
 Cancelled computation cannot persist a late result.
 
-The automated tests use generated audio and deterministic embedding engines.
-Physical HA/ESPHome devices and a downloaded ECAPA model are not required for
-Task 10 verification; their integration/provisioning belongs to later M3 tasks.
+The automated service tests use generated audio and deterministic embedding
+engines. ESPHome Task 12 adds the shared passive microphone tee while preserving
+the existing wake sound, status-ring sequence, and response audio behavior.

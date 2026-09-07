@@ -138,15 +138,19 @@ def test_bad_enrollment_audio_is_rejected():
     assert exc.value.reason_code == "LOW_SIGNAL"
 
 
-def test_identification_gate_is_less_strict_than_enrollment():
+def test_measured_mansarda_level_is_valid_after_silence_is_trimmed():
     module = load_module()
-    raw = make_wav(amplitude=0.01)
+    raw = make_wav(
+        duration_seconds=8.0,
+        amplitude=0.005,
+        silence_prefix=3.0,
+        silence_suffix=4.4,
+    )
 
-    identification = module.preprocess_audio(raw, mode="identification")
-    assert identification.speech_seconds >= module.MIN_REAL_SPEECH_FOR_IDENTIFICATION
+    enrollment = module.preprocess_audio(raw, mode="enrollment")
 
-    with pytest.raises(module.AudioRejected):
-        module.preprocess_audio(raw, mode="enrollment")
+    assert enrollment.speech_seconds >= module.MIN_REAL_SPEECH_FOR_ENROLLMENT
+    assert enrollment.quality.rms >= module.ENROLLMENT_MIN_RMS
 
 
 def test_invalid_mode_is_rejected():
