@@ -37,7 +37,8 @@ runuser -u "$SERVICE_USER" -- env \
   HOME="$DATA_DIR" \
   HF_HOME="$DATA_DIR/models/huggingface" \
   PYTHONPATH="$APP_DIR" \
-  "$APP_DIR/.venv/bin/python" -c \
+  bash -c 'cd "$1" && exec "$2" -c "$3"' _ \
+  "$APP_DIR" "$APP_DIR/.venv/bin/python" \
   "from embeddings import SpeechBrainECAPAEngine; SpeechBrainECAPAEngine(savedir='$DATA_DIR/models/ecapa').validate()"
 
 install -m 0644 "$SOURCE_ROOT/deploy/systemd/nyra-speaker-id.service" \
@@ -52,9 +53,5 @@ for _ in $(seq 1 60); do
   fi
   sleep 2
 done
-curl --silent --show-error --fail http://127.0.0.1:8090/health
-curl --silent --show-error --fail http://127.0.0.1:8090/ready
-systemctl is-enabled --quiet nyra-speaker-id.service
-systemctl is-active --quiet nyra-speaker-id.service
-test "$(stat -c '%U:%G' "$DATA_DIR")" = "$SERVICE_USER:$SERVICE_USER"
-"$APP_DIR/.venv/bin/python" -c "import fastapi, speechbrain, torch, torchaudio"
+APP_DIR="$APP_DIR" DATA_DIR="$DATA_DIR" SERVICE_USER="$SERVICE_USER" \
+  "$SOURCE_ROOT/deploy/verify/speaker-id.sh"

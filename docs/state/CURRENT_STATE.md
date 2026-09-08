@@ -11,7 +11,9 @@ Milestone 2 — Home Assistant adapter and Nyra speaker integration — is compl
 Milestone 3 — Identity and Voice — is in progress. Speaker-ID, physical
 enrollment, identity validation, wake-word sample capture, and the identity
 management views in Nyra Admin and trusted Home Assistant user-name enrichment
-are deployed. Broader M3 observability and regression tasks remain.
+are deployed. M3 observability, automated regression coverage, and fresh-CT
+reproducibility are complete; final physical smoke tests and legacy-independence
+verification remain.
 
 ## Implemented foundation
 
@@ -97,9 +99,29 @@ with score `0.46259344812746`. Earlier very short requests remained variable,
 so repeated short-command validation is still required before treating the
 calibration as final.
 
-Local verification reports 448 passed tests, successful Python bytecode
-compilation, no whitespace errors, and no display-name fields in Speaker-ID or
-general observability storage.
+Task 19 regression verification completed on 2026-09-08. The simulated M3
+suite covers identified, Guest, continuity and changed-user resolution, short
+requests, Speaker-ID failure, timeout/late-result behavior, runtime timeout
+snapshots, enrollment terminal behavior, every Wake Word result, and
+interleaved streams. Home Assistant fallback responses are localized for
+`it-IT` and `en-US` and do not hardcode the assistant's spoken name. A
+Speaker-ID connection failure now yields the typed
+`FAILED/SERVICE_UNAVAILABLE` identity result and the Router continues with
+session continuity or Guest instead of aborting the request.
+
+Fresh-CT and reboot verification completed on CT106 on 2026-09-08 using
+`deploy/verify/speaker-id.sh`. Before and after the reboot, the service user,
+application/data layout, Python dependencies, both SQLite databases, systemd
+enablement/activity, ECAPA inference, model cache, `/health`, and `/ready`
+passed. The saved persistence manifest confirmed unchanged threshold, margin,
+configuration revision, schema, profile/enrollment counts, and Wake Word
+counts. A generated PCM stream sent through the production Router returned a
+typed `NOT_RECOGNIZED/BELOW_THRESHOLD` result from CT106 while preserving its
+request, session, source, trace, and Router audio-relay span correlation.
+
+Local verification reports 468 passed tests, successful Python bytecode
+compilation, valid deployment shell syntax, no whitespace errors, and no
+display-name fields in Speaker-ID or general observability storage.
 
 Router and Admin remain separate applications. Installation-specific Home Assistant and ESPHome values are intentionally not committed as project defaults.
 
@@ -112,8 +134,7 @@ Home Assistant is migrated to the Nyra v1 Router lifecycle for Milestone 2. Prod
 These items do not block Milestone 2:
 
 - perform an additional unknown-speaker physical identity check
-- physically validate trusted Home Assistant user-name enrichment
-- complete the remaining Milestone 3 observability, settings, and E2E work
+- complete the final Milestone 3 physical smoke tests and legacy-independence check
 - migrate Memory in Milestone 4
 - migrate Skills and Router-owned Home Assistant capabilities in Milestone 5
 - migrate LLM access in Milestone 6
@@ -123,7 +144,7 @@ These items do not block Milestone 2:
 
 ## Next step
 
-Run repeated short natural requests from Nyra Mansarda and confirm that their
-identity diagnostics consistently resolve the stable Home Assistant ID to
-`Nicola Residori`, then continue the remaining Milestone 3 observability and
-regression work.
+Perform the minimal Task 21 physical smoke tests from Nyra Mansarda, verify one
+unknown-speaker result where practical, confirm Wake Word export, then prove
+that the M3 path remains operational with the legacy `nyra-voice` service
+stopped.
