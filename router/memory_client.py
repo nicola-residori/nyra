@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from router.lifecycle.service import ContextResult
+from router.lifecycle.service import ContextResult, MemoryAccessError, MemoryQuery
 from shared.protocol.ids import new_span_id
 from shared.protocol.memory import (
     MemoryScope,
@@ -20,11 +20,11 @@ from shared.protocol.memory import (
 from shared.protocol.requests import NyraRequest
 
 
-class MemoryUnavailable(RuntimeError):
+class MemoryUnavailable(MemoryAccessError):
     pass
 
 
-class InvalidMemoryResponse(RuntimeError):
+class InvalidMemoryResponse(MemoryAccessError):
     pass
 
 
@@ -152,7 +152,7 @@ class MemoryClient:
         self,
         request: NyraRequest,
         identity_user_id: str | None,
-        context: ContextResult,
+        query: MemoryQuery,
         trace_id: str,
     ) -> dict[str, Any]:
         owner = identity_user_id if identity_user_id not in (None, "guest") else None
@@ -160,9 +160,12 @@ class MemoryClient:
         if owner is not None:
             scopes.insert(0, MemoryScope.USER)
         payload = SemanticSearchRequest(
-            query=request.input.text,
+            query=query.query,
             scopes=scopes,
             owner_user_id=owner,
+            memory_types=list(query.memory_types),
+            limit=query.limit,
+            minimum_similarity=query.minimum_similarity,
         )
         response = await self._request(
             "POST",
@@ -192,5 +195,6 @@ class MemoryClient:
             payload = self._json(response)
         except InvalidMemoryResponse:
             return False
-        return isinstance(payload, dict) and payload.get("status") == "READY"
-
+        return isinstance(payload, dict) and (
+            payload.get("status") == "READY" or payload.get("ready") is True
+        )

@@ -127,3 +127,16 @@ async def test_unavailable_after_bounded_retry():
         await client.resolve_context(nyra_request(), None, new_trace_id())
     assert calls == 2
 
+
+@pytest.mark.asyncio
+async def test_ready_accepts_memory_service_readiness_contract():
+    async def handler(request: httpx.Request):
+        return httpx.Response(200, json={
+            "ready": True,
+            "storage": "initialized",
+            "embedding": "loaded",
+            "embedding_model": "test-v1",
+        })
+
+    client = MemoryClient("http://memory.test", transport=httpx.MockTransport(handler))
+    assert await client.ready() is True

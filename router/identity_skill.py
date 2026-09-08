@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from router.lifecycle.service import LifecycleDecision, SkillMatch
+from shared.protocol.memory import MemoryRequirement
 
 
 _QUERY_PHRASES = {
@@ -38,7 +39,11 @@ class IdentityQuerySkill:
     async def check(self, request, context, memory, pending_state):
         language = _language(request.language)
         matched = _normalized(request.input.text) in _QUERY_PHRASES[language]
-        return SkillMatch(matched=matched, token="identity_query" if matched else None)
+        return SkillMatch(
+            matched=matched,
+            token="identity_query" if matched else None,
+            memory_requirement=MemoryRequirement.NONE,
+        )
 
     async def execute(self, match, request, context, memory, pending_state):
         if not match.matched or match.token != "identity_query":

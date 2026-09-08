@@ -42,7 +42,7 @@ class _ContextPort:
 
 
 class _MemoryPort:
-    async def search(self, request, identity_user_id, context, trace_id):
+    async def search(self, request, identity_user_id, query, trace_id):
         return {}
 
 

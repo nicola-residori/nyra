@@ -12,6 +12,8 @@ from router.lifecycle.store import RequestStateStore
 from router.user_directory import UserDirectory
 from shared.protocol.events import EventCategory, IdentityFeedback, InteractionState
 from shared.protocol.requests import CloseReason, NyraRequest, RequestStatus
+from shared.protocol.memory import MemoryRequirement
+from router.memory_client import MemoryUnavailable
 from router.observability.ids import generate_request_id, generate_session_id
 
 
@@ -36,14 +38,17 @@ class ContextPort:
 
 
 class MemoryPort:
-    def __init__(self): self.calls=0
-    async def search(self, request, identity_user_id, context, trace_id): self.calls += 1; return {"memory":"value"}
+    def __init__(self, error=None): self.calls=[]; self.error=error
+    async def search(self, request, identity_user_id, query, trace_id):
+        self.calls.append((identity_user_id, query))
+        if self.error: raise self.error
+        return {"memory":"value"}
 
 
 class SkillPort:
-    def __init__(self, match=True, decision=None): self.match=match; self.decision=decision or LifecycleDecision.completed("Done."); self.checked=0; self.executed=0; self.contexts=[]
-    async def check(self, request, context, memory, pending_state): self.checked += 1; self.contexts.append(context); return SkillMatch(matched=self.match, token="skill-a" if self.match else None)
-    async def execute(self, match, request, context, memory, pending_state): self.executed += 1; return self.decision
+    def __init__(self, match=True, decision=None, memory_requirement=MemoryRequirement.NONE, memory_query=None): self.match=match; self.decision=decision or LifecycleDecision.completed("Done."); self.checked=0; self.executed=0; self.contexts=[]; self.memory_requirement=memory_requirement; self.memory_query=memory_query; self.memories=[]
+    async def check(self, request, context, memory, pending_state): self.checked += 1; self.contexts.append(context); return SkillMatch(matched=self.match, token="skill-a" if self.match else None, memory_requirement=self.memory_requirement, memory_query=self.memory_query)
+    async def execute(self, match, request, context, memory, pending_state): self.executed += 1; self.memories.append(memory); return self.decision
 
 
 class LlmPort:
@@ -259,7 +264,7 @@ async def test_memory_skill_and_llm_state_paths(tmp_path):
     svc, _, broker=service(tmp_path, context_port=context, memory_port=memory, skill_port=skill, llm_port=llm)
     sub=await broker.subscribe({EventCategory.INTERACTION_STATE})
     result=await svc.execute(request(kind="ha_assist", identity={"user_id":"user-a","provider":"home_assistant","confidence":1.0}))
-    assert result.response.text=="LLM done." and memory.calls==1 and skill.executed==0 and llm.calls==1
+    assert result.response.text=="LLM done." and memory.calls==[] and skill.executed==0 and llm.calls==1
     states=[]
     while not sub.queue.empty(): states.append(sub.queue.get_nowait().state)
     assert InteractionState.PROCESSING_LOCAL in states
@@ -271,7 +276,74 @@ async def test_semantic_memory_can_be_skipped_but_context_always_runs(tmp_path):
     context=ContextPort(semantic=False); memory=MemoryPort()
     svc, _, _=service(tmp_path, context_port=context, memory_port=memory)
     await svc.execute(request(kind="ha_assist", identity={"user_id":"user-a","provider":"home_assistant","confidence":1.0}))
-    assert len(context.calls)==1 and memory.calls==0
+    assert len(context.calls)==1 and memory.calls==[]
+
+
+@pytest.mark.asyncio
+async def test_none_requirement_skips_semantic_memory(tmp_path):
+    memory = MemoryPort()
+    skill = SkillPort(memory_requirement=MemoryRequirement.NONE)
+    svc, _, _ = service(tmp_path, memory_port=memory, skill_port=skill)
+
+    await svc.execute(request(kind="ha_assist", identity={
+        "user_id": "user-a", "provider": "home_assistant", "confidence": 1.0
+    }))
+
+    assert memory.calls == []
+    assert skill.memories == [None]
+
+
+@pytest.mark.asyncio
+async def test_optional_memory_failure_continues_without_enrichment(tmp_path):
+    memory = MemoryPort(MemoryUnavailable("offline"))
+    skill = SkillPort(
+        memory_requirement=MemoryRequirement.OPTIONAL,
+        memory_query="coffee preference",
+    )
+    svc, _, _ = service(tmp_path, memory_port=memory, skill_port=skill)
+
+    result = await svc.execute(request(kind="ha_assist", identity={
+        "user_id": "user-a", "provider": "home_assistant", "confidence": 1.0
+    }))
+
+    assert result.status is RequestStatus.COMPLETED
+    assert skill.memories == [None]
+    assert memory.calls[0][0] == "user-a"
+    assert memory.calls[0][1].query == "coffee preference"
+
+
+@pytest.mark.asyncio
+async def test_required_memory_failure_stops_skill_execution(tmp_path):
+    memory = MemoryPort(MemoryUnavailable("offline"))
+    skill = SkillPort(
+        memory_requirement=MemoryRequirement.REQUIRED,
+        memory_query="coffee preference",
+    )
+    svc, _, _ = service(tmp_path, memory_port=memory, skill_port=skill)
+
+    result = await svc.execute(request(kind="ha_assist", identity={
+        "user_id": "user-a", "provider": "home_assistant", "confidence": 1.0
+    }))
+
+    assert result.status is RequestStatus.FAILED
+    assert result.error == {"code": "MEMORY_UNAVAILABLE"}
+    assert skill.executed == 0
+
+
+@pytest.mark.asyncio
+async def test_optional_memory_result_reaches_skill(tmp_path):
+    memory = MemoryPort()
+    skill = SkillPort(
+        memory_requirement=MemoryRequirement.OPTIONAL,
+        memory_query="coffee preference",
+    )
+    svc, _, _ = service(tmp_path, memory_port=memory, skill_port=skill)
+
+    await svc.execute(request(kind="ha_assist", identity={
+        "user_id": "user-a", "provider": "home_assistant", "confidence": 1.0
+    }))
+
+    assert skill.memories == [{"memory": "value"}]
 
 class Collector:
     def __init__(self): self.records=[]

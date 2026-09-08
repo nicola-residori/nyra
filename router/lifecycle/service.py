@@ -24,6 +24,7 @@ from shared.protocol.events import (
     SessionClosedEvent,
 )
 from shared.protocol.observability import LogKind, LogLevel, LogRecord
+from shared.protocol.memory import MemoryRequirement, SemanticMemoryType
 from shared.protocol.requests import (
     CloseReason, ExecutionType, NyraRequest, NyraRequestResponse, NyraResponseBody, RequestStatus,
 )
@@ -39,10 +40,24 @@ class ContextResult:
     semantic_memory_required: bool = False
 
 
+class MemoryAccessError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class MemoryQuery:
+    query: str
+    memory_types: tuple[SemanticMemoryType, ...] = ()
+    limit: int = 10
+    minimum_similarity: float = 0.35
+
+
 @dataclass(frozen=True)
 class SkillMatch:
     matched: bool
     token: str | None = None
+    memory_requirement: MemoryRequirement = MemoryRequirement.NONE
+    memory_query: MemoryQuery | str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +66,7 @@ class LifecycleDecision:
     text: str | None = None
     pending_state: dict[str, Any] | None = None
     close_reason: CloseReason | None = None
+    error: dict[str, Any] | None = None
 
     @classmethod
     def completed(cls, text: str | None = None):
@@ -64,6 +80,10 @@ class LifecycleDecision:
     def closed(cls, reason: CloseReason, text: str | None = None):
         return cls(RequestStatus.CLOSED, text=text, close_reason=reason)
 
+    @classmethod
+    def failed(cls, code: str):
+        return cls(RequestStatus.FAILED, error={"code": code})
+
 
 class SpeakerIdentityPort(Protocol):
     async def identify(self, request: NyraRequest, trace_id: str) -> SpeakerIdentityResult: ...
@@ -74,7 +94,7 @@ class ContextPort(Protocol):
 
 
 class MemoryPort(Protocol):
-    async def search(self, request: NyraRequest, identity_user_id: str | None, context: ContextResult, trace_id: str) -> dict[str, Any]: ...
+    async def search(self, request: NyraRequest, identity_user_id: str | None, query: MemoryQuery, trace_id: str) -> dict[str, Any]: ...
 
 
 class SkillPort(Protocol):
@@ -442,14 +462,58 @@ class RequestLifecycleService:
             semantic_memory_required=context.semantic_memory_required,
         )
         memory = None
-        if context.semantic_memory_required:
-            self._log(request, trace_id, span_id, "MEMORY_SEARCH", params={"required": True})
-            memory = await self.memory_port.search(request, identity_user_id, context, trace_id)
-
-        match = await self.skill_port.check(request, context, memory, pending_state)
+        match = await self.skill_port.check(request, context, None, pending_state)
         if match.matched:
-            decision = await self.skill_port.execute(match, request, context, memory, pending_state)
+            if match.memory_requirement is MemoryRequirement.NONE:
+                self._log(
+                    request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",
+                    params={"requirement": MemoryRequirement.NONE.value},
+                )
+            else:
+                raw_query = match.memory_query
+                query = (
+                    raw_query
+                    if isinstance(raw_query, MemoryQuery)
+                    else MemoryQuery(query=raw_query or request.input.text)
+                )
+                self._log(
+                    request, trace_id, span_id, "MEMORY_SEARCH_START",
+                    params={"requirement": match.memory_requirement.value},
+                )
+                try:
+                    memory = await self.memory_port.search(
+                        request, identity_user_id, query, trace_id
+                    )
+                    self._log(
+                        request, trace_id, span_id, "MEMORY_SEARCH_COMPLETED",
+                        result="SUCCESS",
+                        params={
+                            "requirement": match.memory_requirement.value,
+                            "result_count": len(memory.get("items", [])),
+                        },
+                    )
+                except MemoryAccessError as exc:
+                    self._log(
+                        request, trace_id, span_id, "MEMORY_SEARCH_FAILED",
+                        kind=LogKind.FAULT,
+                        result=type(exc).__name__,
+                        params={"requirement": match.memory_requirement.value},
+                    )
+                    if match.memory_requirement is MemoryRequirement.REQUIRED:
+                        decision = LifecycleDecision.failed("MEMORY_UNAVAILABLE")
+                    else:
+                        decision = None
+                else:
+                    decision = None
+            if match.memory_requirement is MemoryRequirement.NONE:
+                decision = None
+            if decision is None:
+                decision = await self.skill_port.execute(match, request, context, memory, pending_state)
         else:
+            self._log(
+                request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",
+                params={"reason": "NO_SKILL_MATCH"},
+            )
             await self._state(request, trace_id, span_id, InteractionState.PROCESSING_GLOBAL)
             decision = await self.llm_port.reason(request, context, memory, pending_state)
 
@@ -503,6 +567,7 @@ class RequestLifecycleService:
             trace_id=request_context.trace_id,
             response=NyraResponseBody(text=decision.text) if decision.text is not None else None,
             close_reason=decision.close_reason,
+            error=decision.error,
         )
 
     def _log_identity_completed(
