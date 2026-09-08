@@ -1,9 +1,9 @@
 # Milestone 5 — Skills Design
 
-**Project:** N.Y.R.A. — Neural sYstem for Reasoning & Automation  
-**Milestone:** 5 — Skills  
-**Status:** Proposed design for review  
-**Date:** 2026-09-08  
+**Project:** N.Y.R.A. — Neural sYstem for Reasoning & Automation
+**Milestone:** 5 — Skills
+**Status:** Approved design
+**Date:** 2026-09-08
 **Authoritative dependencies:** `ARCHITECTURE.md`, `DECISIONS.md`,
 `docs/superpowers/specs/2026-08-31-component-contract-v1-design.md`,
 `docs/superpowers/specs/2026-08-30-request-lifecycle-v1-design.md`,
