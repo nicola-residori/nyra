@@ -31,6 +31,7 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 \
 
 python3 -m venv "$APP_DIR/.venv"
 "$APP_DIR/.venv/bin/pip" install --upgrade pip wheel
+"$APP_DIR/.venv/bin/pip" install --index-url https://download.pytorch.org/whl/cpu torch
 "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/memory/requirements.txt"
 
 chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR"
