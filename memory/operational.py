@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -22,6 +24,16 @@ from shared.protocol.memory import (
 
 class OperationalEntryNotFound(LookupError):
     pass
+
+
+class IdempotencyConflict(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class IdempotentResult:
+    value: object
+    replayed: bool
 
 
 def normalize_key(value: str) -> str:
@@ -50,9 +62,69 @@ class OperationalContextService:
         )
 
     def create(self, command: OperationalEntryCreate) -> OperationalEntry:
-        entry_id = self.id_factory()
-        now = self.clock().isoformat()
+        return self.create_idempotent(command).value
+
+    @staticmethod
+    def _request_hash(operation: str, payload: dict) -> str:
+        encoded = json.dumps(
+            {"operation": operation, "payload": payload},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hashlib.sha256(encoded).hexdigest()
+
+    @staticmethod
+    def _replay(connection, key: str, operation: str, request_hash: str):
+        row = connection.execute(
+            "SELECT operation, request_hash, response_json "
+            "FROM idempotency_results WHERE idempotency_key = ?",
+            (key,),
+        ).fetchone()
+        if row is None:
+            return None
+        if row["operation"] != operation or row["request_hash"] != request_hash:
+            raise IdempotencyConflict(key)
+        return json.loads(row["response_json"])
+
+    @staticmethod
+    def _record_idempotency(
+        connection, key: str, operation: str, request_hash: str,
+        response: dict, created_at: str,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO idempotency_results (
+                idempotency_key, operation, request_hash, response_json, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                key,
+                operation,
+                request_hash,
+                json.dumps(response, ensure_ascii=False, sort_keys=True),
+                created_at,
+            ),
+        )
+
+    def create_idempotent(
+        self, command: OperationalEntryCreate
+    ) -> IdempotentResult:
+        operation = "operational.create"
+        payload = command.model_dump(mode="json", exclude={"idempotency_key"})
+        request_hash = self._request_hash(operation, payload)
         with self.store.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            replay = self._replay(
+                connection, command.idempotency_key, operation, request_hash
+            )
+            if replay is not None:
+                return IdempotentResult(
+                    OperationalEntry.model_validate(replay), True
+                )
+
+            entry_id = self.id_factory()
+            now = self.clock().isoformat()
             connection.execute(
                 """
                 INSERT INTO operational_entries (
@@ -74,7 +146,19 @@ class OperationalContextService:
                     now,
                 ),
             )
-        return self.get(entry_id)
+            row = connection.execute(
+                "SELECT * FROM operational_entries WHERE entry_id = ?", (entry_id,)
+            ).fetchone()
+            entry = self._row_to_entry(row)
+            self._record_idempotency(
+                connection,
+                command.idempotency_key,
+                operation,
+                request_hash,
+                entry.model_dump(mode="json"),
+                now,
+            )
+        return IdempotentResult(entry, False)
 
     def get(self, entry_id: str) -> OperationalEntry:
         with self.store.connect() as connection:
@@ -88,10 +172,30 @@ class OperationalContextService:
     def update(
         self, entry_id: str, command: OperationalEntryUpdate
     ) -> OperationalEntry:
-        current = self.get(entry_id)
-        now = self.clock().isoformat()
+        return self.update_idempotent(entry_id, command).value
+
+    def update_idempotent(
+        self, entry_id: str, command: OperationalEntryUpdate
+    ) -> IdempotentResult:
+        operation = f"operational.update:{entry_id}"
+        payload = command.model_dump(mode="json", exclude={"idempotency_key"})
+        request_hash = self._request_hash(operation, payload)
         with self.store.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            replay = self._replay(
+                connection, command.idempotency_key, operation, request_hash
+            )
+            if replay is not None:
+                return IdempotentResult(
+                    OperationalEntry.model_validate(replay), True
+                )
+            row = connection.execute(
+                "SELECT * FROM operational_entries WHERE entry_id = ?", (entry_id,)
+            ).fetchone()
+            if row is None:
+                raise OperationalEntryNotFound(entry_id)
+            current = self._row_to_entry(row)
+            now = self.clock().isoformat()
             cursor = connection.execute(
                 """
                 UPDATE operational_entries
@@ -115,16 +219,65 @@ class OperationalContextService:
             )
             if cursor.rowcount != 1:
                 raise OperationalEntryNotFound(entry_id)
-        return self.get(entry_id)
+            row = connection.execute(
+                "SELECT * FROM operational_entries WHERE entry_id = ?", (entry_id,)
+            ).fetchone()
+            entry = self._row_to_entry(row)
+            self._record_idempotency(
+                connection,
+                command.idempotency_key,
+                operation,
+                request_hash,
+                entry.model_dump(mode="json"),
+                now,
+            )
+        return IdempotentResult(entry, False)
 
-    def delete(self, entry_id: str) -> None:
+    def delete(self, entry_id: str, idempotency_key: str | None = None) -> None:
+        key = idempotency_key or f"internal-delete:{entry_id}:{uuid4()}"
+        self.delete_idempotent(entry_id, key)
+
+    def delete_idempotent(
+        self, entry_id: str, idempotency_key: str
+    ) -> IdempotentResult:
+        operation = f"operational.delete:{entry_id}"
+        request_hash = self._request_hash(operation, {})
         with self.store.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            replay = self._replay(
+                connection, idempotency_key, operation, request_hash
+            )
+            if replay is not None:
+                return IdempotentResult(replay, True)
             cursor = connection.execute(
                 "DELETE FROM operational_entries WHERE entry_id = ?", (entry_id,)
             )
             if cursor.rowcount != 1:
                 raise OperationalEntryNotFound(entry_id)
+            now = self.clock().isoformat()
+            response = {"outcome": CommonOutcome.SUCCESS.value, "entry_id": entry_id}
+            self._record_idempotency(
+                connection, idempotency_key, operation, request_hash, response, now
+            )
+        return IdempotentResult(response, False)
+
+    def count_entries(
+        self,
+        *,
+        entry_type: OperationalEntryType | str | None = None,
+        scope: MemoryScope | str | None = None,
+        owner_user_id: str | None = None,
+        enabled: bool | None = None,
+    ) -> int:
+        return len(
+            self.list_entries(
+                entry_type=entry_type,
+                scope=scope,
+                owner_user_id=owner_user_id,
+                enabled=enabled,
+                limit=2_147_483_647,
+            )
+        )
 
     def list_entries(
         self,

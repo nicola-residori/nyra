@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 from contextlib import asynccontextmanager
 from time import monotonic
 
@@ -9,6 +8,9 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from memory.config import MemorySettings
+from memory.api.operational import router as operational_router
+from memory.operational import OperationalContextService
+from memory.storage import MemoryStore
 
 
 class _UnavailableEmbeddingProvider:
@@ -21,21 +23,6 @@ class _UnavailableEmbeddingProvider:
         raise RuntimeError("production embedding provider is not installed")
 
 
-def _initialize_database(settings: MemorySettings) -> None:
-    settings.data_root.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(settings.database_path) as connection:
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version INTEGER PRIMARY KEY,
-                applied_at TEXT NOT NULL
-            )
-            """
-        )
-
-
 def create_app(
     settings: MemorySettings | None = None,
     *,
@@ -45,13 +32,15 @@ def create_app(
     provider = embedding_provider or _UnavailableEmbeddingProvider(
         settings.embedding_model
     )
+    store = MemoryStore(settings.database_path)
+    operational_context = OperationalContextService(store)
     started = monotonic()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.ready = False
         try:
-            _initialize_database(settings)
+            store.initialize()
         except Exception:
             app.state.storage_state = "unavailable"
         else:
@@ -79,6 +68,8 @@ def create_app(
     app.state.embedding_state = "not_loaded"
     app.state.embedding_provider = provider
     app.state.settings = settings
+    app.state.store = store
+    app.state.operational_context = operational_context
 
     @app.get("/health")
     def health():
@@ -100,8 +91,9 @@ def create_app(
             return payload
         return JSONResponse(payload, status_code=503)
 
+    app.include_router(operational_router)
+
     return app
 
 
 app = create_app()
-

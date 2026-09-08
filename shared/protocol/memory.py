@@ -151,6 +151,15 @@ class OperationalEntryUpdate(OperationalEntryCreate):
     pass
 
 
+class OperationalEntryDelete(MemoryModel):
+    idempotency_key: str = Field(min_length=1, max_length=255)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def normalize_key(cls, value: str) -> str:
+        return _required_text(value)
+
+
 class OperationalEntry(ScopedModel):
     entry_id: str
     entry_type: OperationalEntryType

@@ -53,4 +53,14 @@ class MemoryStore:
                 )
                 """
             )
-
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS idempotency_results (
+                    idempotency_key TEXT PRIMARY KEY,
+                    operation TEXT NOT NULL,
+                    request_hash TEXT NOT NULL,
+                    response_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
