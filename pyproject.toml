@@ -25,8 +25,8 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["router*", "admin*", "shared*"]
-exclude = ["tests*", "deploy*", "docs*", "voice*", "memory*", "skills*", "homeassistant*", "data*"]
+include = ["router*", "admin*", "shared*", "memory*"]
+exclude = ["tests*", "deploy*", "docs*", "voice*", "skills*", "homeassistant*", "data*"]
 
 [tool.setuptools.package-data]
 admin = [
