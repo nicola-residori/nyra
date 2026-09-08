@@ -51,6 +51,15 @@ class TrustedIdentity(BaseModel):
     user_id: str
     provider: str
     confidence: float = Field(ge=0.0, le=1.0)
+    display_name: str | None = Field(default=None, max_length=255)
+
+    @field_validator("display_name")
+    @classmethod
+    def normalize_display_name(cls, value):
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class RequestInput(BaseModel):

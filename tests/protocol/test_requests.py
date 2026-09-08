@@ -1,7 +1,14 @@
 from uuid import uuid4
 import pytest
 from pydantic import ValidationError
-from shared.protocol.requests import ExecutionType, RequestStatus, CloseReason, NyraRequest, NyraRequestResponse
+from shared.protocol.requests import (
+    CloseReason,
+    ExecutionType,
+    NyraRequest,
+    NyraRequestResponse,
+    RequestStatus,
+    TrustedIdentity,
+)
 from router.observability.ids import generate_request_id, generate_session_id, generate_trace_id
 
 
@@ -34,6 +41,36 @@ def test_ha_assist_accepts_trusted_identity():
     req = NyraRequest.model_validate({**speaker_payload(), "type": "ha_assist", "source": None,
         "identity": {"user_id": "user-a", "provider": "home_assistant", "confidence": 1.0}})
     assert req.identity.user_id == "user-a"
+
+
+def test_trusted_identity_accepts_an_optional_normalized_display_name():
+    identity = TrustedIdentity(
+        user_id="ha-user-1",
+        provider="home_assistant",
+        confidence=1.0,
+        display_name="  Nicola  ",
+    )
+    assert identity.display_name == "Nicola"
+    assert TrustedIdentity(
+        user_id="ha-user-1",
+        provider="home_assistant",
+        confidence=1.0,
+        display_name="   ",
+    ).display_name is None
+
+
+def test_trusted_identity_display_name_is_optional_and_bounded():
+    identity = TrustedIdentity(
+        user_id="ha-user-1", provider="home_assistant", confidence=1.0
+    )
+    assert identity.display_name is None
+    with pytest.raises(ValidationError):
+        TrustedIdentity(
+            user_id="ha-user-1",
+            provider="home_assistant",
+            confidence=1.0,
+            display_name="n" * 256,
+        )
 
 
 def test_job_requires_null_session_and_request_ids():
