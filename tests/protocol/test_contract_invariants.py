@@ -2,6 +2,12 @@ from shared.protocol.capabilities import CapabilityCorrelation, ExecuteRequest, 
 from shared.protocol.execution import ExecutionPlan, NyraOperation, PlanOrigin, PlanValidationState
 from shared.protocol.ids import CorrelationContext
 from shared.protocol.semantic import SemanticResult, SemanticTarget
+from shared.protocol.memory import (
+    OperationalEntryCreate,
+    OperationalResolutionRequest,
+    SemanticMemoryCreate,
+    SemanticSearchRequest,
+)
 
 
 def test_shared_correlation_never_requires_session_id():
@@ -34,3 +40,17 @@ def test_protocol_has_no_manual_authentication_abstraction():
 def test_non_idempotent_operations_are_not_retry_safe():
     for operation in (NyraOperation.TOGGLE, NyraOperation.INCREASE, NyraOperation.DECREASE, NyraOperation.TRIGGER):
         assert not is_idempotent_operation(operation)
+
+
+def test_memory_contracts_do_not_accept_authentication_or_execution_fields():
+    forbidden = {
+        "authorization", "token", "credentials", "roles", "caller",
+        "service_data", "execution_plan", "prompt",
+    }
+    for model in (
+        OperationalEntryCreate,
+        OperationalResolutionRequest,
+        SemanticMemoryCreate,
+        SemanticSearchRequest,
+    ):
+        assert forbidden.isdisjoint(model.model_fields)
