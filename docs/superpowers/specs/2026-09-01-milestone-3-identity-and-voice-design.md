@@ -309,6 +309,13 @@ NOT_RECOGNIZED | FAILED | identification timeout
 
 Continuity never crosses session boundaries.
 
+For a Home Assistant speaker, each wake-word activation starts a new
+conversation session. A `NEEDS_CLARIFICATION` response may keep that session
+and request open for its immediate follow-up; any terminal response or Router
+failure closes it. A later wake-word activation therefore receives a new
+`session_id`, and identity continuity can never carry across two separate wake
+words.
+
 Continuity follows the **last certainly/biometrically identified user in the current session**, not merely the person who started the session.
 
 Example:

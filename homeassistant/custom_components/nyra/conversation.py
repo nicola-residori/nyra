@@ -109,6 +109,8 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
         response = await client.async_execute(request)
     except NyraRouterError:
         sessions.complete_request(data.conversation_key)
+        if data.is_speaker:
+            sessions.close_session(data.conversation_key)
         return AdapterResult(
             localized_adapter_message(data.language, "UNAVAILABLE"),
             data.conversation_key,
@@ -120,7 +122,7 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
         sessions.preserve_request(data.conversation_key)
     else:
         sessions.complete_request(data.conversation_key)
-        if response.status is RequestStatus.CLOSED:
+        if data.is_speaker or response.status is RequestStatus.CLOSED:
             sessions.close_session(data.conversation_key)
 
     text = response.response.text if response.response is not None else ""

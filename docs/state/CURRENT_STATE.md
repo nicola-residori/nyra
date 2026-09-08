@@ -119,7 +119,34 @@ counts. A generated PCM stream sent through the production Router returned a
 typed `NOT_RECOGNIZED/BELOW_THRESHOLD` result from CT106 while preserving its
 request, session, source, trace, and Router audio-relay span correlation.
 
-Local verification reports 468 passed tests, successful Python bytecode
+The Task 18–19 Router changes and localized Home Assistant fallback were
+deployed on 2026-09-08. After successful Router and Home Assistant restarts,
+Router reported `HEALTHY`/`READY`, Home Assistant returned HTTP 200, and the
+production Router-to-Speaker-ID relay test passed again. The Wake Word export
+path produced a valid `.tar.gz` containing selected WAV audio and
+`metadata.json`. CT106 and CT108 contain no `nyra-voice` service or runtime
+reference; the former CT106 was already replaced by the fresh dedicated
+Speaker-ID container.
+
+The first post-deployment physical Mansarda request completed normally. The
+initial “Chi sono?” validation exposed a stale speaker session: the biometric
+attempt scored `0.366723`, correctly produced two red blinks, but the response
+used continuity from an earlier wake word. Home Assistant now closes a speaker
+session after every terminal response or Router failure, while preserving it
+only for an immediate clarification. Each new wake word therefore creates a
+new `session_id`. The localized Router identity-query skill answers with the
+trusted display name only when the current session resolves that identity and
+never speaks a technical ID or `guest`.
+
+Physical verification after the fix produced “Sei Nicola Residori.” The two
+latest wake-word activations had distinct session IDs and both produced
+`IDENTIFIED`, scoring `0.526898` and `0.417643`. After eight physical production
+attempts, identity metrics reported 75% `IDENTIFIED`, 25% `NOT_RECOGNIZED`, no
+failures/timeouts/late results, p50 `776 ms`, p95 `2618 ms`, and p99 `2631 ms`.
+The Router timeout remains `6.0 s` (revision `2`), which retains a substantial
+safety margin above the observed p95.
+
+Local verification reports 476 passed tests, successful Python bytecode
 compilation, valid deployment shell syntax, no whitespace errors, and no
 display-name fields in Speaker-ID or general observability storage.
 

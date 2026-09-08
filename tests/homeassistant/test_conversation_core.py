@@ -183,6 +183,45 @@ async def test_completed_router_result_does_not_fallback():
     assert not needs_home_assistant_fallback(result)
 
 
+@pytest.mark.asyncio
+async def test_each_terminal_speaker_wake_word_gets_a_new_session():
+    sessions = SessionManager()
+    client = Client(RequestStatus.COMPLETED)
+    data = AdapterInput(
+        "che ore sono",
+        "it-IT",
+        "speaker:nyra-mansarda",
+        satellite_id="assist_satellite.nyra_mansarda",
+        nyra_source_id="nyra-mansarda",
+    )
+
+    await process_adapter_input(data, sessions, client)
+    await process_adapter_input(data, sessions, client)
+
+    assert client.requests[0].session_id != client.requests[1].session_id
+
+
+@pytest.mark.asyncio
+async def test_speaker_clarification_keeps_session_until_terminal_response():
+    sessions = SessionManager()
+    data = AdapterInput(
+        "luce",
+        "it-IT",
+        "speaker:nyra-mansarda",
+        satellite_id="assist_satellite.nyra_mansarda",
+        nyra_source_id="nyra-mansarda",
+    )
+    clarification = Client(RequestStatus.NEEDS_CLARIFICATION)
+    completed = Client(RequestStatus.COMPLETED)
+
+    await process_adapter_input(data, sessions, clarification)
+    await process_adapter_input(data, sessions, completed)
+    await process_adapter_input(data, sessions, completed)
+
+    assert completed.requests[0].session_id == clarification.requests[0].session_id
+    assert completed.requests[1].session_id != clarification.requests[0].session_id
+
+
 class UnavailableClient:
     async def async_execute(self, request):
         raise NyraRouterUnavailable("offline")

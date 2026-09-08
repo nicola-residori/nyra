@@ -32,6 +32,7 @@ from router.api.speaker_id_admin import router as speaker_id_admin_router
 from router.api.users import router as users_router
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
+from router.identity_skill import IdentityQuerySkill
 
 
 class _ContextPort:
@@ -44,11 +45,8 @@ class _MemoryPort:
         return {}
 
 
-class _SkillPort:
-    async def check(self, request, context, memory, pending_state):
-        return SkillMatch(matched=False)
-    async def execute(self, match, request, context, memory, pending_state):
-        return LifecycleDecision(status=RequestStatus.FAILED)
+class _SkillPort(IdentityQuerySkill):
+    pass
 
 
 class _LlmPort:
