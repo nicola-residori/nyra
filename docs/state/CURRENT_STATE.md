@@ -69,12 +69,13 @@ metadata, recent identity diagnostics with retention-aware detail, and
 wake-word sample listening/deletion/export through Router APIs only.
 
 Nyra Mansarda runs the ESPHome 2026.8.2 enrollment/wake-capture firmware built
-on 2026-09-07. The OTA image SHA-256 is
-`736c0d2fb179fd8b85944113cd253d97e9e0455a12184f7437faf056ffbd9048`
-(ESPHome build hash `0x5e1a538a`). OTA completed successfully only on
+on 2026-09-08. The OTA image SHA-256 is
+`9f5686a0e60359b28c2176361c0f6a420e475f0b9046ee9b742289d71d5a589e`
+(ESPHome build hash `0xbdfba290`). OTA completed successfully only on
 `192.168.0.141`; the device passed the 60-second boot-loop guard and restored
-its encrypted ESPHome API connection. Home Assistant `ha core check` passed,
-and the automated repository suite reports 423 passed tests.
+its encrypted ESPHome API connection. This build acknowledges wake-word
+detection with the white listening visual immediately, while Assist audio
+still starts after the local wake cue has finished.
 
 The trusted user display-name change was deployed to Router/Admin and Home
 Assistant on 2026-09-08. Home Assistant remains authoritative for the current
@@ -88,7 +89,7 @@ was then verified in the profile, identity diagnostic, diagnostic candidate,
 and Wake Word sample views. The new physical identification smoke test remains
 pending.
 
-Local verification reports 447 passed tests, successful Python bytecode
+Local verification reports 448 passed tests, successful Python bytecode
 compilation, no whitespace errors, and no display-name fields in Speaker-ID or
 general observability storage.
 
