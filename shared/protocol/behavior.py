@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from .execution import ExecutionStep
+from .execution_common import ExecutionStep
 
 class BehaviorLifecycle(str, Enum):
     ONE_SHOT="ONE_SHOT"; PERSISTENT="PERSISTENT"
