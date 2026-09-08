@@ -13,6 +13,11 @@ class RouterClient:
             async with httpx.AsyncClient(base_url=self.base_url,timeout=10.0,transport=self.transport) as c:
                 r=await c.request(method,path,params=params,json=payload,headers=self._headers()); r.raise_for_status(); return r.json()
         except (httpx.HTTPError,ValueError) as e: raise RouterUnavailable(str(e)) from e
+    async def request_json_with_status(self,method:str,path:str,params=None,payload=None):
+        try:
+            async with httpx.AsyncClient(base_url=self.base_url,timeout=10.0,transport=self.transport) as c:
+                r=await c.request(method,path,params=params,json=payload,headers=self._headers()); return r.json(),r.status_code
+        except (httpx.HTTPError,ValueError) as e: raise RouterUnavailable(str(e)) from e
     async def request_bytes(self,method:str,path:str,params=None,payload=None):
         try:
             async with httpx.AsyncClient(base_url=self.base_url,timeout=30.0,transport=self.transport) as c:

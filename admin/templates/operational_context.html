@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h2>Contesto operativo</h2><p class="muted">Alias, mapping, valori predefiniti e scorciatoie applicati con precedenza Utente → Famiglia → Sistema.</p></div></div>
+{% if error %}<div class="fault">{{error}}</div>{% endif %}
+<form class="filters card" method="get">
+  <select name="entry_type"><option value="">Tutti i tipi</option>{% for value in ['ALIAS','MAPPING','DEFAULT','SHORTCUT'] %}<option value="{{value}}" {% if filters.entry_type==value %}selected{% endif %}>{{value}}</option>{% endfor %}</select>
+  <select name="scope"><option value="">Tutti gli ambiti</option>{% for value in ['USER','FAMILY','SYSTEM'] %}<option value="{{value}}" {% if filters.scope==value %}selected{% endif %}>{{value}}</option>{% endfor %}</select>
+  <input name="owner_user_id" value="{{filters.owner_user_id or ''}}" placeholder="ID utente">
+  <button type="submit">Filtra</button>
+</form>
+<details class="card memory-create"><summary>Nuova regola</summary>
+  <form id="operational-form" class="memory-form">
+    <label>Tipo<select name="entry_type" required>{% for value in ['ALIAS','MAPPING','DEFAULT','SHORTCUT'] %}<option>{{value}}</option>{% endfor %}</select></label>
+    <label>Ambito<select name="scope" required>{% for value in ['USER','FAMILY','SYSTEM'] %}<option>{{value}}</option>{% endfor %}</select></label>
+    <label>ID utente<input name="owner_user_id" placeholder="Obbligatorio per USER"></label>
+    <label>Chiave<input name="key" required></label>
+    <label class="wide">Valore JSON<textarea name="value" required>{"target":"light.example"}</textarea></label>
+    <label><input name="enabled" type="checkbox" checked> Attiva</label>
+    <button type="submit">Salva regola</button>
+  </form>
+</details>
+<div id="memory-status" role="status"></div>
+<div class="table-shell memory-table"><table><thead><tr><th>Tipo</th><th>Chiave</th><th>Valore</th><th>Ambito</th><th>Proprietario</th><th>Versione</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>
+{% for item in items %}<tr data-entry-id="{{item.entry_id}}"><td><span class="badge">{{item.entry_type}}</span></td><td>{{item.key}}</td><td><code>{{item.value|tojson}}</code></td><td>{{item.scope}}</td><td><span class="user-name">{{item.owner_display_name or item.owner_user_id or 'Condiviso'}}</span>{% if item.owner_display_name %}<br><code class="user-id">{{item.owner_user_id}}</code>{% endif %}</td><td>Revisione {{item.revision}}<br><small data-nyra-timestamp="{{item.updated_at}}">{{item.updated_at}}</small></td><td>{{'Attiva' if item.enabled else 'Disattivata'}}</td><td><button class="small-delete" data-delete-entry="{{item.entry_id}}">Elimina</button></td></tr>
+{% else %}<tr><td colspan="8" class="muted">Nessuna regola configurata.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/memory.js"></script>{% endblock %}

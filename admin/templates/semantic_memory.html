@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h2>Memoria semantica</h2><p class="muted">Fatti, preferenze, note e relazioni conservati per utente, famiglia o sistema.</p></div></div>
+{% if error %}<div class="fault">{{error}}</div>{% endif %}
+<form class="filters card" method="get">
+  <input name="q" value="{{filters.q or ''}}" placeholder="Cerca per significato">
+  <select name="memory_type"><option value="">Tutti i tipi</option>{% for value in ['FACT','PREFERENCE','NOTE','RELATION'] %}<option value="{{value}}" {% if filters.memory_type==value %}selected{% endif %}>{{value}}</option>{% endfor %}</select>
+  <select name="scope"><option value="">Tutti gli ambiti</option>{% for value in ['USER','FAMILY','SYSTEM'] %}<option value="{{value}}" {% if filters.scope==value %}selected{% endif %}>{{value}}</option>{% endfor %}</select>
+  <select name="state"><option value="ACTIVE">Attive</option><option value="SUPERSEDED" {% if filters.state=='SUPERSEDED' %}selected{% endif %}>Sostituite</option><option value="DELETED" {% if filters.state=='DELETED' %}selected{% endif %}>Eliminate</option></select>
+  <input name="owner_user_id" value="{{filters.owner_user_id or ''}}" placeholder="ID utente">
+  <button type="submit">Applica</button>
+</form>
+<details class="card memory-create"><summary>Nuovo ricordo</summary>
+  <form id="semantic-form" class="memory-form">
+    <label>Tipo<select name="memory_type" required>{% for value in ['FACT','PREFERENCE','NOTE','RELATION'] %}<option>{{value}}</option>{% endfor %}</select></label>
+    <label>Ambito<select name="scope" required>{% for value in ['USER','FAMILY','SYSTEM'] %}<option>{{value}}</option>{% endfor %}</select></label>
+    <label>ID utente<input name="owner_user_id" placeholder="Obbligatorio per USER"></label>
+    <label>Origine<select name="source"><option>USER_EXPLICIT</option><option>IMPORTED</option><option>SYSTEM</option></select></label>
+    <label class="wide">Contenuto<textarea name="content" required></textarea></label>
+    <button type="submit">Salva ricordo</button>
+  </form>
+</details>
+<div id="memory-status" role="status"></div>
+<div class="memory-grid">
+{% for item in items %}<article class="card memory-card" data-memory-id="{{item.memory_id}}" data-owner-id="{{item.owner_user_id or ''}}">
+  <div class="group-head"><div><span class="eyebrow">{{item.memory_type}} · {{item.scope}}</span><h3>{{item.content}}</h3></div>{% if scores.get(item.memory_id) is not none %}<span class="badge">{{(scores.get(item.memory_id)*100)|round|int}}%</span>{% endif %}</div>
+  <dl><dt>Proprietario</dt><dd><span class="user-name">{{item.owner_display_name or item.owner_user_id or 'Condiviso'}}</span>{% if item.owner_display_name %}<br><code class="user-id">{{item.owner_user_id}}</code>{% endif %}</dd><dt>Stato</dt><dd>{{item.state}}</dd><dt>Origine</dt><dd>{{item.source}}</dd><dt>ID stabile</dt><dd><code>{{item.memory_id}}</code></dd><dt>Aggiornato</dt><dd data-nyra-timestamp="{{item.updated_at}}">{{item.updated_at}}</dd>{% if item.supersedes_memory_id %}<dt>Sostituisce</dt><dd><code>{{item.supersedes_memory_id}}</code></dd>{% endif %}{% if item.superseded_by_memory_id %}<dt>Sostituito da</dt><dd><code>{{item.superseded_by_memory_id}}</code></dd>{% endif %}</dl>
+  {% if item.state == 'ACTIVE' %}<div class="management-actions"><button data-confirm-memory="{{item.memory_id}}">Conferma</button><button data-replace-memory="{{item.memory_id}}" data-content="{{item.content}}">Sostituisci</button><button class="danger" data-delete-memory="{{item.memory_id}}">Elimina</button></div>{% endif %}
+</article>
+{% else %}<div class="card muted">Nessun ricordo disponibile.</div>{% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/memory.js"></script>{% endblock %}

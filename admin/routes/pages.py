@@ -6,6 +6,9 @@ def templates(req): return req.app.state.templates
 async def fetch(req,path,params=None):
     try: return await req.app.state.router_client.get(path,params),None
     except RouterUnavailable as e: return None,str(e)
+async def call(req,method,path,params=None,payload=None):
+    try: return await req.app.state.router_client.request_json(method,path,params=params,payload=payload),None
+    except RouterUnavailable as e: return None,str(e)
 @router.get("/",response_class=HTMLResponse)
 async def dashboard(request:Request):
     health,error=await fetch(request,"/health"); logs,_=await fetch(request,"/v1/logs",{"limit":1})
@@ -25,6 +28,40 @@ async def traces(request:Request): data,error=await fetch(request,"/v1/traces");
 async def trace_detail(request:Request,ident:str): data,error=await fetch(request,f"/v1/traces/{ident}"); return templates(request).TemplateResponse(request,"trace_detail.html",{"trace":data,"error":error})
 @router.get("/services",response_class=HTMLResponse)
 async def services(request:Request): data,error=await fetch(request,"/v1/services"); return templates(request).TemplateResponse(request,"services.html",{"items":data or [],"error":error})
+
+@router.get("/memory/operational",response_class=HTMLResponse)
+async def operational_memory(request:Request):
+    allowed={"entry_type","scope","owner_user_id","enabled","limit","offset"}
+    params={key:value for key,value in request.query_params.items() if key in allowed and value}
+    data,error=await fetch(request,"/v1/admin/memory/operational",params)
+    return templates(request).TemplateResponse(request,"operational_context.html",{
+        "items":(data or {}).get("items",[]),"page":data or {},
+        "error":f"Servizio Memory non disponibile: {error}" if error else None,
+        "filters":dict(request.query_params),
+    })
+
+@router.get("/memory/semantic",response_class=HTMLResponse)
+async def semantic_memory(request:Request):
+    allowed={"scope","owner_user_id","memory_type","state","limit","offset"}
+    params={key:value for key,value in request.query_params.items() if key in allowed and value}
+    data,error=await fetch(request,"/v1/admin/memory/semantic",params)
+    scores={}
+    query=request.query_params.get("q","").strip()
+    search_error=None
+    if query:
+        scopes=[request.query_params.get("scope")] if request.query_params.get("scope") else ["USER","FAMILY","SYSTEM"]
+        owner=request.query_params.get("owner_user_id")
+        if "USER" in scopes and not owner:
+            scopes=[scope for scope in scopes if scope != "USER"]
+        search_payload={"query":query,"scopes":scopes}
+        if owner and "USER" in scopes: search_payload["owner_user_id"]=owner
+        search,search_error=await call(request,"POST","/v1/admin/memory/semantic/search",payload=search_payload)
+        scores={item.get("memory_id"):item.get("score") for item in (search or {}).get("items",[])}
+    return templates(request).TemplateResponse(request,"semantic_memory.html",{
+        "items":(data or {}).get("items",[]),"page":data or {},"scores":scores,
+        "error":f"Servizio Memory non disponibile: {error or search_error}" if (error or search_error) else None,
+        "filters":dict(request.query_params),
+    })
 
 @router.get("/identity/profiles",response_class=HTMLResponse)
 async def identity_profiles(request:Request):
@@ -66,5 +103,19 @@ async def speaker_identity_proxy(request:Request,path:str):
         data=await request.app.state.router_client.request_json(
             request.method,router_path,params=dict(request.query_params),payload=payload)
         return JSONResponse(data)
+    except RouterUnavailable as exc:
+        return JSONResponse({"error":str(exc)},status_code=503)
+
+@router.api_route("/admin-api/memory/{path:path}",methods=["GET","POST","PUT","DELETE"])
+async def memory_proxy(request:Request,path:str):
+    router_path=f"/v1/admin/memory/{path}"
+    payload=None
+    if request.method in {"POST","PUT","DELETE"}:
+        try: payload=await request.json()
+        except Exception: payload=None
+    try:
+        data,status_code=await request.app.state.router_client.request_json_with_status(
+            request.method,router_path,params=dict(request.query_params),payload=payload)
+        return JSONResponse(data,status_code=status_code)
     except RouterUnavailable as exc:
         return JSONResponse({"error":str(exc)},status_code=503)
