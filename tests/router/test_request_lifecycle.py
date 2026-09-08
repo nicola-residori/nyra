@@ -30,14 +30,14 @@ class IdentityPort:
 
 class ContextPort:
     def __init__(self, semantic=False): self.semantic=semantic; self.calls=[]
-    async def resolve(self, request, identity_user_id):
+    async def resolve(self, request, identity_user_id, trace_id):
         self.calls.append((request.input.text, identity_user_id))
         return ContextResult(data={"room":"living-room"}, semantic_memory_required=self.semantic)
 
 
 class MemoryPort:
     def __init__(self): self.calls=0
-    async def search(self, request, identity_user_id, context): self.calls += 1; return {"memory":"value"}
+    async def search(self, request, identity_user_id, context, trace_id): self.calls += 1; return {"memory":"value"}
 
 
 class SkillPort:

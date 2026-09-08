@@ -19,6 +19,8 @@ class RouterSettings:
     speaker_id_stream_url: str | None = None
     speaker_id_http_url: str | None = None
     audio_stream_timeout_seconds: float = 30.0
+    memory_url: str | None = None
+    memory_timeout_seconds: float = 3.0
 
     @classmethod
     def load(cls, config_file: str | None = None):
@@ -47,4 +49,8 @@ class RouterSettings:
             speaker_id_http_url=os.getenv("NYRA_SPEAKER_ID_HTTP_URL", data.get("speaker_id_http_url")),
             audio_stream_timeout_seconds=float(os.getenv("NYRA_AUDIO_STREAM_TIMEOUT_SECONDS", data.get("audio_stream_timeout_seconds", 30.0))),
             ingress_token=os.getenv("NYRA_ROUTER_INGRESS_TOKEN", data.get("ingress_token")),
+            memory_url=os.getenv("NYRA_MEMORY_URL", data.get("memory_url")),
+            memory_timeout_seconds=float(os.getenv(
+                "NYRA_MEMORY_TIMEOUT_SECONDS", data.get("memory_timeout_seconds", 3.0)
+            )),
         )

@@ -19,12 +19,12 @@ from shared.protocol.requests import NyraRequest, RequestStatus
 
 
 class ContextPort:
-    async def resolve(self, request, identity_user_id):
+    async def resolve(self, request, identity_user_id, trace_id):
         return ContextResult(data={"resolved_user_id": identity_user_id})
 
 
 class MemoryPort:
-    async def search(self, request, identity_user_id, context):
+    async def search(self, request, identity_user_id, context, trace_id):
         return {}
 
 

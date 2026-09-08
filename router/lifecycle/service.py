@@ -70,11 +70,11 @@ class SpeakerIdentityPort(Protocol):
 
 
 class ContextPort(Protocol):
-    async def resolve(self, request: NyraRequest, identity_user_id: str | None) -> ContextResult: ...
+    async def resolve(self, request: NyraRequest, identity_user_id: str | None, trace_id: str) -> ContextResult: ...
 
 
 class MemoryPort(Protocol):
-    async def search(self, request: NyraRequest, identity_user_id: str | None, context: ContextResult) -> dict[str, Any]: ...
+    async def search(self, request: NyraRequest, identity_user_id: str | None, context: ContextResult, trace_id: str) -> dict[str, Any]: ...
 
 
 class SkillPort(Protocol):
@@ -421,7 +421,7 @@ class RequestLifecycleService:
             ))
             await self._state(request, trace_id, span_id, InteractionState.PROCESSING_LOCAL)
 
-        context = await self.context_port.resolve(request, identity_user_id)
+        context = await self.context_port.resolve(request, identity_user_id, trace_id)
         request_context = self._build_request_context(
             request,
             trace_id,
@@ -444,7 +444,7 @@ class RequestLifecycleService:
         memory = None
         if context.semantic_memory_required:
             self._log(request, trace_id, span_id, "MEMORY_SEARCH", params={"required": True})
-            memory = await self.memory_port.search(request, identity_user_id, context)
+            memory = await self.memory_port.search(request, identity_user_id, context, trace_id)
 
         match = await self.skill_port.check(request, context, memory, pending_state)
         if match.matched:

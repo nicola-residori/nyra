@@ -33,15 +33,16 @@ from router.api.users import router as users_router
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
 from router.identity_skill import IdentityQuerySkill
+from router.memory_client import MemoryClient
 
 
 class _ContextPort:
-    async def resolve(self, request, identity_user_id):
+    async def resolve(self, request, identity_user_id, trace_id):
         return ContextResult(data={}, semantic_memory_required=False)
 
 
 class _MemoryPort:
-    async def search(self, request, identity_user_id, context):
+    async def search(self, request, identity_user_id, context, trace_id):
         return {}
 
 
@@ -55,7 +56,7 @@ class _LlmPort:
 
 
 def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phrase_generator=None,
-               wake_word_dataset=None, speaker_id_admin=None):
+               wake_word_dataset=None, speaker_id_admin=None, memory_client=None):
     settings = settings or RouterSettings.load()
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
@@ -86,12 +87,18 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         wait_timeout_seconds=settings.audio_stream_timeout_seconds,
         event_sink=observability,
     )
+    if memory_client is None and settings.memory_url:
+        memory_client = MemoryClient(
+            settings.memory_url, timeout=settings.memory_timeout_seconds
+        )
+    context_port = memory_client if memory_client is not None else _ContextPort()
+    memory_port = memory_client if memory_client is not None else _MemoryPort()
     lifecycle = RequestLifecycleService(
         store=request_store,
         broker=event_broker,
         identity_port=audio_relay,
-        context_port=_ContextPort(),
-        memory_port=_MemoryPort(),
+        context_port=context_port,
+        memory_port=memory_port,
         skill_port=_SkillPort(),
         llm_port=_LlmPort(),
         clarification_timeout_seconds=settings.clarification_timeout_seconds,
@@ -132,6 +139,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.user_directory = user_directory
     app.state.wake_word_dataset = wake_word_dataset
     app.state.speaker_id_admin = speaker_id_admin
+    app.state.memory_client = memory_client
     app.state.observability = observability
     app.state.events = event_broker
     app.state.lifecycle = lifecycle

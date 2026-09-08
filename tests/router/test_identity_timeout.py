@@ -19,12 +19,12 @@ class Broker:
 
 
 class ContextPort:
-    async def resolve(self, request, identity_user_id):
+    async def resolve(self, request, identity_user_id, trace_id):
         return ContextResult(data={}, semantic_memory_required=False)
 
 
 class MemoryPort:
-    async def search(self, request, identity_user_id, context): return {}
+    async def search(self, request, identity_user_id, context, trace_id): return {}
 
 
 class SkillPort:

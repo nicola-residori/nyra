@@ -9,9 +9,9 @@ from router.observability.ids import generate_request_id, generate_session_id
 class Identity:
     async def identify(self, request, trace_id): return "user-a"
 class Context:
-    async def resolve(self, request, identity_user_id): return ContextResult(data={}, semantic_memory_required=False)
+    async def resolve(self, request, identity_user_id, trace_id): return ContextResult(data={}, semantic_memory_required=False)
 class Memory:
-    async def search(self, request, identity_user_id, context): return {}
+    async def search(self, request, identity_user_id, context, trace_id): return {}
 class Skill:
     async def check(self, request, context, memory, pending_state): return SkillMatch(True,"x")
     async def execute(self, match, request, context, memory, pending_state): return LifecycleDecision.completed("Done.")
