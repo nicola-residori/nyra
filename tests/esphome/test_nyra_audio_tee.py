@@ -53,6 +53,21 @@ def test_wake_cue_finishes_before_assist_starts():
     assert wake.index("delay: 1000ms") < wake.index("voice_assistant.start:")
 
 
+def test_wake_detection_shows_listening_white_before_the_clean_audio_delay():
+    core = VENDORED_WAVESHARE_CORE.read_text(encoding="utf-8")
+    wake = core.split("# Otherwise: beep, then start Assist.", 1)[1].split(
+        "voice_assistant:", 1
+    )[0]
+
+    assert "light.turn_on:" in wake
+    assert "id: status_ring" in wake
+    assert 'effect: "Pulse Fast"' in wake
+    assert "red: 100%" in wake
+    assert "green: 100%" in wake
+    assert "blue: 100%" in wake
+    assert wake.index("light.turn_on:") < wake.index("delay: 1000ms")
+
+
 def test_stable_speaker_package_cannot_enable_experimental_enrollment():
     text = PACKAGE.read_text(encoding="utf-8")
 

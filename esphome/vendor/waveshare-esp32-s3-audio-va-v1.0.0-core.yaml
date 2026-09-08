@@ -428,6 +428,14 @@ micro_wake_word:
                                 announcement: true
                           # Otherwise: beep, then start Assist.
                           else:
+                            # Give immediate visual acknowledgement while the
+                            # wake cue finishes outside the captured speech.
+                            - light.turn_on:
+                                id: status_ring
+                                effect: "Pulse Fast"
+                                red: 100%
+                                green: 100%
+                                blue: 100%
                             - if:
                                 condition:
                                   switch.is_on: wake_sound
