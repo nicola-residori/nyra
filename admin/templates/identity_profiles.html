@@ -4,7 +4,7 @@
 {% if error %}<div class="fault">{{error}}</div>{% endif %}
 {% for profile in profiles %}
 <section class="card identity-group">
-  <div class="group-head"><div><span class="eyebrow">Utente</span><h3>{{profile.user_id}}</h3></div><span class="badge">{{profile.sample_count}} campioni</span></div>
+  <div class="group-head"><div><span class="eyebrow">Utente</span><h3 class="user-name">{{profile.user_display_name or profile.user_id}}</h3>{% if profile.user_display_name %}<code class="user-id">{{profile.user_id}}</code>{% endif %}</div><span class="badge">{{profile.sample_count}} campioni</span></div>
   <label class="select-row"><input type="checkbox" data-select-profile="{{profile.user_id}}"> Seleziona tutti i campioni del profilo</label>
   <div class="sample-grid">
   {% for sample in profile.samples %}

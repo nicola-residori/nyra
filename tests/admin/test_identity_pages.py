@@ -6,12 +6,13 @@ from admin.client import RouterClient
 from admin.config import AdminSettings
 
 
-def app():
+def app(user_display_name="Nicola"):
     async def handler(request):
         path = request.url.path
         if path.endswith("/profiles"):
             return httpx.Response(200, json=[{
                 "user_id": "user-nicola", "sample_count": 1,
+                "user_display_name": user_display_name,
                 "samples": [{"sample_id": "enr-1", "source_id": "nyra-mansarda",
                              "created_at": "2026-09-07T18:00:00Z", "duration_seconds": 1.2,
                              "quality": {"rms": .2}, "preprocessing_version": "1"}],
@@ -21,17 +22,20 @@ def app():
                 "diagnostic_id": "diag-1", "created_at": "2026-09-07T18:01:00Z",
                 "source_id": "nyra-mansarda", "outcome": "IDENTIFIED",
                 "identified_user_id": "user-nicola", "best_score": .82,
+                "identified_user_display_name": user_display_name,
                 "reason_code": None, "audio_available": True,
             }])
         if path.endswith("/diagnostics/diag-1"):
             return httpx.Response(200, json={
                 "diagnostic_id": "diag-1", "candidates": [
-                    {"user_id": "user-nicola", "score": .82, "rank": 1}
+                    {"user_id": "user-nicola", "user_display_name": user_display_name,
+                     "score": .82, "rank": 1}
                 ]
             })
         if path.endswith("/wake-words"):
             return httpx.Response(200, json=[{
                 "sample_id": "ww-1", "wake_word_text": "Nyra", "user_id": "user-nicola",
+                "user_display_name": user_display_name,
                 "source_id": "nyra-mansarda", "created_at": "2026-09-07T18:02:00Z",
                 "duration_seconds": 1.0, "quality": {"rms": .3}, "language": "it-IT",
             }])
@@ -49,6 +53,8 @@ def test_identity_pages_show_required_data_and_audio_controls():
     with TestClient(app()) as client:
         profiles = client.get("/identity/profiles").text
         assert "Profili vocali" in profiles
+        assert '<h3 class="user-name">Nicola</h3>' in profiles
+        assert '<code class="user-id">user-nicola</code>' in profiles
         assert "user-nicola" in profiles
         assert "nyra-mansarda" in profiles
         assert "<audio" in profiles
@@ -56,6 +62,8 @@ def test_identity_pages_show_required_data_and_audio_controls():
 
         diagnostics = client.get("/identity/diagnostics").text
         assert "Controlli identità" in diagnostics
+        assert '<span class="user-name">Nicola</span>' in diagnostics
+        assert '<code class="user-id">user-nicola</code>' in diagnostics
         assert "IDENTIFIED" in diagnostics
         assert "0.82" in diagnostics
         assert "Candidati" in diagnostics
@@ -63,9 +71,22 @@ def test_identity_pages_show_required_data_and_audio_controls():
 
         wake_words = client.get("/wake-words").text
         assert "Campioni wake word" in wake_words
+        assert '<span class="user-name">Nicola</span>' in wake_words
+        assert '<code class="user-id">user-nicola</code>' in wake_words
         assert "Nyra" in wake_words
         assert "<audio" in wake_words
         assert "Esporta selezionati" in wake_words
+
+
+def test_identity_pages_fall_back_to_the_stable_id_when_name_is_missing():
+    with TestClient(app(None)) as client:
+        profiles = client.get("/identity/profiles").text
+        diagnostics = client.get("/identity/diagnostics").text
+        wake_words = client.get("/wake-words").text
+
+    assert '<h3 class="user-name">user-nicola</h3>' in profiles
+    assert '<span class="user-name">user-nicola</span>' in diagnostics
+    assert '<span class="user-name">user-nicola</span>' in wake_words
 
 
 def test_admin_has_management_only_and_no_capture_start_controls():

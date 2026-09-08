@@ -5,11 +5,11 @@
 {% if error %}<div class="fault">{{error}}</div>{% endif %}
 <div class="sample-grid">
 {% for item in items %}<article class="card diagnostic-card outcome-{{item.outcome}}">
-  <div class="group-head"><strong>{{item.outcome}}</strong>{% if item.identified_user_id %}<span class="badge success">{{item.identified_user_id}}</span>{% endif %}</div>
+  <div class="group-head"><strong>{{item.outcome}}</strong>{% if item.identified_user_id %}<span class="badge success"><span class="user-name">{{item.identified_user_display_name or item.identified_user_id}}</span>{% if item.identified_user_display_name %} <code class="user-id">{{item.identified_user_id}}</code>{% endif %}</span>{% endif %}</div>
   <p><span data-nyra-timestamp="{{item.created_at}}">{{item.created_at}}</span> · <span class="badge">{{item.source_id or 'speaker sconosciuto'}}</span></p>
   <dl><dt>Punteggio migliore</dt><dd>{{item.best_score if item.best_score is not none else '—'}}</dd><dt>Motivo</dt><dd>{{item.reason_code or '—'}}</dd><dt>Request</dt><dd><code>{{item.request_id or '—'}}</code></dd><dt>Trace</dt><dd><code>{{item.trace_id or '—'}}</code></dd></dl>
   {% if item.audio_available %}<audio controls preload="none" src="/admin-api/speaker-identity/diagnostics/{{item.diagnostic_id}}/audio"></audio>{% else %}<p class="muted">Audio e dettagli scaduti o non disponibili.</p>{% endif %}
-  <details><summary>Candidati</summary><ol>{% for candidate in details.get(item.diagnostic_id,{}).get('candidates',[]) %}<li><code>{{candidate.user_id}}</code> — {{candidate.score}}</li>{% else %}<li class="muted">Dettagli non disponibili</li>{% endfor %}</ol></details>
+  <details><summary>Candidati</summary><ol>{% for candidate in details.get(item.diagnostic_id,{}).get('candidates',[]) %}<li><span class="user-name">{{candidate.user_display_name or candidate.user_id}}</span>{% if candidate.user_display_name %} <code class="user-id">{{candidate.user_id}}</code>{% endif %} — {{candidate.score}}</li>{% else %}<li class="muted">Dettagli non disponibili</li>{% endfor %}</ol></details>
 </article>{% else %}<div class="card muted">Nessun controllo identità disponibile.</div>{% endfor %}
 </div>
 {% endblock %}
