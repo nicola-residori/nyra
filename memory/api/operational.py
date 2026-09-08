@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from time import monotonic
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from memory.operational import IdempotencyConflict, OperationalEntryNotFound
+from memory.observability import correlation_from_headers
 from shared.protocol.memory import (
     MemoryScope,
     OperationalEntryCreate,
@@ -25,7 +28,27 @@ def _error(status_code: int, code: str, message: str):
 
 @router.post("/v1/context/resolve")
 def resolve_context(payload: OperationalResolutionRequest, request: Request):
+    correlation = correlation_from_headers(request.headers)
+    started = monotonic()
+    start_record = request.app.state.memory_observability.emit(
+        "CONTEXT_RESOLUTION_START",
+        "context_resolution",
+        correlation,
+        params={"lookup_count": len(payload.lookups)},
+    )
     result = request.app.state.operational_context.resolve(payload)
+    request.app.state.memory_observability.emit(
+        "CONTEXT_RESOLUTION_COMPLETED",
+        "context_resolution",
+        correlation,
+        result=result.outcome.value,
+        params={
+            "applied_count": len(result.applied),
+            "conflict_count": len(result.conflicts),
+        },
+        started_at=started,
+        span_id=start_record.span_id,
+    )
     status = 409 if result.outcome.value == "AMBIGUOUS" else 200
     return JSONResponse(result.model_dump(mode="json"), status_code=status)
 

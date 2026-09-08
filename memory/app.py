@@ -10,14 +10,19 @@ from fastapi.responses import JSONResponse
 from memory.config import MemorySettings
 from memory.embeddings import SentenceTransformerEmbeddingProvider
 from memory.api.operational import router as operational_router
+from memory.api.semantic import router as semantic_router
+from memory.observability import MemoryObservability
 from memory.operational import OperationalContextService
+from memory.semantic import SemanticMemoryService
 from memory.storage import MemoryStore
+from shared.logging.client import NyraLogger
 
 
 def create_app(
     settings: MemorySettings | None = None,
     *,
     embedding_provider=None,
+    event_sink=None,
 ) -> FastAPI:
     settings = settings or MemorySettings.load()
     provider = embedding_provider or SentenceTransformerEmbeddingProvider(
@@ -25,11 +30,22 @@ def create_app(
     )
     store = MemoryStore(settings.database_path)
     operational_context = OperationalContextService(store)
+    semantic_memory = SemanticMemoryService(store, provider)
+    memory_observability = MemoryObservability(event_sink)
     started = monotonic()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.ready = False
+        owned_logger = None
+        if event_sink is None:
+            owned_logger = NyraLogger(
+                settings.router_url,
+                "MEMORY",
+                {},
+                spool_path=settings.data_root / "log-spool.jsonl",
+            )
+            memory_observability.event_sink = owned_logger
         try:
             store.initialize()
         except Exception:
@@ -52,6 +68,8 @@ def create_app(
             yield
         finally:
             app.state.ready = False
+            if owned_logger is not None:
+                owned_logger.close()
 
     app = FastAPI(title="Nyra Memory", lifespan=lifespan)
     app.state.ready = False
@@ -61,6 +79,8 @@ def create_app(
     app.state.settings = settings
     app.state.store = store
     app.state.operational_context = operational_context
+    app.state.semantic_memory = semantic_memory
+    app.state.memory_observability = memory_observability
 
     @app.get("/health")
     def health():
@@ -83,6 +103,7 @@ def create_app(
         return JSONResponse(payload, status_code=503)
 
     app.include_router(operational_router)
+    app.include_router(semantic_router)
 
     return app
 
