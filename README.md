@@ -20,9 +20,15 @@ Nyra v1 is under active development.
 
 - **Milestone 1 — Router foundation and observability: complete.**
 - **Milestone 2 — Home Assistant adapter and Nyra speaker integration: complete.**
-- **Milestone 3 — Identity and Voice: next.**
+- **Milestone 3 — Identity and Voice: complete.**
+- **Milestone 4 — Memory and context: next.**
 
-Milestone 2 established the production Home Assistant ingress/egress boundary and the real-time speaker interaction path. A physical Nyra speaker has been validated end-to-end through Home Assistant and Router, including stable source identification, Router-driven interaction states, protected identity feedback, TTS lifecycle feedback, and the local `Nyra IT` and `Nyra EN` wake words.
+Milestones 2 and 3 established the production Home Assistant speaker path and
+trusted voice identity lifecycle. A physical Nyra speaker has been validated
+end-to-end through Home Assistant, Router, and the dedicated Speaker-ID
+service, including enrollment, Wake Word sample capture/export, session-scoped
+identity, localized identity responses, observability, and persistent fresh-CT
+deployment.
 
 The previous implementation remains only a functional reference for specialist services that have not yet been migrated to the Nyra v1 lifecycle.
 
@@ -40,6 +46,18 @@ The previous implementation remains only a functional reference for specialist s
 - Session-close audio/visual feedback.
 - Canonical local micro-wake-word models `Nyra IT` and `Nyra EN`, selectable through Home Assistant while replacing the stock base wake-word models.
 - Physical end-to-end validation on a Nyra ESPHome speaker.
+
+## Milestone 3 capabilities
+
+- Dedicated reproducible `nyra-speaker-id` service with ECAPA-TDNN inference.
+- Parallel Router audio relay with strict request/session/source correlation.
+- Typed `IDENTIFIED`, `NOT_RECOGNIZED`, and `FAILED` biometric outcomes.
+- Router-owned trusted identity resolution and per-wake-word speaker sessions.
+- Home Assistant voice-profile enrollment and editable Wake Word sample capture.
+- Nyra Admin profile, diagnostic, audio-review, deletion, and export views.
+- Runtime threshold, margin, and timeout configuration with persisted snapshots.
+- Identity latency/outcome metrics and privacy-safe lifecycle observability.
+- Localized identity and failure responses without spoken technical IDs.
 
 
 ## Documentation

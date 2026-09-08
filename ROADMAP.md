@@ -35,14 +35,21 @@
 
 ## Milestone 3 - Identity and Voice
 
-**Status: Next**
+**Status: Complete**
 
-- Voice service integration through Router
-- Parallel speaker identification
-- Trusted identity context
-- Identity-aware policies
+- Dedicated Speaker-ID service integrated exclusively through Router
+- Parallel, correlated speaker identification audio streams
+- Trusted identity context with per-wake-word session boundaries
+- Voice-profile enrollment from Home Assistant
+- Editable Wake Word sample collection and `.tar.gz` export
+- Identity/profile/diagnostic administration through Nyra Admin
+- Runtime threshold, margin, and timeout configuration
+- Identity observability, metrics, retention, and localized responses
+- Reproducible Debian 12 CT deployment and reboot persistence verification
 
 ## Milestone 4 - Memory and context
+
+**Status: Next**
 
 - Operational context resolution
 - Structured aliases and mappings

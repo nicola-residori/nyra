@@ -8,12 +8,13 @@ Nyra v1.0-dev
 
 Milestone 2 — Home Assistant adapter and Nyra speaker integration — is complete.
 
-Milestone 3 — Identity and Voice — is in progress. Speaker-ID, physical
-enrollment, identity validation, wake-word sample capture, and the identity
-management views in Nyra Admin and trusted Home Assistant user-name enrichment
-are deployed. M3 observability, automated regression coverage, and fresh-CT
-reproducibility are complete; final physical smoke tests and legacy-independence
-verification remain.
+Milestone 3 — Identity and Voice — is complete. Speaker-ID, physical
+enrollment, identity validation, wake-word sample capture/export, trusted Home
+Assistant user-name enrichment, Nyra Admin identity management, observability,
+automated regression coverage, and fresh-CT reproducibility are deployed and
+verified.
+
+Milestone 4 — Memory and Context — is next.
 
 ## Implemented foundation
 
@@ -154,14 +155,18 @@ Router and Admin remain separate applications. Installation-specific Home Assist
 
 ## Migration status
 
-Home Assistant is migrated to the Nyra v1 Router lifecycle for Milestone 2. Production Skills, Memory, Voice, and LLM specialist integrations are not yet migrated. Existing implementations may remain operational as functional references until their Nyra v1 replacements are validated.
+Home Assistant and the Speaker-ID/voice-identity domain are migrated to the
+Nyra v1 Router lifecycle through Milestone 3. Production Memory, Skills, and
+LLM specialist integrations are not yet migrated. Existing implementations may
+remain operational as functional references until their Nyra v1 replacements
+are validated.
 
 ## Known follow-up work
 
-These items do not block Milestone 2:
+These items do not block the completed Milestone 3:
 
-- perform an additional unknown-speaker physical identity check
-- complete the final Milestone 3 physical smoke tests and legacy-independence check
+- perform an additional unknown-speaker physical identity check when another
+  speaker is available
 - migrate Memory in Milestone 4
 - migrate Skills and Router-owned Home Assistant capabilities in Milestone 5
 - migrate LLM access in Milestone 6
@@ -171,7 +176,6 @@ These items do not block Milestone 2:
 
 ## Next step
 
-Perform the minimal Task 21 physical smoke tests from Nyra Mansarda, verify one
-unknown-speaker result where practical, confirm Wake Word export, then prove
-that the M3 path remains operational with the legacy `nyra-voice` service
-stopped.
+Begin Milestone 4 design and implementation for operational context resolution,
+semantic memory gating, long-term memory enrichment, and identity-aware memory
+scopes.
