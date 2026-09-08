@@ -52,6 +52,25 @@ class AdapterResult:
     response: NyraRequestResponse | None = None
 
 
+_ADAPTER_MESSAGES = {
+    "it": {
+        "UNAVAILABLE": "Non sono disponibile in questo momento.",
+        "FAILED": "Non sono riuscita a completare la richiesta.",
+    },
+    "en": {
+        "UNAVAILABLE": "I am unavailable right now.",
+        "FAILED": "I could not complete the request.",
+    },
+}
+
+
+def localized_adapter_message(language: str, key: str) -> str:
+    messages = _ADAPTER_MESSAGES.get(
+        language.split("-", 1)[0].lower(), _ADAPTER_MESSAGES["en"]
+    )
+    return messages[key]
+
+
 def conversation_key_for_input(
     conversation_id: str | None,
     context_id: str,
@@ -90,7 +109,11 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
         response = await client.async_execute(request)
     except NyraRouterError:
         sessions.complete_request(data.conversation_key)
-        return AdapterResult("Nyra non è disponibile in questo momento.", data.conversation_key, False)
+        return AdapterResult(
+            localized_adapter_message(data.language, "UNAVAILABLE"),
+            data.conversation_key,
+            False,
+        )
 
     continuing = response.status is RequestStatus.NEEDS_CLARIFICATION
     if continuing:
@@ -102,7 +125,7 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
 
     text = response.response.text if response.response is not None else ""
     if response.status in {RequestStatus.FAILED, RequestStatus.EXPIRED} and not text:
-        text = "Nyra non è riuscita a completare la richiesta."
+        text = localized_adapter_message(data.language, "FAILED")
     return AdapterResult(text, data.conversation_key, continuing, response)
 
 

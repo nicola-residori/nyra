@@ -324,7 +324,16 @@ class RequestLifecycleService:
                 identity_task.add_done_callback(_consume_late_identity)
                 raw_identity_result = None
             else:
-                raw_identity_result = identity_task.result()
+                try:
+                    raw_identity_result = identity_task.result()
+                except Exception:
+                    raw_identity_result = SpeakerIdentityResult(
+                        outcome=SpeakerIdentityOutcome.FAILED,
+                        identified_user_id=None,
+                        best_score=None,
+                        diagnostic_id=None,
+                        reason_code="SERVICE_UNAVAILABLE",
+                    )
 
             if isinstance(raw_identity_result, SpeakerIdentityResult):
                 identity_result = raw_identity_result

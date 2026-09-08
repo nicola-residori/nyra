@@ -7,6 +7,7 @@ from homeassistant.custom_components.nyra.conversation import (
     process_adapter_input,
     needs_home_assistant_fallback,
 )
+from homeassistant.custom_components.nyra.client import NyraRouterUnavailable
 from homeassistant.custom_components.nyra.esphome import resolve_nyra_source_id
 from homeassistant.custom_components.nyra.session import SessionManager, speaker_conversation_key
 
@@ -180,3 +181,58 @@ async def test_completed_router_result_does_not_fallback():
     result = await process_adapter_input(AdapterInput("accendi la luce", "it-IT", "speaker"), sessions, completed)
 
     assert not needs_home_assistant_fallback(result)
+
+
+class UnavailableClient:
+    async def async_execute(self, request):
+        raise NyraRouterUnavailable("offline")
+
+
+class FailedClient:
+    async def async_execute(self, request):
+        return NyraRequestResponse(
+            status=RequestStatus.FAILED,
+            session_id=request.session_id,
+            request_id=request.request_id,
+            trace_id=new_trace_id(),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("it-IT", "Non sono disponibile in questo momento."),
+        ("en-US", "I am unavailable right now."),
+    ],
+)
+async def test_unavailable_response_is_localized_and_does_not_hardcode_assistant_name(
+    language, expected
+):
+    result = await process_adapter_input(
+        AdapterInput("ciao", language, language), SessionManager(), UnavailableClient()
+    )
+
+    assert result.text == expected
+    assert "nyra" not in result.text.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("it-IT", "Non sono riuscita a completare la richiesta."),
+        ("en-US", "I could not complete the request."),
+    ],
+)
+async def test_failed_response_is_localized_and_does_not_hardcode_assistant_name(
+    language, expected
+):
+    result = await process_adapter_input(
+        AdapterInput("ciao", language, language),
+        SessionManager(),
+        FailedClient(),
+    )
+
+    assert result.text == expected
+    assert "nyra" not in result.text.lower()
