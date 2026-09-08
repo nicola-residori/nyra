@@ -4,6 +4,12 @@ from pydantic import BaseModel
 
 from router.api.enrollments import require_auth
 from router.speaker_id_admin import SpeakerIdAdminUnavailable
+from router.user_enrichment import (
+    enrich_diagnostic,
+    enrich_diagnostic_detail,
+    enrich_profile,
+    enrich_wake_word_sample,
+)
 
 
 router = APIRouter(prefix="/v1/admin/speaker-identity")
@@ -37,7 +43,8 @@ async def binary_call(request, method, path, *, payload=None):
 
 @router.get("/profiles")
 async def profiles(request: Request):
-    return await json_call(request, "GET", "/v1/admin/profiles")
+    items = await json_call(request, "GET", "/v1/admin/profiles")
+    return [enrich_profile(item, request.app.state.user_directory) for item in items]
 
 
 @router.get("/profiles/{user_id}/samples/{sample_id}/audio")
@@ -68,7 +75,8 @@ async def diagnostics(request: Request, source_id: str | None = None,
         "source_id": source_id, "outcome": outcome, "user_id": user_id,
         "limit": limit,
     }.items() if value is not None}
-    return await json_call(request, "GET", "/v1/admin/diagnostics", params=params)
+    items = await json_call(request, "GET", "/v1/admin/diagnostics", params=params)
+    return [enrich_diagnostic(item, request.app.state.user_directory) for item in items]
 
 
 @router.get("/diagnostics/{diagnostic_id}/audio")
@@ -80,7 +88,10 @@ async def diagnostic_audio(diagnostic_id: str, request: Request):
 
 @router.get("/diagnostics/{diagnostic_id}")
 async def diagnostic_detail(diagnostic_id: str, request: Request):
-    return await json_call(request, "GET", f"/v1/admin/diagnostics/{diagnostic_id}")
+    detail = await json_call(
+        request, "GET", f"/v1/admin/diagnostics/{diagnostic_id}"
+    )
+    return enrich_diagnostic_detail(detail, request.app.state.user_directory)
 
 
 @router.get("/wake-words")
@@ -90,7 +101,11 @@ async def wake_words(request: Request, wake_word_text: str | None = None,
         "wake_word_text": wake_word_text, "user_id": user_id,
         "source_id": source_id,
     }.items() if value is not None}
-    return await json_call(request, "GET", "/v1/admin/wake-words", params=params)
+    items = await json_call(request, "GET", "/v1/admin/wake-words", params=params)
+    return [
+        enrich_wake_word_sample(item, request.app.state.user_directory)
+        for item in items
+    ]
 
 
 @router.get("/wake-words/samples/{sample_id}/audio")
