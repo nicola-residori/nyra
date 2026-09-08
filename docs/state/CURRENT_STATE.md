@@ -14,22 +14,24 @@ Assistant user-name enrichment, Nyra Admin identity management, observability,
 automated regression coverage, and fresh-CT reproducibility are deployed and
 verified.
 
-Milestone 4 — Memory and Context — is complete locally; production deployment is pending explicit authorization.
+Milestone 4 — Memory and Context — is complete and deployed in production.
 
-The local M4 implementation includes a dedicated SQLite/WAL Memory service,
-typed operational and semantic contracts, deterministic USER → FAMILY →
-SYSTEM resolution, identity-isolated semantic search using a local
-multilingual embedding provider, explicit confirm/supersede/delete lifecycle,
-and privacy-safe correlated observability. Router now has a bounded Memory
-client, dependency readiness, conditional NONE/OPTIONAL/REQUIRED enrichment,
-and authenticated management routes. Nyra Admin provides separate operational
-context and semantic memory pages with Home Assistant display names plus stable
-IDs, filters, similarity scores, revisions, and exact-ID mutations.
+The production M4 implementation includes a dedicated SQLite/WAL Memory service,
+typed operational and semantic contracts, deterministic USER → FAMILY → SYSTEM
+resolution, identity-isolated semantic search using the local
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` embedding provider,
+explicit confirm/supersede/delete lifecycle, and privacy-safe correlated
+observability. Router has a bounded Memory client, dependency readiness,
+conditional NONE/OPTIONAL/REQUIRED enrichment, and authenticated management
+routes. Nyra Admin provides separate operational-context and semantic-memory
+pages with Home Assistant display names plus stable IDs, filters, similarity
+scores, revisions, and exact-ID mutations.
 
-Reproducible Debian 12 systemd, bootstrap, verification, consistent backup,
-guarded restore, and rollback assets are ready locally. No Proxmox container,
-Router configuration, Admin installation, Home Assistant integration, or
-speaker firmware has been changed for M4 yet.
+The deployment uses reproducible Debian 12 systemd/bootstrap/verification assets,
+persistent SQLite storage and model cache, consistent backup, guarded restore,
+and rollback procedures. Memory runs in dedicated CT `105`; Router and Admin
+consume it through the private service endpoint. Home Assistant, ESPHome, and
+Speaker-ID required no M4 production changes.
 
 ## Implemented foundation
 
@@ -67,9 +69,40 @@ speaker firmware has been changed for M4 yet.
 
 ## Deployment
 
+- `nyra-memory`: CT `105`, `192.168.0.13`, port `8090`
+
 - `nyra-router`: CT `108`, `192.168.0.16`, port `8090`
 - `nyra-admin`: CT `108`, `192.168.0.16`, port `80`
 - `nyra-speaker-id`: CT `106`, `192.168.0.14`, port `8090`
+
+The Memory container is a fresh Debian 12 deployment built by
+
+`deploy/bootstrap/memory.sh`. It runs as the locked `nyra-memory` service
+account, persists SQLite/WAL state under `/var/lib/nyra-memory`, and caches the
+multilingual embedding model under persistent storage. CT105 was rebuilt with
+the authorized VMID/IP (`105`, `192.168.0.13`) and verified before and after
+reboot with `deploy/verify/memory.sh`; the saved persistence snapshot remained
+valid across the restart.
+
+The initial Linux bootstrap exposed an unnecessary CUDA/NVIDIA dependency pull
+through PyTorch. Production was corrected to install CPU-only PyTorch from the
+official CPU wheel index before Memory requirements. The regression was then
+captured in `tests/tools/test_memory_deployment.py`: the new test failed against
+pre-fix commit `26901ce`, passed after the CPU-only fix, and the complete suite
+finished with 594 passed tests and one known non-blocking Starlette/httpx
+TestClient deprecation warning. The fix is commit `26c0da0`, the regression test
+is commit `ddb73ec`, and both CT105 and CT108 were aligned to `ddb73ec`.
+
+Router/Admin CT108 is configured with
+`NYRA_MEMORY_URL=http://192.168.0.13:8090` and
+`NYRA_MEMORY_TIMEOUT_SECONDS=3.0`. Production verification confirmed Router
+`HEALTHY`/`READY`, Memory `healthy`/`ready`, and HTTP 200 for both Nyra Admin
+Memory pages. Operational Memory create/read/delete was exercised end to end
+through Router and cleaned up afterward. Semantic Memory
+create/read/search/confirm/delete was also exercised through Router, returned
+the production multilingual embedding model and a similarity result, and was
+cleaned up afterward. CT108's `.env`, runtime `data/`, and `backups/` were
+preserved during repository alignment.
 
 The Speaker-ID container is a fresh Debian 12 deployment built by
 `deploy/bootstrap/speaker-id.sh`. It runs as the unprivileged
@@ -170,9 +203,9 @@ Router and Admin remain separate applications. Installation-specific Home Assist
 
 ## Migration status
 
-Home Assistant and the Speaker-ID/voice-identity domain are migrated to the
-Nyra v1 Router lifecycle through Milestone 3. Production Memory, Skills, and
-LLM specialist integrations are not yet migrated. Existing implementations may
+Home Assistant, the Speaker-ID/voice-identity domain, and Memory are migrated to
+the Nyra v1 Router lifecycle through Milestone 4. Production Skills and LLM
+specialist integrations are not yet migrated. Existing implementations may
 remain operational as functional references until their Nyra v1 replacements
 are validated.
 
@@ -182,7 +215,6 @@ These items do not block the completed Milestone 3:
 
 - perform an additional unknown-speaker physical identity check when another
   speaker is available
-- deploy and physically validate the completed local Memory milestone after explicit authorization
 - migrate Skills and Router-owned Home Assistant capabilities in Milestone 5
 - migrate LLM access in Milestone 6
 - eliminate remaining deployment-only compatibility/manual packaging steps during productization
@@ -191,5 +223,7 @@ These items do not block the completed Milestone 3:
 
 ## Next step
 
-Review and authorize the proposed dedicated Memory container, then deploy and
-verify persistence, Router integration, Admin access, and rollback evidence.
+Start Milestone 5 — Skills — by reviewing the current Skills service/reference
+implementation, defining the Nyra v1 Router-owned capability boundary, and
+planning the migration with the same reproducible deployment and RED-GREEN
+verification discipline used for M4.
