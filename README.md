@@ -21,7 +21,7 @@ Nyra v1 is under active development.
 - **Milestone 1 — Router foundation and observability: complete.**
 - **Milestone 2 — Home Assistant adapter and Nyra speaker integration: complete.**
 - **Milestone 3 — Identity and Voice: complete.**
-- **Milestone 4 — Memory and context: next.**
+- **Milestone 4 — Memory and context: complete locally; production deployment pending authorization.**
 
 Milestones 2 and 3 established the production Home Assistant speaker path and
 trusted voice identity lifecycle. A physical Nyra speaker has been validated
@@ -57,6 +57,15 @@ The previous implementation remains only a functional reference for specialist s
 - Nyra Admin profile, diagnostic, audio-review, deletion, and export views.
 - Runtime threshold, margin, and timeout configuration with persisted snapshots.
 - Identity latency/outcome metrics and privacy-safe lifecycle observability.
+
+## Milestone 4 capabilities
+
+- Dedicated Memory service with SQLite/WAL persistence and local multilingual embeddings.
+- Structured aliases, mappings, defaults, and shortcuts with deterministic user, family, and system precedence.
+- Identity-scoped facts, preferences, notes, and relations with explicit confirmation, supersession, and physical deletion.
+- Router lifecycle gate that searches semantic memory only when a matched Skill declares it optional or required.
+- Router-only management APIs and Nyra Admin pages showing human names alongside stable Home Assistant IDs.
+- Debian 12 service bootstrap, readiness and reboot verification, consistent backup, guarded restore, and rollback documentation.
 - Localized identity and failure responses without spoken technical IDs.
 
 

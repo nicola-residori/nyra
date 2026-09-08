@@ -1,0 +1,26 @@
+[Unit]
+Description=Nyra Memory
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nyra-memory
+Group=nyra-memory
+WorkingDirectory=/opt/nyra-memory
+EnvironmentFile=-/opt/nyra-memory/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/nyra-memory
+Environment=NYRA_MEMORY_DATA_ROOT=/var/lib/nyra-memory
+Environment=HF_HOME=/var/lib/nyra-memory/models/huggingface
+ExecStart=/opt/nyra-memory/.venv/bin/uvicorn memory.app:app --host 0.0.0.0 --port 8090
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nyra-memory
+
+[Install]
+WantedBy=multi-user.target

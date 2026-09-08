@@ -49,13 +49,19 @@
 
 ## Milestone 4 - Memory and context
 
-**Status: Next**
+**Status: Complete locally — production deployment pending authorization**
 
 - Operational context resolution
 - Structured aliases and mappings
 - Semantic memory gate
 - Long-term memory enrichment
 - Identity-aware memory scopes
+- Dedicated SQLite/WAL Memory service with local multilingual embeddings
+- Deterministic USER → FAMILY → SYSTEM operational precedence
+- Explicit semantic lifecycle: confirm, supersede, and physical deletion
+- Conditional NONE / OPTIONAL / REQUIRED semantic-memory gate
+- Router-only management API and Nyra Admin memory pages
+- Reproducible Debian 12 bootstrap, verification, backup, and restore
 
 ## Milestone 5 - Skills
 

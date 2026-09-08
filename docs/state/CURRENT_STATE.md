@@ -14,7 +14,22 @@ Assistant user-name enrichment, Nyra Admin identity management, observability,
 automated regression coverage, and fresh-CT reproducibility are deployed and
 verified.
 
-Milestone 4 — Memory and Context — is next.
+Milestone 4 — Memory and Context — is complete locally; production deployment is pending explicit authorization.
+
+The local M4 implementation includes a dedicated SQLite/WAL Memory service,
+typed operational and semantic contracts, deterministic USER → FAMILY →
+SYSTEM resolution, identity-isolated semantic search using a local
+multilingual embedding provider, explicit confirm/supersede/delete lifecycle,
+and privacy-safe correlated observability. Router now has a bounded Memory
+client, dependency readiness, conditional NONE/OPTIONAL/REQUIRED enrichment,
+and authenticated management routes. Nyra Admin provides separate operational
+context and semantic memory pages with Home Assistant display names plus stable
+IDs, filters, similarity scores, revisions, and exact-ID mutations.
+
+Reproducible Debian 12 systemd, bootstrap, verification, consistent backup,
+guarded restore, and rollback assets are ready locally. No Proxmox container,
+Router configuration, Admin installation, Home Assistant integration, or
+speaker firmware has been changed for M4 yet.
 
 ## Implemented foundation
 
@@ -167,7 +182,7 @@ These items do not block the completed Milestone 3:
 
 - perform an additional unknown-speaker physical identity check when another
   speaker is available
-- migrate Memory in Milestone 4
+- deploy and physically validate the completed local Memory milestone after explicit authorization
 - migrate Skills and Router-owned Home Assistant capabilities in Milestone 5
 - migrate LLM access in Milestone 6
 - eliminate remaining deployment-only compatibility/manual packaging steps during productization
@@ -176,6 +191,5 @@ These items do not block the completed Milestone 3:
 
 ## Next step
 
-Begin Milestone 4 design and implementation for operational context resolution,
-semantic memory gating, long-term memory enrichment, and identity-aware memory
-scopes.
+Review and authorize the proposed dedicated Memory container, then deploy and
+verify persistence, Router integration, Admin access, and rollback evidence.
