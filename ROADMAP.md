@@ -49,7 +49,7 @@
 
 ## Milestone 4 - Memory and context
 
-**Status: Complete locally — production deployment pending authorization**
+**Status: Complete and deployed in production**
 
 - Operational context resolution
 - Structured aliases and mappings

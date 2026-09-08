@@ -21,7 +21,7 @@ Nyra v1 is under active development.
 - **Milestone 1 — Router foundation and observability: complete.**
 - **Milestone 2 — Home Assistant adapter and Nyra speaker integration: complete.**
 - **Milestone 3 — Identity and Voice: complete.**
-- **Milestone 4 — Memory and context: complete locally; production deployment pending authorization.**
+- **Milestone 4 — Memory and context: complete and deployed in production.**
 
 Milestones 2 and 3 established the production Home Assistant speaker path and
 trusted voice identity lifecycle. A physical Nyra speaker has been validated
