@@ -286,8 +286,8 @@ class SemanticMemoryDelete(MemoryModel):
 class SemanticMemory(ScopedModel):
     memory_id: str
     memory_type: SemanticMemoryType
-    content: str | None = None
-    source: SemanticMemorySource | None = None
+    content: str
+    source: SemanticMemorySource
     state: Literal[
         SemanticMemoryState.ACTIVE,
         SemanticMemoryState.SUPERSEDED,
@@ -298,8 +298,8 @@ class SemanticMemory(ScopedModel):
     updated_at: datetime
     last_confirmed_at: datetime
     deleted_at: datetime | None = None
-    embedding_provider: str | None = None
-    embedding_model: str | None = None
+    embedding_provider: str
+    embedding_model: str
 
     @field_validator("memory_id", "supersedes_memory_id", "superseded_by_memory_id")
     @classmethod
