@@ -76,15 +76,21 @@ on 2026-09-07. The OTA image SHA-256 is
 its encrypted ESPHome API connection. Home Assistant `ha core check` passed,
 and the automated repository suite reports 423 passed tests.
 
-The trusted user display-name change is ready for controlled deployment. Home
-Assistant remains authoritative for the current name, Router persists the
-mapping from the stable Home Assistant user ID, and Nyra Admin presents the
-name while retaining the ID as secondary diagnostic data. Existing Speaker-ID
-profiles are enriched dynamically and their biometric records remain ID-only.
-Local verification on 2026-09-08 reports 447 passed tests, successful Python
-bytecode compilation, no whitespace errors, and no display-name fields in
-Speaker-ID or general observability storage. Router/Admin and Home Assistant
-deployment plus the physical smoke test are still pending.
+The trusted user display-name change was deployed to Router/Admin and Home
+Assistant on 2026-09-08. Home Assistant remains authoritative for the current
+name, Router persists the mapping from the stable Home Assistant user ID, and
+Nyra Admin presents the name while retaining the ID as secondary diagnostic
+data. Existing Speaker-ID profiles are enriched dynamically and their
+biometric records remain ID-only. Router returned `HEALTHY` and `READY`, Admin
+returned HTTP 200, `ha core check` succeeded, and Home Assistant restarted
+normally. Opening Configurazione Nyra synchronized `Nicola Residori`; the name
+was then verified in the profile, identity diagnostic, diagnostic candidate,
+and Wake Word sample views. The new physical identification smoke test remains
+pending.
+
+Local verification reports 447 passed tests, successful Python bytecode
+compilation, no whitespace errors, and no display-name fields in Speaker-ID or
+general observability storage.
 
 Router and Admin remain separate applications. Installation-specific Home Assistant and ESPHome values are intentionally not committed as project defaults.
 
@@ -96,9 +102,8 @@ Home Assistant is migrated to the Nyra v1 Router lifecycle for Milestone 2. Prod
 
 These items do not block Milestone 2:
 
-- perform one physical wake-word sample capture and verify playback/metadata in Nyra Admin
 - perform an additional unknown-speaker physical identity check
-- deploy and physically validate trusted Home Assistant user-name enrichment
+- physically validate trusted Home Assistant user-name enrichment
 - complete the remaining Milestone 3 observability, settings, and E2E work
 - migrate Memory in Milestone 4
 - migrate Skills and Router-owned Home Assistant capabilities in Milestone 5
@@ -109,6 +114,5 @@ These items do not block Milestone 2:
 
 ## Next step
 
-Deploy the locally verified trusted user display-name change to Router/Admin
-and Home Assistant, then confirm that Nicola appears as the primary identity
-label while the stable Home Assistant ID remains available as secondary data.
+Run one physical identification from Nyra Mansarda and confirm that its new
+diagnostic resolves the stable Home Assistant ID to `Nicola Residori`.
