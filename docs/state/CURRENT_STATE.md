@@ -87,8 +87,15 @@ biometric records remain ID-only. Router returned `HEALTHY` and `READY`, Admin
 returned HTTP 200, `ha core check` succeeded, and Home Assistant restarted
 normally. Opening Configurazione Nyra synchronized `Nicola Residori`; the name
 was then verified in the profile, identity diagnostic, diagnostic candidate,
-and Wake Word sample views. The new physical identification smoke test remains
-pending.
+and Wake Word sample views.
+
+On 2026-09-08 the live Speaker-ID threshold was calibrated from `0.40` to
+`0.38`, with the margin unchanged at `0.07` (configuration revision `2`).
+Nicola then refreshed the Mansarda profile from 12 to 18 accepted samples. The
+first physical request after that refresh was `IDENTIFIED` as `Nicola Residori`
+with score `0.46259344812746`. Earlier very short requests remained variable,
+so repeated short-command validation is still required before treating the
+calibration as final.
 
 Local verification reports 448 passed tests, successful Python bytecode
 compilation, no whitespace errors, and no display-name fields in Speaker-ID or
@@ -116,6 +123,7 @@ These items do not block Milestone 2:
 
 ## Next step
 
-Run one natural physical request from Nyra Mansarda and confirm that the first
-command words are captured immediately after the wake cue, then verify that its
-identity diagnostic resolves the stable Home Assistant ID to `Nicola Residori`.
+Run repeated short natural requests from Nyra Mansarda and confirm that their
+identity diagnostics consistently resolve the stable Home Assistant ID to
+`Nicola Residori`, then continue the remaining Milestone 3 observability and
+regression work.
