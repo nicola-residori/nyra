@@ -175,6 +175,22 @@ def test_resolution_result_exposes_values_and_applied_revisions():
     assert result.applied[0].revision == 2
 
 
+def test_operational_conflict_preserves_the_entry_type_namespace():
+    conflict = OperationalResolutionResult(
+        outcome="AMBIGUOUS",
+        conflicts=[{
+            "entry_type": "DEFAULT",
+            "key": "desk",
+            "scope": "FAMILY",
+            "entry_ids": [
+                "memop_123e4567-e89b-42d3-a456-426614174000",
+                "memop_123e4567-e89b-42d3-a456-426614174001",
+            ],
+        }],
+    )
+    assert conflict.conflicts[0].entry_type is OperationalEntryType.DEFAULT
+
+
 def test_semantic_search_requires_an_owner_when_user_scope_is_requested():
     with pytest.raises(ValidationError, match="USER search scope requires owner_user_id"):
         SemanticSearchRequest(query="coffee", scopes=["USER", "FAMILY"])

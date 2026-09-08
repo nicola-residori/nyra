@@ -221,6 +221,7 @@ class AppliedOperationalEntry(MemoryModel):
 
 
 class OperationalConflict(MemoryModel):
+    entry_type: OperationalEntryType
     key: str
     scope: MemoryScope
     entry_ids: list[str] = Field(min_length=2)
