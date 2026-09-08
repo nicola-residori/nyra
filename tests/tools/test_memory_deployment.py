@@ -38,6 +38,24 @@ def test_bootstrap_installs_service_preloads_model_and_verifies():
         assert required in source
 
 
+def test_bootstrap_installs_cpu_only_torch_before_memory_requirements():
+
+    source = BOOTSTRAP.read_text()
+
+    cpu_torch_install = (
+        '"$APP_DIR/.venv/bin/pip" install --index-url '
+        'https://download.pytorch.org/whl/cpu torch'
+    )
+    requirements_install = (
+        '"$APP_DIR/.venv/bin/pip" install -r '
+        '"$APP_DIR/memory/requirements.txt"'
+    )
+
+    assert cpu_torch_install in source
+    assert requirements_install in source
+    assert source.index(cpu_torch_install) < source.index(requirements_install)
+
+
 def test_verifier_covers_service_storage_model_api_and_snapshot():
     source = VERIFY.read_text()
     for required in (
