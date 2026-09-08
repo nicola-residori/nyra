@@ -159,12 +159,13 @@ def test_delete_replays_and_rejects_a_different_key_payload(semantic):
     assert replay.replayed is True
     assert replay.value == first.value
 
-    with pytest.raises(IdempotencyConflict):
-        service.delete_idempotent(
-            created.memory_id,
-            "delete-1",
-            "trc_123e4567-e89b-42d3-a456-426614174002",
-        )
+    another_trace_replay = service.delete_idempotent(
+        created.memory_id,
+        "delete-1",
+        "trc_123e4567-e89b-42d3-a456-426614174002",
+    )
+    assert another_trace_replay.replayed is True
+    assert another_trace_replay.value == first.value
 
 
 def test_confirm_updates_only_active_memory(semantic):
@@ -187,4 +188,3 @@ def test_missing_memory_is_distinct_from_invalid_state(semantic):
     service, _, _ = semantic
     with pytest.raises(SemanticMemoryNotFound):
         service.get("mem_123e4567-e89b-42d3-a456-426614174000")
-

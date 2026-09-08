@@ -420,7 +420,7 @@ class SemanticMemoryService:
     ) -> IdempotentResult:
         operation = f"semantic.delete:{memory_id}"
         request_hash = OperationalContextService._request_hash(
-            operation, {"trace_id": trace_id}
+            operation, {}
         )
         with self.store.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")

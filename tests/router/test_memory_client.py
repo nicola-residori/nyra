@@ -140,3 +140,25 @@ async def test_ready_accepts_memory_service_readiness_contract():
 
     client = MemoryClient("http://memory.test", transport=httpx.MockTransport(handler))
     assert await client.ready() is True
+
+
+@pytest.mark.asyncio
+async def test_management_retry_requires_get_or_idempotency_key():
+    calls = 0
+
+    async def handler(request: httpx.Request):
+        nonlocal calls
+        calls += 1
+        raise httpx.ConnectError("offline", request=request)
+
+    client = MemoryClient("http://memory.test", transport=httpx.MockTransport(handler))
+    with pytest.raises(MemoryUnavailable):
+        await client.json("POST", "/write", payload={"content": "value"})
+    assert calls == 1
+
+    with pytest.raises(MemoryUnavailable):
+        await client.json(
+            "POST", "/write",
+            payload={"content": "value", "idempotency_key": "safe-1"},
+        )
+    assert calls == 3

@@ -7,7 +7,7 @@ import httpx
 from pydantic import ValidationError
 
 from router.lifecycle.service import ContextResult, MemoryAccessError, MemoryQuery
-from shared.protocol.ids import new_span_id
+from shared.protocol.ids import new_span_id, new_trace_id
 from shared.protocol.memory import (
     MemoryScope,
     OperationalEntryType,
@@ -32,6 +32,13 @@ class MemoryAmbiguous(RuntimeError):
     def __init__(self, result: OperationalResolutionResult):
         super().__init__("operational context is ambiguous")
         self.result = result
+
+
+class MemoryApiError(RuntimeError):
+    def __init__(self, status_code: int, code: str):
+        super().__init__(code)
+        self.status_code = status_code
+        self.code = code
 
 
 class MemoryClient:
@@ -69,6 +76,7 @@ class MemoryClient:
         path: str,
         *,
         payload: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         retryable: bool = False,
     ) -> httpx.Response:
@@ -82,7 +90,7 @@ class MemoryClient:
                     transport=self.transport,
                 ) as client:
                     response = await client.request(
-                        method, path, json=payload, headers=headers
+                        method, path, params=params, json=payload, headers=headers
                     )
                 if response.status_code in {502, 503, 504} and attempt + 1 < attempts:
                     continue
@@ -198,3 +206,31 @@ class MemoryClient:
         return isinstance(payload, dict) and (
             payload.get("status") == "READY" or payload.get("ready") is True
         )
+
+    async def json(
+        self, method: str, path: str, *, params=None, payload=None
+    ) -> Any:
+        method = method.upper()
+        retryable = method == "GET" or path.endswith("/search") or (
+            isinstance(payload, dict) and bool(payload.get("idempotency_key"))
+        )
+        response = await self._request(
+            method,
+            path,
+            params=params,
+            payload=payload,
+            headers={
+                "X-Nyra-Trace-Id": new_trace_id(),
+                "X-Nyra-Parent-Span-Id": new_span_id("ROUTER", "memory_admin"),
+            },
+            retryable=retryable,
+        )
+        data = self._json(response)
+        if response.is_error:
+            code = "MEMORY_ERROR"
+            if isinstance(data, dict):
+                error = data.get("error")
+                if isinstance(error, dict) and isinstance(error.get("code"), str):
+                    code = error["code"]
+            raise MemoryApiError(response.status_code, code)
+        return data

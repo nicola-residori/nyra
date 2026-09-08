@@ -30,6 +30,7 @@ from router.api.enrollments import router as enrollments_router
 from router.api.wake_word_captures import router as wake_word_captures_router
 from router.api.speaker_id_admin import router as speaker_id_admin_router
 from router.api.users import router as users_router
+from router.api.memory_admin import router as memory_admin_router
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
 from router.identity_skill import IdentityQuerySkill
@@ -156,6 +157,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(wake_word_captures_router)
     app.include_router(speaker_id_admin_router)
     app.include_router(users_router)
+    app.include_router(memory_admin_router)
     return app
 
 
