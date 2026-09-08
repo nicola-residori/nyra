@@ -16,8 +16,8 @@ from homeassistant.custom_components.nyra.panel import (
 
 
 class Connection:
-    def __init__(self, user_id="user-nicola"):
-        self.user = None if user_id is None else SimpleNamespace(id=user_id)
+    def __init__(self, user_id="user-nicola", user_name=None):
+        self.user = None if user_id is None else SimpleNamespace(id=user_id, name=user_name)
         self.results = []
         self.errors = []
 
@@ -34,6 +34,7 @@ class Coordinator:
         self.recorded = []
         self.terminated = []
         self.restored = []
+        self.client = None
 
     async def async_restore(self, source_ids):
         self.restored.append(list(source_ids))
@@ -106,6 +107,32 @@ async def test_state_discovers_sources_when_panel_is_opened_after_esphome_connec
     assert connection.results[0][1]["sessions"] == [
         {"session_id": "enr_1", "profile_user_id": "user-nicola"}
     ]
+
+
+@pytest.mark.asyncio
+async def test_panel_state_syncs_only_the_authenticated_connection_name():
+    class SyncClient:
+        def __init__(self):
+            self.synced = []
+
+        async def async_sync_user_reference(self, **payload):
+            self.synced.append(payload)
+            return True
+
+    coordinator = Coordinator()
+    coordinator.client = SyncClient()
+    connection = Connection(user_name="Nicola")
+
+    await ws_state(None, connection, {
+        "id": 12,
+        "display_name": "Nome falsificato",
+    }, coordinator, [])
+
+    assert coordinator.client.synced == [{
+        "user_id": "user-nicola",
+        "display_name": "Nicola",
+        "provider": "home_assistant",
+    }]
 
 
 @pytest.mark.asyncio

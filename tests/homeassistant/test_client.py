@@ -79,3 +79,43 @@ async def test_active_enrollment_lookup_returns_none_only_for_404():
         "nyra-mansarda"
     ) is None
     await raw.aclose()
+
+
+@pytest.mark.asyncio
+async def test_user_reference_sync_is_authenticated_and_best_effort():
+    calls = []
+
+    async def handler(request):
+        calls.append((request.url.path, request.headers.get("authorization"), await request.aread()))
+        return httpx.Response(200, json={
+            "provider": "home_assistant",
+            "user_id": "ha-1",
+            "display_name": "Nicola",
+            "updated_at": "2026-09-08T10:00:00Z",
+        })
+
+    raw = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = NyraRouterClient("http://router:8090", "secret", client=raw)
+
+    assert await client.async_sync_user_reference(
+        user_id="ha-1", display_name="Nicola"
+    )
+    assert calls[0][0:2] == ("/v1/users/sync", "Bearer secret")
+    assert b'"display_name":"Nicola"' in calls[0][2]
+    await raw.aclose()
+
+
+@pytest.mark.asyncio
+async def test_user_reference_sync_failure_returns_false():
+    raw = httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(503)
+    ))
+    client = NyraRouterClient("http://router:8090", client=raw)
+
+    assert not await client.async_sync_user_reference(
+        user_id="ha-1", display_name="Nicola"
+    )
+    assert not await client.async_sync_user_reference(
+        user_id="ha-1", display_name=None
+    )
+    await raw.aclose()

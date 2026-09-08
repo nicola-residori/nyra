@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from unittest.mock import AsyncMock
 
 from homeassistant.custom_components.nyra.enrollment import (
     EnrollmentConflict,
@@ -279,6 +280,41 @@ async def test_service_handler_uses_context_user_and_ignores_supplied_profile_id
 
     assert result["profile_user_id"] == "authenticated-user"
     assert client.started[0]["profile_user_id"] == "authenticated-user"
+
+
+@pytest.mark.asyncio
+async def test_service_handler_syncs_name_from_home_assistant_auth_only():
+    class SyncingClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.synced = []
+
+        async def async_sync_user_reference(self, **payload):
+            self.synced.append(payload)
+            return True
+
+    client = SyncingClient()
+    coordinator = EnrollmentCoordinator(client)
+    hass = SimpleNamespace(auth=SimpleNamespace(
+        async_get_user=AsyncMock(return_value=SimpleNamespace(
+            id="authenticated-user", name="Nicola"
+        ))
+    ))
+    call = SimpleNamespace(
+        context=SimpleNamespace(user_id="authenticated-user"),
+        data={
+            "source_id": "nyra-mansarda",
+            "display_name": "Nome falsificato",
+        },
+    )
+
+    await handle_start_enrollment(call, coordinator, hass)
+
+    assert client.synced == [{
+        "user_id": "authenticated-user",
+        "display_name": "Nicola",
+        "provider": "home_assistant",
+    }]
 
 
 @pytest.mark.asyncio

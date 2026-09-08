@@ -18,6 +18,7 @@ from shared.protocol.requests import (
 from .client import NyraRouterError
 from .esphome import resolve_nyra_source_id
 from .session import SessionManager, speaker_conversation_key
+from .users import async_resolve_user_reference
 
 
 
@@ -32,6 +33,7 @@ class AdapterInput:
     nyra_source_id: str | None = None
     area: str | None = None
     user_id: str | None = None
+    user_display_name: str | None = None
 
     @property
     def source_id(self) -> str:
@@ -65,7 +67,12 @@ def build_request(data: AdapterInput, sessions: SessionManager) -> NyraRequest:
     execution_type = ExecutionType.HA_SPEAKER if data.is_speaker else ExecutionType.HA_ASSIST
     identity = None
     if execution_type is ExecutionType.HA_ASSIST and data.user_id:
-        identity = TrustedIdentity(user_id=data.user_id, provider="home_assistant", confidence=1.0)
+        identity = TrustedIdentity(
+            user_id=data.user_id,
+            provider="home_assistant",
+            confidence=1.0,
+            display_name=data.user_display_name,
+        )
     return NyraRequest(
         type=execution_type,
         session_id=sessions.get_or_create_session(data.conversation_key),
@@ -162,6 +169,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                 nyra_source_id,
             )
 
+            user_reference = None
+            if not user_input.satellite_id and user_input.context.user_id:
+                user_reference = await async_resolve_user_reference(
+                    self.hass, user_input.context.user_id
+                )
+
             data = AdapterInput(
                 text=user_input.text,
                 language=user_input.language,
@@ -170,6 +183,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                 satellite_id=user_input.satellite_id,
                 nyra_source_id=nyra_source_id,
                 user_id=user_input.context.user_id,
+                user_display_name=(
+                    user_reference.display_name if user_reference is not None else None
+                ),
             )
             result = await process_adapter_input(data, runtime.sessions, runtime.client)
             if needs_home_assistant_fallback(result):

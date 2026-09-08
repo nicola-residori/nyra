@@ -4,6 +4,9 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
+from .users import async_resolve_user_reference, async_sync_user_reference
+
+
 
 class EnrollmentUnauthorized(RuntimeError):
     pass
@@ -257,9 +260,13 @@ def localized_enrollment_message(language: str, status: str, reason_code: str | 
     return messages.get(reason_code or "", messages["DEFAULT_REJECTED"])
 
 
-async def handle_start_enrollment(call, coordinator: EnrollmentCoordinator):
+async def handle_start_enrollment(call, coordinator: EnrollmentCoordinator, hass=None):
+    authenticated_user_id = getattr(getattr(call, "context", None), "user_id", None)
+    if hass is not None and authenticated_user_id:
+        reference = await async_resolve_user_reference(hass, authenticated_user_id)
+        await async_sync_user_reference(coordinator.client, reference)
     return await coordinator.async_start(
-        authenticated_user_id=getattr(getattr(call, "context", None), "user_id", None),
+        authenticated_user_id=authenticated_user_id,
         source_id=call.data["source_id"], language=call.data.get("language", "it-IT"),
         target_count=call.data.get("sample_count", 6),
     )
@@ -283,7 +290,7 @@ def register_enrollment_services(hass, coordinator: EnrollmentCoordinator) -> No
     from homeassistant.core import SupportsResponse
 
     async def start(call):
-        return await handle_start_enrollment(call, coordinator)
+        return await handle_start_enrollment(call, coordinator, hass)
 
     async def terminate(call):
         return await handle_terminate_enrollment(call, coordinator)

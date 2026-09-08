@@ -8,6 +8,7 @@ from shared.protocol.service import ServiceState, ServiceStatusResponse
 from .const import (
     DEFAULT_TIMEOUT_SECONDS, ENROLLMENT_PATH, READY_PATH, REQUEST_PATH,
     WAKE_WORD_CAPTURE_PATH,
+    USER_SYNC_PATH,
 )
 
 
@@ -194,6 +195,37 @@ class NyraRouterClient:
         if type(count) is not int or count < 0:
             raise NyraRouterInvalidResponse("Router returned an invalid sample count")
         return count
+
+    async def async_sync_user_reference(
+        self,
+        *,
+        user_id: str,
+        display_name: str | None,
+        provider: str = "home_assistant",
+    ) -> bool:
+        if not isinstance(display_name, str) or not display_name.strip():
+            return False
+        try:
+            response = await self._client.post(
+                f"{self.base_url}{USER_SYNC_PATH}",
+                headers=self.headers,
+                json={
+                    "provider": provider,
+                    "user_id": user_id,
+                    "display_name": display_name.strip(),
+                },
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, ValueError):
+            return False
+        return (
+            isinstance(data, dict)
+            and data.get("provider") == provider
+            and data.get("user_id") == user_id
+            and data.get("display_name") == display_name.strip()
+        )
 
     async def async_close(self) -> None:
         if self._owns_client:

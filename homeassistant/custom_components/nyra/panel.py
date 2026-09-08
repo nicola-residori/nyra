@@ -5,6 +5,7 @@ import inspect
 from typing import Any
 
 from .enrollment import EnrollmentConflict, EnrollmentUnauthorized
+from .users import authenticated_user_reference, async_sync_user_reference
 
 
 PANEL_URL_PATH = "nyra-enrollment"
@@ -13,10 +14,19 @@ PANEL_ASSET_URL = "/api/nyra/frontend/nyra-enrollment-panel.js"
 
 
 def _user_id(connection) -> str:
-    user_id = getattr(getattr(connection, "user", None), "id", None)
-    if not user_id:
+    try:
+        return authenticated_user_reference(connection.user).user_id
+    except (AttributeError, ValueError):
         raise EnrollmentUnauthorized("Autenticazione Home Assistant richiesta.")
-    return user_id
+
+
+async def _sync_connection_user(connection, coordinator):
+    try:
+        reference = authenticated_user_reference(connection.user)
+    except (AttributeError, ValueError):
+        raise EnrollmentUnauthorized("Autenticazione Home Assistant richiesta.")
+    await async_sync_user_reference(getattr(coordinator, "client", None), reference)
+    return reference
 
 
 def _send_error(connection, message_id: int, exc: Exception) -> None:
@@ -31,7 +41,8 @@ def _send_error(connection, message_id: int, exc: Exception) -> None:
 
 async def ws_state(hass, connection, msg, coordinator, source_ids) -> None:
     try:
-        user_id = _user_id(connection)
+        reference = await _sync_connection_user(connection, coordinator)
+        user_id = reference.user_id
         sources = source_ids() if callable(source_ids) else source_ids
         if inspect.isawaitable(sources):
             sources = await sources
@@ -47,8 +58,9 @@ async def ws_state(hass, connection, msg, coordinator, source_ids) -> None:
 
 async def ws_start(hass, connection, msg, coordinator) -> None:
     try:
+        reference = await _sync_connection_user(connection, coordinator)
         result = await coordinator.async_start(
-            authenticated_user_id=_user_id(connection),
+            authenticated_user_id=reference.user_id,
             source_id=msg["source_id"],
             language=msg.get("language", "it-IT"),
             target_count=msg.get("sample_count", 6),
@@ -80,7 +92,8 @@ async def ws_terminate(hass, connection, msg, coordinator) -> None:
 
 async def ws_wake_word_state(hass, connection, msg, coordinator, source_ids) -> None:
     try:
-        user_id = _user_id(connection)
+        reference = await _sync_connection_user(connection, coordinator)
+        user_id = reference.user_id
         sources = source_ids() if callable(source_ids) else source_ids
         if inspect.isawaitable(sources):
             sources = await sources
@@ -96,8 +109,9 @@ async def ws_wake_word_state(hass, connection, msg, coordinator, source_ids) -> 
 
 async def ws_capture_wake_word(hass, connection, msg, coordinator) -> None:
     try:
+        reference = await _sync_connection_user(connection, coordinator)
         result = await coordinator.async_capture(
-            authenticated_user_id=_user_id(connection),
+            authenticated_user_id=reference.user_id,
             source_id=msg["source_id"],
             language=msg.get("language", "it-IT"),
             wake_word_text=msg["wake_word_text"],

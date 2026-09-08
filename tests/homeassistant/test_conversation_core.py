@@ -40,6 +40,23 @@ def test_assist_identity_is_trusted_but_speaker_never_invents_identity():
     assert speaker.source.id == "nyra-soggiorno"
 
 
+def test_assist_identity_carries_the_authenticated_home_assistant_name():
+    request = build_request(
+        AdapterInput(
+            "chi sono",
+            "it-IT",
+            "assist",
+            device_id="phone",
+            user_id="ha-1",
+            user_display_name="Nicola",
+        ),
+        SessionManager(),
+    )
+
+    assert request.identity.user_id == "ha-1"
+    assert request.identity.display_name == "Nicola"
+
+
 def test_speaker_request_prefers_stable_nyra_source_id_over_ha_satellite_entity_id():
 
     sessions = SessionManager()
