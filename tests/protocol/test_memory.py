@@ -11,6 +11,7 @@ from shared.protocol.memory import (
     MemoryScope,
     OperationalEntryCreate,
     OperationalEntryType,
+    OperationalLookup,
     OperationalResolutionRequest,
     OperationalResolutionResult,
     SemanticMemoryCreate,
@@ -145,9 +146,18 @@ def test_resolution_request_normalizes_and_deduplicates_lookup_keys():
         area=" mansarda ",
         language=" it-IT ",
         timestamp=datetime(2026, 9, 8, 8, 30, tzinfo=timezone.utc),
-        lookup_keys=[" Desk Lamp ", "desk lamp", "TV"],
+        lookups=[
+            {"entry_type": "ALIAS", "key": " Desk Lamp "},
+            {"entry_type": "ALIAS", "key": "desk lamp"},
+            {"entry_type": "DEFAULT", "key": "Desk Lamp"},
+            {"entry_type": "ALIAS", "key": "TV"},
+        ],
     )
-    assert request.lookup_keys == ["desk lamp", "tv"]
+    assert request.lookups == [
+        OperationalLookup(entry_type="ALIAS", key="desk lamp"),
+        OperationalLookup(entry_type="DEFAULT", key="desk lamp"),
+        OperationalLookup(entry_type="ALIAS", key="tv"),
+    ]
     assert request.identity_user_id == "user-nicola"
 
 

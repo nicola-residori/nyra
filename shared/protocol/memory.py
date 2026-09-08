@@ -167,13 +167,23 @@ class OperationalEntry(ScopedModel):
         return validate_prefixed_uuid(value, "memop")
 
 
+class OperationalLookup(MemoryModel):
+    entry_type: OperationalEntryType
+    key: str = Field(min_length=1, max_length=255)
+
+    @field_validator("key")
+    @classmethod
+    def normalize_key(cls, value: str) -> str:
+        return unicodedata.normalize("NFKC", _required_text(value)).casefold()
+
+
 class OperationalResolutionRequest(MemoryModel):
     identity_user_id: str | None = Field(default=None, max_length=255)
     source_id: str | None = Field(default=None, max_length=255)
     area: str | None = Field(default=None, max_length=255)
     language: str = Field(min_length=2, max_length=35)
     timestamp: datetime
-    lookup_keys: list[str] = Field(min_length=1, max_length=100)
+    lookups: list[OperationalLookup] = Field(min_length=1, max_length=100)
 
     @field_validator("identity_user_id", "source_id", "area")
     @classmethod
@@ -185,18 +195,18 @@ class OperationalResolutionRequest(MemoryModel):
     def normalize_language(cls, value: str) -> str:
         return _required_text(value)
 
-    @field_validator("lookup_keys")
+    @field_validator("lookups")
     @classmethod
-    def normalize_lookup_keys(cls, values: list[str]) -> list[str]:
-        normalized: list[str] = []
-        seen: set[str] = set()
+    def deduplicate_lookups(
+        cls, values: list[OperationalLookup]
+    ) -> list[OperationalLookup]:
+        normalized: list[OperationalLookup] = []
+        seen: set[tuple[OperationalEntryType, str]] = set()
         for value in values:
-            key = unicodedata.normalize("NFKC", value).strip().casefold()
-            if not key:
-                raise ValueError("lookup key must not be empty")
-            if key not in seen:
-                normalized.append(key)
-                seen.add(key)
+            identity = (value.entry_type, value.key)
+            if identity not in seen:
+                normalized.append(value)
+                seen.add(identity)
         return normalized
 
 
