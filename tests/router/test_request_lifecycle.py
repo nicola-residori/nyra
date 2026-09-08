@@ -9,6 +9,7 @@ from router.lifecycle.service import (
     LifecycleConflict,
 )
 from router.lifecycle.store import RequestStateStore
+from router.user_directory import UserDirectory
 from shared.protocol.events import EventCategory, IdentityFeedback, InteractionState
 from shared.protocol.requests import CloseReason, NyraRequest, RequestStatus
 from router.observability.ids import generate_request_id, generate_session_id
@@ -40,8 +41,8 @@ class MemoryPort:
 
 
 class SkillPort:
-    def __init__(self, match=True, decision=None): self.match=match; self.decision=decision or LifecycleDecision.completed("Done."); self.checked=0; self.executed=0
-    async def check(self, request, context, memory, pending_state): self.checked += 1; return SkillMatch(matched=self.match, token="skill-a" if self.match else None)
+    def __init__(self, match=True, decision=None): self.match=match; self.decision=decision or LifecycleDecision.completed("Done."); self.checked=0; self.executed=0; self.contexts=[]
+    async def check(self, request, context, memory, pending_state): self.checked += 1; self.contexts.append(context); return SkillMatch(matched=self.match, token="skill-a" if self.match else None)
     async def execute(self, match, request, context, memory, pending_state): self.executed += 1; return self.decision
 
 
@@ -152,6 +153,104 @@ async def test_identity_semantics_and_trusted_ha_identity(tmp_path):
     req2=request(kind="ha_assist", identity={"user_id":"user-b","provider":"home_assistant","confidence":1.0})
     await svc2.execute(req2)
     assert trusted.calls==0 and store2.get(req2.request_id).identity_user_id=="user-b"
+
+
+@pytest.mark.asyncio
+async def test_trusted_name_is_persisted_and_exposed_to_downstream_context(tmp_path):
+    directory = UserDirectory(tmp_path / "router.db")
+    directory.initialize()
+    collector = Collector()
+    skill = SkillPort()
+    svc, _, _ = service(
+        tmp_path,
+        user_directory=directory,
+        observability=collector,
+        skill_port=skill,
+    )
+    req = request(
+        kind="ha_assist",
+        identity={
+            "user_id": "ha-1",
+            "provider": "home_assistant",
+            "confidence": 1.0,
+            "display_name": "Nicola",
+        },
+    )
+
+    await svc.execute(req)
+
+    assert directory.get("home_assistant", "ha-1").display_name == "Nicola"
+    assert skill.contexts[-1].data["identity"] == {
+        "user_id": "ha-1",
+        "display_name": "Nicola",
+        "resolution_source": "TRUSTED_HA_IDENTITY",
+    }
+    assert "Nicola" not in repr([
+        (record.payload, record.params) for record in collector.records
+    ])
+
+
+@pytest.mark.asyncio
+async def test_biometric_identity_and_continuity_resolve_the_stored_name(tmp_path):
+    directory = UserDirectory(tmp_path / "router.db")
+    directory.initialize()
+    directory.upsert("home_assistant", "ha-1", "Nicola")
+    identity = IdentityPort("ha-1")
+    skill = SkillPort()
+    svc, _, _ = service(
+        tmp_path,
+        user_directory=directory,
+        identity_port=identity,
+        skill_port=skill,
+    )
+    first = request()
+
+    await svc.execute(first)
+    identity.detected = None
+    await svc.execute(request(session_id=first.session_id))
+
+    assert [item.data["identity"] for item in skill.contexts] == [
+        {
+            "user_id": "ha-1",
+            "display_name": "Nicola",
+            "resolution_source": "SPEAKER_IDENTIFICATION",
+        },
+        {
+            "user_id": "ha-1",
+            "display_name": "Nicola",
+            "resolution_source": "SESSION_CONTINUITY",
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_user_directory_failure_does_not_block_a_request(tmp_path):
+    class BrokenDirectory:
+        def upsert(self, *args):
+            raise RuntimeError("database unavailable")
+
+        def get(self, *args):
+            raise RuntimeError("database unavailable")
+
+    skill = SkillPort()
+    svc, _, _ = service(
+        tmp_path,
+        user_directory=BrokenDirectory(),
+        skill_port=skill,
+    )
+
+    result = await svc.execute(request(
+        kind="ha_assist",
+        identity={
+            "user_id": "ha-1",
+            "provider": "home_assistant",
+            "confidence": 1.0,
+            "display_name": "Nicola",
+        },
+    ))
+
+    assert result.status is RequestStatus.COMPLETED
+    assert skill.contexts[-1].data["identity"]["display_name"] == "Nicola"
 
 
 @pytest.mark.asyncio

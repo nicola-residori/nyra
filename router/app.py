@@ -95,6 +95,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         observability=observability,
         identity_config=identity_config,
         identification_timeout_seconds=settings.identification_timeout_seconds,
+        user_directory=user_directory,
     )
 
     @asynccontextmanager

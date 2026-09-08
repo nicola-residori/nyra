@@ -90,7 +90,8 @@ class RequestLifecycleService:
     def __init__(self, store, broker, identity_port: SpeakerIdentityPort, context_port: ContextPort,
                  memory_port: MemoryPort, skill_port: SkillPort, llm_port: LlmPort,
                  clock=None, clarification_timeout_seconds: int = 120, observability=None,
-               identity_config=None, identification_timeout_seconds: float = 2.0):
+                 identity_config=None, identification_timeout_seconds: float = 2.0,
+                 user_directory=None):
         self.store = store
         self.broker = broker
         self.identity_port = identity_port
@@ -103,6 +104,41 @@ class RequestLifecycleService:
         self.observability = observability
         self.identity_config = identity_config
         self.identification_timeout_seconds = float(identification_timeout_seconds)
+        self.user_directory = user_directory
+
+    def _sync_trusted_identity(self, request: NyraRequest) -> None:
+        identity = request.identity
+        if (
+            self.user_directory is None
+            or identity is None
+            or identity.display_name is None
+        ):
+            return
+        try:
+            self.user_directory.upsert(
+                identity.provider, identity.user_id, identity.display_name
+            )
+        except Exception:
+            pass
+
+    def _identity_display_name(
+        self, request: NyraRequest, identity_user_id: str | None
+    ) -> str | None:
+        if identity_user_id in (None, "guest"):
+            return None
+        if (
+            request.identity is not None
+            and request.identity.user_id == identity_user_id
+            and request.identity.display_name is not None
+        ):
+            return request.identity.display_name
+        if self.user_directory is None:
+            return None
+        try:
+            reference = self.user_directory.get("home_assistant", identity_user_id)
+        except Exception:
+            return None
+        return reference.display_name if reference is not None else None
 
     def _log(self, request: NyraRequest, trace_id: str, span_id: str, event: str,
              kind: LogKind = LogKind.EVENT, result: str | None = None,
@@ -157,6 +193,7 @@ class RequestLifecycleService:
             identity = ResolvedIdentity(
                 user_id=identity_user_id or "guest",
                 resolution_source=identity_source,
+                display_name=self._identity_display_name(request, identity_user_id),
             )
 
         return RequestContext(
@@ -197,6 +234,7 @@ class RequestLifecycleService:
 
     async def _execute(self, request: NyraRequest, trace_id: str, span_id: str) -> NyraRequestResponse:
         now = self.clock()
+        self._sync_trusted_identity(request)
         existing = None
         pending_state = None
 
@@ -323,6 +361,17 @@ class RequestLifecycleService:
             context,
             previous_session_state,
             identity_source,
+        )
+        context_data = dict(context.data)
+        if request_context.identity is not None:
+            context_data["identity"] = {
+                "user_id": request_context.identity.user_id,
+                "display_name": request_context.identity.display_name,
+                "resolution_source": request_context.identity.resolution_source.value,
+            }
+        context = ContextResult(
+            data=context_data,
+            semantic_memory_required=context.semantic_memory_required,
         )
         memory = None
         if context.semantic_memory_required:
