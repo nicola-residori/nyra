@@ -8,19 +8,10 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from memory.config import MemorySettings
+from memory.embeddings import SentenceTransformerEmbeddingProvider
 from memory.api.operational import router as operational_router
 from memory.operational import OperationalContextService
 from memory.storage import MemoryStore
-
-
-class _UnavailableEmbeddingProvider:
-    provider_name = "sentence-transformers"
-
-    def __init__(self, model_name: str):
-        self.model_name = model_name
-
-    def prepare(self) -> None:
-        raise RuntimeError("production embedding provider is not installed")
 
 
 def create_app(
@@ -29,7 +20,7 @@ def create_app(
     embedding_provider=None,
 ) -> FastAPI:
     settings = settings or MemorySettings.load()
-    provider = embedding_provider or _UnavailableEmbeddingProvider(
+    provider = embedding_provider or SentenceTransformerEmbeddingProvider(
         settings.embedding_model
     )
     store = MemoryStore(settings.database_path)

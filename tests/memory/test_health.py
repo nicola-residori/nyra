@@ -3,6 +3,7 @@ import tomllib
 
 from memory.app import create_app
 from memory.config import MemorySettings
+from memory.embeddings import SentenceTransformerEmbeddingProvider
 
 
 class LoadedEmbeddingProvider:
@@ -70,6 +71,15 @@ def test_ready_reports_embedding_failure_without_hiding_storage_state(tmp_path):
         "embedding": "unavailable",
         "embedding_model": "broken-model",
     }
+
+
+def test_default_app_uses_the_configured_production_embedding_provider(tmp_path):
+    app = create_app(MemorySettings(data_root=tmp_path, embedding_model="model-v2"))
+
+    assert isinstance(
+        app.state.embedding_provider, SentenceTransformerEmbeddingProvider
+    )
+    assert app.state.embedding_provider.model_name == "model-v2"
 
 
 def test_memory_package_is_included_in_distribution_configuration():

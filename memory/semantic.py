@@ -10,7 +10,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
-from memory.embeddings import EmbeddingProvider, EmbeddingVector
+from memory.embeddings import (
+    EmbeddingModelMismatch,
+    EmbeddingProvider,
+    EmbeddingVector,
+)
 from memory.operational import (
     IdempotencyConflict,
     IdempotentResult,
@@ -25,6 +29,9 @@ from shared.protocol.memory import (
     SemanticMemoryState,
     SemanticMemoryTombstone,
     SemanticMemoryType,
+    SemanticSearchItem,
+    SemanticSearchRequest,
+    SemanticSearchResult,
 )
 
 
@@ -60,7 +67,13 @@ def _content_hash(scope: MemoryScope, owner_user_id: str | None, content: str) -
 
 
 def _encode_vector(vector: EmbeddingVector) -> bytes:
-    return array("f", vector.values).tobytes()
+    return array("f", vector.normalized().values).tobytes()
+
+
+def _decode_vector(payload: bytes) -> tuple[float, ...]:
+    values = array("f")
+    values.frombytes(payload)
+    return tuple(values)
 
 
 class SemanticMemoryService:
@@ -502,4 +515,67 @@ class SemanticMemoryService:
             ).fetchall()
         return SemanticMemoryPage(
             [self._row_to_memory(row) for row in rows], total, limit, offset
+        )
+
+    def search(self, request: SemanticSearchRequest) -> SemanticSearchResult:
+        query_vector = self.embedding_provider.embed(request.query).normalized()
+        scope_clauses: list[str] = []
+        args: list[object] = []
+        for scope in request.scopes:
+            if scope is MemoryScope.USER:
+                scope_clauses.append("(scope = 'USER' AND owner_user_id = ?)")
+                args.append(request.owner_user_id)
+            else:
+                scope_clauses.append("scope = ?")
+                args.append(scope.value)
+        clauses = ["state = 'ACTIVE'", "(" + " OR ".join(scope_clauses) + ")"]
+        if request.memory_types:
+            placeholders = ",".join("?" for _ in request.memory_types)
+            clauses.append(f"memory_type IN ({placeholders})")
+            args.extend(item.value for item in request.memory_types)
+
+        with self.store.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM semantic_memories WHERE " + " AND ".join(clauses),
+                args,
+            ).fetchall()
+
+        ranked: list[SemanticSearchItem] = []
+        for row in rows:
+            if (
+                row["embedding_provider"] != query_vector.provider
+                or row["embedding_model"] != query_vector.model
+            ):
+                raise EmbeddingModelMismatch(
+                    "stored embedding model "
+                    f"{row['embedding_provider']}/{row['embedding_model']} "
+                    "does not match query model "
+                    f"{query_vector.provider}/{query_vector.model}"
+                )
+            values = _decode_vector(row["embedding"])
+            if len(values) != len(query_vector.values):
+                raise EmbeddingModelMismatch(
+                    f"stored embedding dimension {len(values)} does not match "
+                    f"query dimension {len(query_vector.values)}"
+                )
+            score = sum(
+                stored * query
+                for stored, query in zip(values, query_vector.values, strict=True)
+            )
+            score = max(0.0, min(1.0, score))
+            if score < request.minimum_similarity:
+                continue
+            memory = self._row_to_memory(row)
+            ranked.append(
+                SemanticSearchItem(
+                    **memory.model_dump(),
+                    score=score,
+                )
+            )
+
+        ranked.sort(key=lambda item: (-item.score, item.memory_id))
+        return SemanticSearchResult(
+            items=ranked[: request.limit],
+            query_model=query_vector.model,
+            minimum_similarity=request.minimum_similarity,
         )
