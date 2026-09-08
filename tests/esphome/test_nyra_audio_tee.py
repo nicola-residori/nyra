@@ -42,18 +42,19 @@ def test_identification_captures_the_complete_clean_assist_listening_window():
     assert "end_stream();" in vad_end
 
 
-def test_wake_cue_finishes_before_assist_starts():
+def test_assist_starts_when_the_wake_cue_actually_finishes():
     package = PACKAGE.read_text(encoding="utf-8")
     core = VENDORED_WAVESHARE_CORE.read_text(encoding="utf-8")
 
     assert "../vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml" in package
     wake = core.split("# Otherwise: beep, then start Assist.", 1)[1].split("voice_assistant:", 1)[0]
-    assert "delay: 1000ms" in wake
-    assert "delay: 300ms" not in wake
-    assert wake.index("delay: 1000ms") < wake.index("voice_assistant.start:")
+    assert "wait_until:" in wake
+    assert wake.count("media_player.is_announcing:") >= 2
+    assert "delay: 1000ms" not in wake
+    assert wake.index("wait_until:") < wake.index("voice_assistant.start:")
 
 
-def test_wake_detection_shows_listening_white_before_the_clean_audio_delay():
+def test_wake_detection_shows_listening_white_while_the_clean_audio_wait_runs():
     core = VENDORED_WAVESHARE_CORE.read_text(encoding="utf-8")
     wake = core.split("# Otherwise: beep, then start Assist.", 1)[1].split(
         "voice_assistant:", 1
@@ -65,7 +66,7 @@ def test_wake_detection_shows_listening_white_before_the_clean_audio_delay():
     assert "red: 100%" in wake
     assert "green: 100%" in wake
     assert "blue: 100%" in wake
-    assert wake.index("light.turn_on:") < wake.index("delay: 1000ms")
+    assert wake.index("light.turn_on:") < wake.index("wait_until:")
 
 
 def test_stable_speaker_package_cannot_enable_experimental_enrollment():

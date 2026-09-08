@@ -10,9 +10,8 @@ Milestone 2 — Home Assistant adapter and Nyra speaker integration — is compl
 
 Milestone 3 — Identity and Voice — is in progress. Speaker-ID, physical
 enrollment, identity validation, wake-word sample capture, and the identity
-management views in Nyra Admin are deployed. Trusted Home Assistant user-name
-enrichment is implemented and verified locally, but is not yet deployed.
-Broader M3 observability and regression tasks remain.
+management views in Nyra Admin and trusted Home Assistant user-name enrichment
+are deployed. Broader M3 observability and regression tasks remain.
 
 ## Implemented foundation
 
@@ -70,12 +69,14 @@ wake-word sample listening/deletion/export through Router APIs only.
 
 Nyra Mansarda runs the ESPHome 2026.8.2 enrollment/wake-capture firmware built
 on 2026-09-08. The OTA image SHA-256 is
-`9f5686a0e60359b28c2176361c0f6a420e475f0b9046ee9b742289d71d5a589e`
-(ESPHome build hash `0xbdfba290`). OTA completed successfully only on
+`9ef1e2e40945b1ff4e7c69199fe53231c1941f346f62724d4dd31fda943b6c25`
+(ESPHome build hash `0x3017e61c`). OTA completed successfully only on
 `192.168.0.141`; the device passed the 60-second boot-loop guard and restored
 its encrypted ESPHome API connection. This build acknowledges wake-word
 detection with the white listening visual immediately, while Assist audio
-still starts after the local wake cue has finished.
+starts as soon as the local wake-cue announcement actually finishes instead of
+waiting for a fixed one-second delay. The wake cue remains outside STT and
+Speaker-ID audio.
 
 The trusted user display-name change was deployed to Router/Admin and Home
 Assistant on 2026-09-08. Home Assistant remains authoritative for the current
@@ -115,5 +116,6 @@ These items do not block Milestone 2:
 
 ## Next step
 
-Run one physical identification from Nyra Mansarda and confirm that its new
-diagnostic resolves the stable Home Assistant ID to `Nicola Residori`.
+Run one natural physical request from Nyra Mansarda and confirm that the first
+command words are captured immediately after the wake cue, then verify that its
+identity diagnostic resolves the stable Home Assistant ID to `Nicola Residori`.

@@ -1,5 +1,5 @@
 # Vendored from MichalZaniewicz/esphome-waveshare-esp32-s3-audio-va v1.0.0.
-# Nyra patch: wait for the complete 0.947 s wake cue before starting Assist.
+# Nyra patch: start Assist as soon as the wake cue playback actually finishes.
 ###############################################################################
 # Waveshare ESP32-S3-AUDIO-Board - Home Assistant voice assistant (core)
 #
@@ -444,8 +444,20 @@ micro_wake_word:
                                       id: play_sound
                                       priority: true
                                       sound_file: !lambda return id(wake_word_triggered_sound);
-                                  # The bundled cue is 0.947 s; wait for playback to finish so it cannot enter Assist audio.
-                                  - delay: 1000ms
+                                  # Follow the real announcement lifecycle instead of a fixed delay.
+                                  # This starts Assist at the first safe instant while keeping the
+                                  # wake cue out of STT and Speaker-ID audio.
+                                  - wait_until:
+                                      condition:
+                                        media_player.is_announcing:
+                                          id: external_media_player
+                                      timeout: 300ms
+                                  - wait_until:
+                                      condition:
+                                        not:
+                                          media_player.is_announcing:
+                                            id: external_media_player
+                                      timeout: 1200ms
                             - voice_assistant.start:
                                 wake_word: !lambda return wake_word;
 
