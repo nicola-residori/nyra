@@ -29,7 +29,9 @@ from router.api.identity_config import router as identity_config_router
 from router.api.enrollments import router as enrollments_router
 from router.api.wake_word_captures import router as wake_word_captures_router
 from router.api.speaker_id_admin import router as speaker_id_admin_router
+from router.api.users import router as users_router
 from router.speaker_id_admin import SpeakerIdAdminClient
+from router.user_directory import UserDirectory
 
 
 class _ContextPort:
@@ -68,6 +70,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     enrollments = EnrollmentService(enrollment_store, phrase_generator=phrase_generator)
     wake_word_capture_store = WakeWordCaptureSessionStore(settings.database_path)
     wake_word_captures = WakeWordCaptureService(wake_word_capture_store)
+    user_directory = UserDirectory(settings.database_path)
     wake_word_dataset = wake_word_dataset or SpeakerWakeWordDatasetClient(
         speaker_id_http_url(settings.speaker_id_http_url, settings.speaker_id_stream_url)
     )
@@ -102,6 +105,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         identity_config.initialize()
         enrollment_store.initialize()
         wake_word_capture_store.initialize()
+        user_directory.initialize()
         app.state.ready = True
         try:
             yield
@@ -121,6 +125,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.enrollments = enrollments
     app.state.wake_word_capture_store = wake_word_capture_store
     app.state.wake_word_captures = wake_word_captures
+    app.state.user_directory = user_directory
     app.state.wake_word_dataset = wake_word_dataset
     app.state.speaker_id_admin = speaker_id_admin
     app.state.observability = observability
@@ -138,6 +143,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(enrollments_router)
     app.include_router(wake_word_captures_router)
     app.include_router(speaker_id_admin_router)
+    app.include_router(users_router)
     return app
 
 
