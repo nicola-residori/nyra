@@ -280,6 +280,19 @@ class RequestLifecycleService:
                 if snapshot is not None
                 else self.identification_timeout_seconds
             )
+            identity_started = monotonic()
+            identity_source_id = request.source.id if request.source else None
+            self._log(
+                request,
+                trace_id,
+                span_id,
+                "identity.started",
+                params={
+                    "source_id": identity_source_id,
+                    "config_revision": snapshot.revision if snapshot is not None else None,
+                    "timeout_seconds": timeout_seconds,
+                },
+            )
             identity_task = asyncio.create_task(self.identity_port.identify(request, trace_id))
             done, _ = await asyncio.wait({identity_task}, timeout=timeout_seconds)
             timed_out = identity_task not in done
@@ -287,9 +300,27 @@ class RequestLifecycleService:
             if timed_out:
                 def _consume_late_identity(task):
                     try:
-                        task.result()
+                        late_result = task.result()
                     except BaseException:
-                        pass
+                        return
+                    if isinstance(late_result, str):
+                        late_result = SpeakerIdentityResult(
+                            outcome=SpeakerIdentityOutcome.IDENTIFIED,
+                            identified_user_id=late_result,
+                            best_score=None,
+                            diagnostic_id=None,
+                            reason_code=None,
+                        )
+                    if isinstance(late_result, SpeakerIdentityResult):
+                        self._log_identity_completed(
+                            request,
+                            trace_id,
+                            span_id,
+                            late_result,
+                            identity_source_id,
+                            identity_started,
+                            late_result=True,
+                        )
                 identity_task.add_done_callback(_consume_late_identity)
                 raw_identity_result = None
             else:
@@ -308,6 +339,17 @@ class RequestLifecycleService:
             else:
                 identity_result = None
 
+            if not timed_out and identity_result is not None:
+                self._log_identity_completed(
+                    request,
+                    trace_id,
+                    span_id,
+                    identity_result,
+                    identity_source_id,
+                    identity_started,
+                    late_result=False,
+                )
+
             resolution = resolve_speaker_identity(
                 last_trusted_user_id,
                 identity_result,
@@ -316,6 +358,23 @@ class RequestLifecycleService:
             identity_user_id = resolution.current_user_id
             last_trusted_user_id = resolution.last_trusted_user_id
             identity_source = resolution.resolution_source
+
+            self._log(
+                request,
+                trace_id,
+                span_id,
+                "identity.resolved",
+                result=resolution.current_user_id,
+                params={
+                    "source_id": identity_source_id,
+                    "user_id": resolution.current_user_id,
+                    "resolution": resolution.resolution_source.value,
+                    "biometric_outcome": (
+                        identity_result.outcome.value if identity_result is not None else None
+                    ),
+                    "timed_out": timed_out,
+                },
+            )
 
             self._log(
                 request,
@@ -435,4 +494,33 @@ class RequestLifecycleService:
             trace_id=request_context.trace_id,
             response=NyraResponseBody(text=decision.text) if decision.text is not None else None,
             close_reason=decision.close_reason,
+        )
+
+    def _log_identity_completed(
+        self,
+        request: NyraRequest,
+        trace_id: str,
+        span_id: str,
+        result: SpeakerIdentityResult,
+        source_id: str | None,
+        started: float,
+        *,
+        late_result: bool,
+    ) -> None:
+        self._log(
+            request,
+            trace_id,
+            span_id,
+            "identity.completed",
+            result=result.outcome.value,
+            params={
+                "source_id": source_id,
+                "outcome": result.outcome.value,
+                "identified_user_id": result.identified_user_id,
+                "best_score": result.best_score,
+                "diagnostic_id": result.diagnostic_id,
+                "reason_code": result.reason_code,
+                "latency_ms": max(0.0, (monotonic() - started) * 1000),
+                "late_result": late_result,
+            },
         )

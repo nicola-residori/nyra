@@ -203,9 +203,27 @@ class EnrollmentSessionStore:
 
 
 class EnrollmentService:
-    def __init__(self, store: EnrollmentSessionStore, phrase_generator: PhraseGenerator | None = None):
+    def __init__(self, store: EnrollmentSessionStore, phrase_generator: PhraseGenerator | None = None,
+                 event_sink=None):
         self.store = store
         self.phrase_generator = phrase_generator
+        self.event_sink = event_sink
+
+    def _emit(self, event: str, session: EnrollmentSession, *, result: str | None = None,
+              **params) -> None:
+        if self.event_sink is None:
+            return
+        self.event_sink.emit(
+            event,
+            operation="enrollment",
+            result=result,
+            params={
+                "enrollment_session_id": session.session_id,
+                "profile_user_id": session.profile_user_id,
+                "source_id": session.source_id,
+                **params,
+            },
+        )
 
     def start(self, profile_user_id: str, source_id: str, language: str, target_count: int = 6) -> EnrollmentSession:
         profile_user_id = _required(profile_user_id, "profile_user_id")
@@ -219,11 +237,19 @@ class EnrollmentService:
                 return active
             raise EnrollmentConflict("ACTIVE_ENROLLMENT_CONFLICT")
         phrases = self._phrases(language, target_count)
-        return self.store.create(EnrollmentSession(
+        session = self.store.create(EnrollmentSession(
             session_id=f"enr_{uuid.uuid4().hex}", profile_user_id=profile_user_id,
             source_id=source_id, language=language, target_count=target_count,
             accepted_sample_ids=(), phrases=phrases, status=EnrollmentStatus.ACTIVE,
         ))
+        self._emit(
+            "enrollment.started",
+            session,
+            result=session.status.value,
+            language=session.language,
+            target_count=session.target_count,
+        )
+        return session
 
     def get(self, session_id: str) -> EnrollmentSession:
         return self.store.get(session_id)
@@ -254,7 +280,26 @@ class EnrollmentService:
                 }
             )
 
-        return self.store.mutate(session_id, update)
+        session = self.store.mutate(session_id, update)
+        event = "enrollment.sample.accepted" if status == "ACCEPTED" else "enrollment.sample.rejected"
+        self._emit(
+            event,
+            session,
+            result=status,
+            sample_id=sample_id,
+            reason_code=reason_code,
+            accepted_count=session.accepted_count,
+            target_count=session.target_count,
+        )
+        if session.status is EnrollmentStatus.COMPLETED:
+            self._emit(
+                "enrollment.completed",
+                session,
+                result=session.status.value,
+                accepted_count=session.accepted_count,
+                target_count=session.target_count,
+            )
+        return session
 
     def terminate(self, session_id: str, reason: str) -> EnrollmentSession:
         reason = _required(reason, "reason")
@@ -274,7 +319,17 @@ class EnrollmentService:
                 }
             )
 
-        return self.store.mutate(session_id, update)
+        previous = self.store.get(session_id)
+        session = self.store.mutate(session_id, update)
+        if previous.status is EnrollmentStatus.ACTIVE and session.status is EnrollmentStatus.TERMINATED:
+            self._emit(
+                "enrollment.terminated",
+                session,
+                result=session.status.value,
+                reason=session.termination_reason,
+                accepted_count=session.accepted_count,
+            )
+        return session
 
     def _phrases(self, language: str, target_count: int) -> tuple[EnrollmentPhrase, ...]:
         if self.phrase_generator is not None:

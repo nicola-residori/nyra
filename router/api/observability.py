@@ -24,6 +24,8 @@ def trace_detail(request: Request, ident:str):
 def span_detail(request: Request, ident:str): return _get(request.app.state.store.get_span(ident))
 @router.get("/services")
 def services(request: Request): return [{"name":"nyra-router","endpoint":f"http://127.0.0.1:{request.app.state.settings.port}","health":"healthy"}]
+@router.get("/metrics/identity")
+def identity_metrics(request: Request): return request.app.state.store.identity_metrics()
 def _get(data):
     if data is None: raise HTTPException(status_code=404,detail="not found")
     return data

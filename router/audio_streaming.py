@@ -16,10 +16,12 @@ from router.speaker_identity import InvalidSpeakerIdentityResponse, _parse_realt
 class CorrelatedIdentityAudioSink:
     """Relay audio while making identification results awaitable by request ID."""
 
-    def __init__(self, sink, *, wait_timeout_seconds: float = 30.0, result_capacity: int = 128):
+    def __init__(self, sink, *, wait_timeout_seconds: float = 30.0, result_capacity: int = 128,
+                 event_sink=None):
         self.sink = sink
         self.wait_timeout_seconds = wait_timeout_seconds
         self.result_capacity = result_capacity
+        self.event_sink = event_sink
         self._metadata = {}
         self._waiting = {}
         self._results = OrderedDict()
@@ -31,6 +33,17 @@ class CorrelatedIdentityAudioSink:
         except BaseException:
             self._metadata.pop(metadata.audio_stream_id, None)
             raise
+        if self.event_sink is not None and metadata.purpose is AudioStreamPurpose.ENROLLMENT:
+            self.event_sink.emit(
+                "enrollment.capture.started",
+                operation="enrollment",
+                params={
+                    "enrollment_session_id": metadata.enrollment_session_id,
+                    "source_id": metadata.source_id,
+                    "profile_user_id": metadata.user_id,
+                    "audio_stream_id": metadata.audio_stream_id,
+                },
+            )
 
     async def chunk(self, audio_stream_id, payload):
         await self.sink.chunk(audio_stream_id, payload)

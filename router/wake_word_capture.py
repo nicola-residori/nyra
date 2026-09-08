@@ -141,8 +141,26 @@ class WakeWordCaptureSessionStore:
 
 
 class WakeWordCaptureService:
-    def __init__(self, store: WakeWordCaptureSessionStore):
+    def __init__(self, store: WakeWordCaptureSessionStore, event_sink=None):
         self.store = store
+        self.event_sink = event_sink
+
+    def _emit(self, event: str, session: WakeWordCaptureSession, *, result: str | None = None,
+              **params) -> None:
+        if self.event_sink is None:
+            return
+        self.event_sink.emit(
+            event,
+            operation="wake_word_capture",
+            result=result,
+            params={
+                "wake_word_session_id": session.session_id,
+                "user_id": session.user_id,
+                "source_id": session.source_id,
+                "wake_word_text": session.wake_word_text,
+                **params,
+            },
+        )
 
     def start(self, user_id: str, source_id: str, language: str,
               wake_word_text: str) -> WakeWordCaptureSession:
@@ -152,11 +170,18 @@ class WakeWordCaptureService:
         wake_word_text = _required(wake_word_text, "wake_word_text")
         if self.store.get_active_for_source(source_id) is not None:
             raise WakeWordCaptureConflict("ACTIVE_WAKE_WORD_CAPTURE_CONFLICT")
-        return self.store.create(WakeWordCaptureSession(
+        session = self.store.create(WakeWordCaptureSession(
             session_id=f"wwc_{uuid.uuid4().hex}", user_id=user_id,
             source_id=source_id, language=language, wake_word_text=wake_word_text,
             status=WakeWordCaptureStatus.ACTIVE,
         ))
+        self._emit(
+            "wake_word.capture.started",
+            session,
+            result=session.status.value,
+            language=session.language,
+        )
+        return session
 
     def get(self, session_id: str) -> WakeWordCaptureSession:
         return self.store.get(session_id)
@@ -173,7 +198,22 @@ class WakeWordCaptureService:
             raise ValueError("accepted capture requires sample_id")
         if terminal is not WakeWordCaptureStatus.ACCEPTED and sample_id is not None:
             raise ValueError("non-accepted capture cannot include sample_id")
-        return self.store.complete(session_id, terminal, sample_id, reason_code)
+        session = self.store.complete(session_id, terminal, sample_id, reason_code)
+        self._emit(
+            f"wake_word.capture.{terminal.value.lower()}",
+            session,
+            result=terminal.value,
+            sample_id=sample_id,
+            reason_code=reason_code,
+        )
+        self._emit(
+            "wake_word.capture.completed",
+            session,
+            result=terminal.value,
+            sample_id=sample_id,
+            reason_code=reason_code,
+        )
+        return session
 
 
 class SpeakerWakeWordDatasetClient:

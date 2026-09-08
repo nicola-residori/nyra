@@ -105,3 +105,81 @@ class SQLiteObservabilityStore:
     def list_requests(self,filters=None): return self._group("request_id",filters)
     def list_sessions(self,filters=None): return self._group("session_id",filters)
     def list_traces(self,filters=None): return self._group("trace_id",filters)
+
+    def identity_metrics(self):
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT event, result, params_json
+                   FROM logs
+                   WHERE event IN ('identity.started', 'identity.completed', 'identity.resolved')
+                   ORDER BY timestamp, id"""
+            ).fetchall()
+
+        attempts = 0
+        outcome_counts = {"IDENTIFIED": 0, "NOT_RECOGNIZED": 0, "FAILED": 0}
+        latencies = []
+        timeout_count = 0
+        late_result_count = 0
+        by_source = {}
+
+        def source_metrics(source_id):
+            return by_source.setdefault(source_id or "unknown", {
+                "attempts": 0,
+                "outcome_counts": {"IDENTIFIED": 0, "NOT_RECOGNIZED": 0, "FAILED": 0},
+            })
+
+        for row in rows:
+            params = json.loads(row["params_json"] or "{}")
+            source = source_metrics(params.get("source_id"))
+            if row["event"] == "identity.started":
+                attempts += 1
+                source["attempts"] += 1
+            elif row["event"] == "identity.completed":
+                outcome = params.get("outcome") or row["result"]
+                if outcome in outcome_counts:
+                    outcome_counts[outcome] += 1
+                    source["outcome_counts"][outcome] += 1
+                latency = params.get("latency_ms")
+                if isinstance(latency, (int, float)) and not isinstance(latency, bool):
+                    latencies.append(float(latency))
+                if params.get("late_result") is True:
+                    late_result_count += 1
+            elif params.get("timed_out") is True:
+                timeout_count += 1
+
+        def rates(counts, denominator):
+            return {
+                outcome: (count / denominator if denominator else 0.0)
+                for outcome, count in counts.items()
+            }
+
+        for source in by_source.values():
+            source["outcome_rates"] = rates(source["outcome_counts"], source["attempts"])
+
+        return {
+            "attempts": attempts,
+            "outcome_counts": outcome_counts,
+            "outcome_rates": rates(outcome_counts, attempts),
+            "by_source": by_source,
+            "latency_ms": {
+                "average": sum(latencies) / len(latencies) if latencies else None,
+                "p50": self._percentile(latencies, 0.50),
+                "p95": self._percentile(latencies, 0.95),
+                "p99": self._percentile(latencies, 0.99),
+            },
+            "timeout_count": timeout_count,
+            "timeout_rate": timeout_count / attempts if attempts else 0.0,
+            "late_result_count": late_result_count,
+            "late_result_rate": late_result_count / attempts if attempts else 0.0,
+        }
+
+    @staticmethod
+    def _percentile(values, quantile):
+        if not values:
+            return None
+        ordered = sorted(values)
+        position = (len(ordered) - 1) * quantile
+        lower = int(position)
+        upper = min(lower + 1, len(ordered) - 1)
+        fraction = position - lower
+        return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction

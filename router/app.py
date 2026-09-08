@@ -62,14 +62,19 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
     request_store = RequestStateStore(settings.database_path)
+    observability = ObservabilityService(store, request_store=request_store)
     identity_config = IdentityRuntimeConfigStore(
         settings.database_path,
         settings.identification_timeout_seconds,
     )
     enrollment_store = EnrollmentSessionStore(settings.database_path)
-    enrollments = EnrollmentService(enrollment_store, phrase_generator=phrase_generator)
+    enrollments = EnrollmentService(
+        enrollment_store, phrase_generator=phrase_generator, event_sink=observability
+    )
     wake_word_capture_store = WakeWordCaptureSessionStore(settings.database_path)
-    wake_word_captures = WakeWordCaptureService(wake_word_capture_store)
+    wake_word_captures = WakeWordCaptureService(
+        wake_word_capture_store, event_sink=observability
+    )
     user_directory = UserDirectory(settings.database_path)
     wake_word_dataset = wake_word_dataset or SpeakerWakeWordDatasetClient(
         speaker_id_http_url(settings.speaker_id_http_url, settings.speaker_id_stream_url)
@@ -78,10 +83,10 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         speaker_id_http_url(settings.speaker_id_http_url, settings.speaker_id_stream_url)
     )
     event_broker = InteractionEventBroker(queue_size=settings.websocket_queue_size)
-    observability = ObservabilityService(store, request_store=request_store)
     audio_relay = CorrelatedIdentityAudioSink(
         audio_sink if audio_sink is not None else SpeakerAudioRelay(settings.speaker_id_stream_url),
         wait_timeout_seconds=settings.audio_stream_timeout_seconds,
+        event_sink=observability,
     )
     lifecycle = RequestLifecycleService(
         store=request_store,

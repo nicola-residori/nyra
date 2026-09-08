@@ -1,5 +1,7 @@
 from shared.protocol.observability import LogRecord
 from router.observability.redaction import redact
+from shared.protocol.ids import new_span_id, new_trace_id
+from shared.protocol.observability import LogKind, LogLevel
 
 class ObservabilityService:
     def __init__(self, store, request_store=None):
@@ -24,3 +26,17 @@ class ObservabilityService:
             clean.append(LogRecord.model_validate(d))
         self.store.insert_logs(clean)
         return len(clean)
+
+    def emit(self, event: str, *, operation: str, result: str | None = None,
+             params: dict | None = None) -> None:
+        self.ingest([LogRecord(
+            ct="ROUTER",
+            level=LogLevel.INFO,
+            kind=LogKind.EVENT,
+            event=event,
+            trace_id=new_trace_id(),
+            span_id=new_span_id("ROUTER", operation),
+            operation=operation,
+            result=result,
+            params=params or {},
+        )])
