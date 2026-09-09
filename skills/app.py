@@ -10,14 +10,28 @@ from shared.protocol.skills import (
     SkillExecuteResponse,
 )
 from skills.config import SkillsSettings
-from skills.modules import register_builtin_skills
+from skills.modules import (
+    RouterHomeAssistantCapabilityClient,
+    register_builtin_skills,
+)
 from skills.registry import SkillRegistry
 from skills.service import SkillsService
 
 
-def _default_service() -> SkillsService:
+def _default_service(settings: SkillsSettings) -> SkillsService:
     registry = SkillRegistry()
-    register_builtin_skills(registry)
+    capability = (
+        RouterHomeAssistantCapabilityClient(
+            settings.router_url,
+            timeout=settings.router_timeout_seconds,
+        )
+        if settings.router_url
+        else None
+    )
+    register_builtin_skills(
+        registry,
+        home_assistant_capability=capability,
+    )
     return SkillsService(registry=registry)
 
 
@@ -27,7 +41,7 @@ def create_app(
     service: SkillsService | None = None,
 ) -> FastAPI:
     settings = settings or SkillsSettings.load()
-    service = service or _default_service()
+    service = service or _default_service(settings)
 
     app = FastAPI(title="Nyra Skills")
     app.state.settings = settings

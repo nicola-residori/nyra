@@ -47,7 +47,7 @@ class IdentityQuerySkill:
         language = _language(request.language)
         return _normalized(request.text) in _QUERY_PHRASES[language]
 
-    def match(self) -> SkillMatch:
+    def match(self, request: SkillCheckRequest | None = None) -> SkillMatch:
         return SkillMatch(
             matched=True,
             skill_name=self.name,

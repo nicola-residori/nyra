@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from skills.modules.home_assistant import (
+    HomeAssistantActionSkill,
+    RouterHomeAssistantCapabilityClient,
+)
 from skills.modules.identity import IdentityQuerySkill
 from skills.registry import SkillDefinition, SkillRegistry
 
 
-def register_builtin_skills(registry: SkillRegistry) -> None:
+def register_builtin_skills(
+    registry: SkillRegistry,
+    *,
+    home_assistant_capability: RouterHomeAssistantCapabilityClient | None = None,
+) -> None:
     identity = IdentityQuerySkill()
     registry.register(
         SkillDefinition(
@@ -14,3 +22,14 @@ def register_builtin_skills(registry: SkillRegistry) -> None:
             executor=identity.execute,
         )
     )
+
+    if home_assistant_capability is not None:
+        home_assistant = HomeAssistantActionSkill(home_assistant_capability)
+        registry.register(
+            SkillDefinition(
+                name=home_assistant.name,
+                priority=home_assistant.priority,
+                matcher=home_assistant.matches,
+                executor=home_assistant.execute,
+            )
+        )

@@ -72,10 +72,11 @@ class SkillsService:
                 error=ErrorDetail(code="SKILL_INVALID_DEFINITION"),
             )
 
+        match = skill.match(request)
         return SkillCheckResponse(
             correlation=request.correlation,
             outcome=SkillOutcome.HANDLED,
-            match=skill.match(),
+            match=match,
         )
 
     async def execute(
@@ -105,6 +106,9 @@ class SkillsService:
         result = definition.executor(request)
         if inspect.isawaitable(result):
             result = await result
+
+        if isinstance(result, SkillExecuteResponse):
+            return result
 
         return SkillExecuteResponse(
             correlation=request.correlation,
