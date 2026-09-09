@@ -11,10 +11,13 @@ from shared.protocol.capabilities import (
     ResolveCardinality,
     ResolveResponse,
     ResolveStatus,
+    ExecuteRequest,
+    ExecuteResponse,
     ResolvedResource,
     ResourceReference,
 )
-from shared.protocol.execution_common import NyraResourceType
+from shared.protocol.execution_common import NyraOperation, NyraResourceType
+from shared.protocol.common import CommonOutcome, ErrorDetail
 
 
 _RESOURCE_DOMAIN = {
@@ -52,6 +55,33 @@ class HomeAssistantApiClient:
         self.timeout = timeout
         self.transport = transport
 
+    async def state(self, entity_id: str) -> dict[str, Any] | None:
+        async with httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=self.timeout,
+            transport=self.transport,
+            headers={"Authorization": f"Bearer {self.token}"},
+        ) as client:
+            response = await client.get(f"/api/states/{entity_id}")
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+        payload = response.json()
+        return payload if isinstance(payload, dict) else None
+
+    async def invoke(self, domain: str, service: str, entity_id: str, parameters: dict[str, Any]) -> None:
+        async with httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=self.timeout,
+            transport=self.transport,
+            headers={"Authorization": f"Bearer {self.token}"},
+        ) as client:
+            response = await client.post(
+                f"/api/services/{domain}/{service}",
+                json={"entity_id": entity_id, **parameters},
+            )
+            response.raise_for_status()
+
     async def states(self) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(
             base_url=self.base_url,
@@ -67,9 +97,54 @@ class HomeAssistantApiClient:
         return [item for item in payload if isinstance(item, dict)]
 
 
+_OPERATION_MAP = {
+    (NyraResourceType.LIGHT, NyraOperation.TURN_ON): ("light", "turn_on"),
+    (NyraResourceType.LIGHT, NyraOperation.TURN_OFF): ("light", "turn_off"),
+    (NyraResourceType.SWITCH, NyraOperation.TURN_ON): ("switch", "turn_on"),
+    (NyraResourceType.SWITCH, NyraOperation.TURN_OFF): ("switch", "turn_off"),
+    (NyraResourceType.COVER, NyraOperation.OPEN): ("cover", "open_cover"),
+    (NyraResourceType.COVER, NyraOperation.CLOSE): ("cover", "close_cover"),
+    (NyraResourceType.SCRIPT, NyraOperation.TRIGGER): ("script", "turn_on"),
+    (NyraResourceType.SCENE, NyraOperation.TRIGGER): ("scene", "turn_on"),
+}
+
+
 class HomeAssistantCapabilityPort:
     def __init__(self, client: HomeAssistantApiClient) -> None:
         self.client = client
+
+    async def execute(self, request: ExecuteRequest, trusted_context: dict[str, Any]) -> ExecuteResponse:
+        allowed = trusted_context.get("allowed_resource_ids")
+        if isinstance(allowed, list) and request.resource_id not in {item for item in allowed if isinstance(item, str)}:
+            return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.DENIED, error=ErrorDetail(code="RESOURCE_DENIED"))
+
+        expected_domain = _RESOURCE_DOMAIN.get(request.resource_type)
+        if expected_domain is None or not request.resource_id.startswith(expected_domain + "."):
+            return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.NOT_FOUND, error=ErrorDetail(code="RESOURCE_TYPE_MISMATCH"))
+
+        mapping = _OPERATION_MAP.get((request.resource_type, request.operation))
+        if mapping is None:
+            return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.UNSUPPORTED, error=ErrorDetail(code="UNSUPPORTED_OPERATION"))
+
+        native = await self.client.state(request.resource_id)
+        if native is None or native.get("entity_id") != request.resource_id:
+            return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.NOT_FOUND, error=ErrorDetail(code="RESOURCE_NOT_FOUND"))
+        if native.get("state") in {"unavailable", "unknown"}:
+            return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.UNAVAILABLE, error=ErrorDetail(code="RESOURCE_UNAVAILABLE"))
+
+        domain, service = mapping
+        try:
+            await self.client.invoke(domain, service, request.resource_id, request.parameters)
+        except (httpx.TimeoutException, httpx.TransportError):
+            return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.UNKNOWN_OUTCOME, error=ErrorDetail(code="EXECUTION_OUTCOME_UNKNOWN"))
+        except httpx.HTTPStatusError:
+            return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.FAILED, error=ErrorDetail(code="HA_EXECUTION_FAILED"))
+
+        return ExecuteResponse(
+            correlation=request.correlation,
+            outcome=CommonOutcome.SUCCESS,
+            result={"resource_id": request.resource_id, "operation": request.operation.value},
+        )
 
     async def resolve(
         self,

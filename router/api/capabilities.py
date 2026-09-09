@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from shared.protocol.capabilities import (
     CapabilityCorrelation,
     ResolveResponse,
+    ExecuteRequest,
+    ExecuteResponse,
     ResourceReference,
 )
 
@@ -33,3 +35,14 @@ async def resolve_home_assistant_resource(
         payload.trusted_context,
         correlation=payload.correlation,
     )
+
+
+class ExecuteCapabilityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request: ExecuteRequest
+    trusted_context: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/execute", response_model=ExecuteResponse)
+async def execute_home_assistant_operation(payload: ExecuteCapabilityRequest, request: Request) -> ExecuteResponse:
+    return await request.app.state.ha_capability.execute(payload.request, payload.trusted_context)
