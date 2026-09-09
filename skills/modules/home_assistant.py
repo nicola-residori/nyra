@@ -119,6 +119,20 @@ _RESOURCE_TERMS = {
 }
 
 
+_STOP_WORDS = {
+    "en": {"the", "one", "that", "this", "of", "in", "on"},
+    "it": {
+        "quella", "quello", "quell", "della", "dello", "del", "di",
+        "la", "il", "lo", "l", "una", "uno",
+    },
+}
+
+_CONTINUATION_PREFIXES = {
+    "en": ("the ", "that ", "this "),
+    "it": ("quella ", "quello ", "quell "),
+}
+
+
 def _language(value: str) -> str:
     language = value.split("-", 1)[0].lower()
     return language if language in _ACTIONS else "en"
@@ -127,6 +141,98 @@ def _language(value: str) -> str:
 def _normalized(value: str) -> str:
     return " ".join(
         re.sub(r"[^\w]+", " ", value.casefold()).split()
+    )
+
+
+def _meaningful_tokens(value: str, language: str) -> set[str]:
+    return {
+        token
+        for token in _normalized(value).split()
+        if token not in _STOP_WORDS[language]
+    }
+
+
+def _clarification_state(
+    pending_state: dict[str, Any] | None,
+    skill_name: str,
+) -> dict[str, Any] | None:
+    if not isinstance(pending_state, dict):
+        return None
+    if pending_state.get("kind") != "ha_target_clarification":
+        return None
+    if pending_state.get("skill_name") != skill_name:
+        return None
+    candidates = pending_state.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return None
+    return pending_state
+
+
+def _candidate_name(candidate: dict[str, Any]) -> str | None:
+    name = candidate.get("name")
+    if isinstance(name, str) and name.strip():
+        return " ".join(name.split())
+    return None
+
+
+def _select_candidate(
+    text: str,
+    language: str,
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    query_tokens = _meaningful_tokens(text, language)
+    scored: list[tuple[int, str, dict[str, Any]]] = []
+
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        name = _candidate_name(candidate)
+        if name is None:
+            continue
+        score = len(query_tokens & _meaningful_tokens(name, language))
+        if score > 0:
+            scored.append((score, name.casefold(), candidate))
+
+    if not scored:
+        return None
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    best_score = scored[0][0]
+    best = [item for item in scored if item[0] == best_score]
+    if len(best) != 1:
+        return None
+    return best[0][2]
+
+
+def _clarification_prompt(
+    candidates: list[dict[str, Any]],
+    language: str,
+) -> str:
+    names = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        name = _candidate_name(candidate)
+        if name is not None and name not in names:
+            names.append(name)
+
+    if not names:
+        return (
+            "Quale dispositivo intendi?"
+            if language == "it"
+            else "Which device do you mean?"
+        )
+
+    if len(names) == 1:
+        choices = names[0]
+    else:
+        separator = " o " if language == "it" else " or "
+        choices = ", ".join(names[:-1]) + separator + names[-1]
+
+    return (
+        f"Quale dispositivo intendi: {choices}?"
+        if language == "it"
+        else f"Which device do you mean: {choices}?"
     )
 
 
@@ -175,23 +281,63 @@ class HomeAssistantActionSkill:
         self.capability = capability
 
     def matches(self, request: SkillCheckRequest) -> bool:
-        return parse_command(request.text, request.language) is not None
+        if parse_command(request.text, request.language) is not None:
+            return True
+
+        state = _clarification_state(request.pending_state, self.name)
+        if state is None:
+            return False
+
+        language = _language(request.language)
+        candidates = state["candidates"]
+        if _select_candidate(request.text, language, candidates) is not None:
+            return True
+
+        normalized = _normalized(request.text)
+        return normalized.startswith(_CONTINUATION_PREFIXES[language])
 
     def match(self, request: SkillCheckRequest) -> SkillMatch:
         parsed = parse_command(request.text, request.language)
-        if parsed is None:
+        if parsed is not None:
+            return SkillMatch(
+                matched=True,
+                skill_name=self.name,
+                token=self.name,
+                memory_requirement=MemoryRequirement.NONE,
+                metadata={
+                    "operation": parsed.operation.value,
+                    "resource_type": parsed.resource_type.value,
+                    "reference": parsed.reference,
+                },
+            )
+
+        state = _clarification_state(request.pending_state, self.name)
+        if state is None:
             return SkillMatch(matched=False)
+
+        language = _language(request.language)
+        selected = _select_candidate(
+            request.text,
+            language,
+            state["candidates"],
+        )
+        metadata = {
+            "operation": state.get("operation"),
+            "resource_type": state.get("resource_type"),
+            "reference": state.get("reference"),
+            "clarification": True,
+        }
+        if selected is not None:
+            metadata["selected_resource_id"] = selected.get("resource_id")
+            metadata["selected_resource_type"] = selected.get("resource_type")
+            metadata["selected_name"] = selected.get("name")
 
         return SkillMatch(
             matched=True,
             skill_name=self.name,
             token=self.name,
             memory_requirement=MemoryRequirement.NONE,
-            metadata={
-                "operation": parsed.operation.value,
-                "resource_type": parsed.resource_type.value,
-                "reference": parsed.reference,
-            },
+            metadata=metadata,
         )
 
     async def execute(
@@ -214,6 +360,58 @@ class HomeAssistantActionSkill:
             **request.correlation.model_dump()
         )
         trusted_context = dict(request.context)
+        language = _language(request.language)
+
+        selected_resource_id = metadata.get("selected_resource_id")
+        selected_resource_type = metadata.get("selected_resource_type")
+        if isinstance(selected_resource_id, str):
+            try:
+                target_type = NyraResourceType(selected_resource_type)
+            except (TypeError, ValueError):
+                return SkillExecuteResponse(
+                    correlation=request.correlation,
+                    outcome=SkillOutcome.FAILED,
+                    error=ErrorDetail(code="INVALID_HA_CLARIFICATION_TARGET"),
+                )
+
+            executed = await self.capability.execute(
+                ExecuteRequest(
+                    correlation=correlation,
+                    operation=operation,
+                    resource_id=selected_resource_id,
+                    resource_type=target_type,
+                ),
+                trusted_context,
+            )
+            if executed.outcome is not CommonOutcome.SUCCESS:
+                return SkillExecuteResponse(
+                    correlation=request.correlation,
+                    outcome=SkillOutcome.FAILED,
+                    error=executed.error
+                    or ErrorDetail(code=f"HA_{executed.outcome.value}"),
+                )
+
+            return SkillExecuteResponse(
+                correlation=request.correlation,
+                outcome=SkillOutcome.HANDLED,
+                text="Fatto." if language == "it" else "Done.",
+                result={
+                    "operation": operation.value,
+                    "resource_type": target_type.value,
+                    "resource_id": selected_resource_id,
+                    "reference": reference_text,
+                },
+            )
+
+        state = _clarification_state(request.pending_state, self.name)
+        if metadata.get("clarification") and state is not None:
+            return SkillExecuteResponse(
+                correlation=request.correlation,
+                outcome=SkillOutcome.NEEDS_CLARIFICATION,
+                text=_clarification_prompt(state["candidates"], language),
+                pending_state=state,
+            )
+
         resolved = await self.capability.resolve(
             ResourceReference(
                 reference=reference_text,
@@ -232,10 +430,27 @@ class HomeAssistantActionSkill:
             )
 
         if resolved.status is ResolveStatus.AMBIGUOUS:
+            candidates = [
+                {
+                    "resource_id": candidate.resource.resource_id,
+                    "resource_type": candidate.resource.resource_type.value,
+                    "name": candidate.resource.name,
+                }
+                for candidate in resolved.candidates
+            ]
+            pending_state = {
+                "kind": "ha_target_clarification",
+                "skill_name": self.name,
+                "operation": operation.value,
+                "resource_type": resource_type.value,
+                "reference": reference_text,
+                "candidates": candidates,
+            }
             return SkillExecuteResponse(
                 correlation=request.correlation,
-                outcome=SkillOutcome.FAILED,
-                error=ErrorDetail(code="HA_TARGET_AMBIGUOUS"),
+                outcome=SkillOutcome.NEEDS_CLARIFICATION,
+                text=_clarification_prompt(candidates, language),
+                pending_state=pending_state,
             )
 
         if len(resolved.candidates) != 1:
@@ -264,7 +479,6 @@ class HomeAssistantActionSkill:
                 or ErrorDetail(code=f"HA_{executed.outcome.value}"),
             )
 
-        language = _language(request.language)
         return SkillExecuteResponse(
             correlation=request.correlation,
             outcome=SkillOutcome.HANDLED,

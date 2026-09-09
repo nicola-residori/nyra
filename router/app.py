@@ -132,6 +132,7 @@ class _RemoteSkillPort:
             memory_requirement=response.match.memory_requirement,
             memory_query=response.match.memory_query,
             outcome=SkillOutcome.HANDLED,
+            metadata=response.match.metadata,
         )
 
     async def execute(self, match, request, context, memory, pending_state):
@@ -147,6 +148,7 @@ class _RemoteSkillPort:
                 if hasattr(match.memory_query, "query")
                 else match.memory_query
             ),
+            metadata=match.metadata,
         )
         payload = SkillExecuteRequest(
             correlation=self._correlation(request, context),

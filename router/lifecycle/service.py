@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 from time import monotonic
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
@@ -65,6 +65,7 @@ class SkillMatch:
     text: str | None = None
     pending_state: dict[str, Any] | None = None
     error_code: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
