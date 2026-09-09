@@ -98,3 +98,13 @@ def test_production_app_uses_remote_skill_port_when_skills_client_is_injected(tm
         skills_client=FakeSkillsClient(),
     )
     assert isinstance(app.state.lifecycle.skill_port, _RemoteSkillPort)
+
+def test_production_app_without_skills_client_has_no_router_local_identity_skill(tmp_path):
+    from router.app import create_app
+    from router.config import RouterSettings
+
+    app = create_app(
+        RouterSettings(database_path=tmp_path / "router.db"),
+    )
+
+    assert type(app.state.lifecycle.skill_port).__name__ == "_NoSkillPort"

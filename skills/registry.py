@@ -67,6 +67,9 @@ class SkillRegistry:
             priority=selected.priority,
         )
 
+    def get(self, name: str) -> SkillDefinition | None:
+        return self._definitions.get(name)
+
     def is_ready(self) -> bool:
         priorities = [
             definition.priority for definition in self._definitions.values()

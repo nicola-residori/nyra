@@ -33,7 +33,6 @@ from router.api.users import router as users_router
 from router.api.memory_admin import router as memory_admin_router
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
-from router.identity_skill import IdentityQuerySkill
 from router.memory_client import MemoryClient
 from router.skills_client import SkillsClient, SkillsUnavailable
 from shared.protocol.skills import (
@@ -54,8 +53,15 @@ class _MemoryPort:
         return {}
 
 
-class _SkillPort(IdentityQuerySkill):
-    pass
+class _NoSkillPort:
+    async def check(self, request, context, memory, pending_state):
+        return SkillMatch(
+            matched=False,
+            outcome=SkillOutcome.MISS,
+        )
+
+    async def execute(self, match, request, context, memory, pending_state):
+        return LifecycleDecision.failed("SKILL_NOT_CONFIGURED")
 
 
 class _RemoteSkillPort:
@@ -119,6 +125,7 @@ class _RemoteSkillPort:
             )
         return SkillMatch(
             matched=True,
+            skill_name=response.match.skill_name,
             token=response.match.token,
             memory_requirement=response.match.memory_requirement,
             memory_query=response.match.memory_query,
@@ -130,7 +137,7 @@ class _RemoteSkillPort:
 
         protocol_match = ProtocolSkillMatch(
             matched=True,
-            skill_name=None,
+            skill_name=match.skill_name,
             token=match.token,
             memory_requirement=match.memory_requirement,
             memory_query=(
@@ -233,7 +240,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         skill_port=(
             _RemoteSkillPort(skills_client)
             if skills_client is not None
-            else _SkillPort()
+            else _NoSkillPort()
         ),
         llm_port=_LlmPort(),
         clarification_timeout_seconds=settings.clarification_timeout_seconds,

@@ -57,6 +57,7 @@ class MemoryQuery:
 @dataclass(frozen=True)
 class SkillMatch:
     matched: bool
+    skill_name: str | None = None
     token: str | None = None
     memory_requirement: MemoryRequirement = MemoryRequirement.NONE
     memory_query: MemoryQuery | str | None = None
