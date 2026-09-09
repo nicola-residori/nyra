@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, ConfigDict, Field
+
+from shared.protocol.capabilities import (
+    CapabilityCorrelation,
+    ResolveResponse,
+    ResourceReference,
+)
+
+
+router = APIRouter(prefix="/v1/capabilities/home-assistant")
+
+
+class ResolveCapabilityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    correlation: CapabilityCorrelation
+    reference: ResourceReference
+    trusted_context: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/resolve", response_model=ResolveResponse)
+async def resolve_home_assistant_resource(
+    payload: ResolveCapabilityRequest,
+    request: Request,
+) -> ResolveResponse:
+    return await request.app.state.ha_capability.resolve(
+        payload.reference,
+        payload.trusted_context,
+        correlation=payload.correlation,
+    )

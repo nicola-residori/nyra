@@ -31,6 +31,8 @@ from router.api.wake_word_captures import router as wake_word_captures_router
 from router.api.speaker_id_admin import router as speaker_id_admin_router
 from router.api.users import router as users_router
 from router.api.memory_admin import router as memory_admin_router
+from router.api.capabilities import router as capabilities_router
+from router.ha_capability import HomeAssistantApiClient, HomeAssistantCapabilityPort
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
 from router.memory_client import MemoryClient
@@ -190,7 +192,7 @@ class _LlmPort:
 
 def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phrase_generator=None,
                wake_word_dataset=None, speaker_id_admin=None, memory_client=None,
-               skills_client=None):
+               skills_client=None, ha_capability=None):
     settings = settings or RouterSettings.load()
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
@@ -228,6 +230,18 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     if skills_client is None and settings.skills_url:
         skills_client = SkillsClient(
             settings.skills_url, timeout=settings.skills_timeout_seconds
+        )
+    if (
+        ha_capability is None
+        and settings.home_assistant_url
+        and settings.home_assistant_token
+    ):
+        ha_capability = HomeAssistantCapabilityPort(
+            HomeAssistantApiClient(
+                settings.home_assistant_url,
+                settings.home_assistant_token,
+                timeout=settings.home_assistant_timeout_seconds,
+            )
         )
     context_port = memory_client if memory_client is not None else _ContextPort()
     memory_port = memory_client if memory_client is not None else _MemoryPort()
@@ -283,6 +297,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.speaker_id_admin = speaker_id_admin
     app.state.memory_client = memory_client
     app.state.skills_client = skills_client
+    app.state.ha_capability = ha_capability
     app.state.observability = observability
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
@@ -300,6 +315,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(speaker_id_admin_router)
     app.include_router(users_router)
     app.include_router(memory_admin_router)
+    app.include_router(capabilities_router)
     return app
 
 
