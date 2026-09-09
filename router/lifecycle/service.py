@@ -25,6 +25,7 @@ from shared.protocol.events import (
 )
 from shared.protocol.observability import LogKind, LogLevel, LogRecord
 from shared.protocol.memory import MemoryRequirement, SemanticMemoryType
+from shared.protocol.skills import SkillOutcome
 from shared.protocol.requests import (
     CloseReason, ExecutionType, NyraRequest, NyraRequestResponse, NyraResponseBody, RequestStatus,
 )
@@ -38,6 +39,7 @@ class LifecycleConflict(RuntimeError):
 class ContextResult:
     data: dict[str, Any]
     semantic_memory_required: bool = False
+    trace_id: str | None = None
 
 
 class MemoryAccessError(RuntimeError):
@@ -58,6 +60,10 @@ class SkillMatch:
     token: str | None = None
     memory_requirement: MemoryRequirement = MemoryRequirement.NONE
     memory_query: MemoryQuery | str | None = None
+    outcome: SkillOutcome = SkillOutcome.HANDLED
+    text: str | None = None
+    pending_state: dict[str, Any] | None = None
+    error_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,7 @@ class LifecycleDecision:
     pending_state: dict[str, Any] | None = None
     close_reason: CloseReason | None = None
     error: dict[str, Any] | None = None
+    llm_fallback: bool = False
 
     @classmethod
     def completed(cls, text: str | None = None):
@@ -460,10 +467,40 @@ class RequestLifecycleService:
         context = ContextResult(
             data=context_data,
             semantic_memory_required=context.semantic_memory_required,
+            trace_id=trace_id,
         )
         memory = None
         match = await self.skill_port.check(request, context, None, pending_state)
-        if match.matched:
+        if match.outcome is SkillOutcome.NEEDS_CLARIFICATION:
+            decision = LifecycleDecision.needs_clarification(
+                match.text or "",
+                match.pending_state or {},
+            )
+        elif match.outcome is SkillOutcome.FAILED:
+            decision = LifecycleDecision.failed(
+                match.error_code or "SKILLS_FAILED"
+            )
+        elif match.outcome is SkillOutcome.MISS:
+            self._log(
+                request,
+                trace_id,
+                span_id,
+                "MEMORY_SEARCH_SKIPPED",
+                params={"reason": "SKILL_MISS"},
+            )
+            await self._state(
+                request,
+                trace_id,
+                span_id,
+                InteractionState.PROCESSING_GLOBAL,
+            )
+            decision = await self.llm_port.reason(
+                request,
+                context,
+                memory,
+                pending_state,
+            )
+        elif match.matched:
             if match.memory_requirement is MemoryRequirement.NONE:
                 self._log(
                     request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",
@@ -508,7 +545,26 @@ class RequestLifecycleService:
             if match.memory_requirement is MemoryRequirement.NONE:
                 decision = None
             if decision is None:
-                decision = await self.skill_port.execute(match, request, context, memory, pending_state)
+                decision = await self.skill_port.execute(
+                    match,
+                    request,
+                    context,
+                    memory,
+                    pending_state,
+                )
+            if decision.llm_fallback:
+                await self._state(
+                    request,
+                    trace_id,
+                    span_id,
+                    InteractionState.PROCESSING_GLOBAL,
+                )
+                decision = await self.llm_port.reason(
+                    request,
+                    context,
+                    memory,
+                    pending_state,
+                )
         else:
             self._log(
                 request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",

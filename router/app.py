@@ -35,7 +35,13 @@ from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
 from router.identity_skill import IdentityQuerySkill
 from router.memory_client import MemoryClient
-from router.skills_client import SkillsClient
+from router.skills_client import SkillsClient, SkillsUnavailable
+from shared.protocol.skills import (
+    SkillCheckRequest,
+    SkillCorrelation,
+    SkillExecuteRequest,
+    SkillOutcome,
+)
 
 
 class _ContextPort:
@@ -50,6 +56,124 @@ class _MemoryPort:
 
 class _SkillPort(IdentityQuerySkill):
     pass
+
+
+class _RemoteSkillPort:
+    def __init__(self, client):
+        self.client = client
+
+    @staticmethod
+    def _correlation(request, context):
+        if context.trace_id is None:
+            raise RuntimeError("Skills invocation requires the Router trace")
+        return SkillCorrelation(
+            request_id=request.request_id,
+            origin_request_id=request.origin_request_id,
+            trace_id=context.trace_id,
+        )
+
+    async def check(self, request, context, memory, pending_state):
+        payload = SkillCheckRequest(
+            correlation=self._correlation(request, context),
+            text=request.input.text,
+            language=request.language,
+            context=context.data,
+            pending_state=pending_state,
+        )
+        try:
+            response = await self.client.check(payload)
+        except SkillsUnavailable:
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.FAILED,
+                error_code="SKILLS_UNAVAILABLE",
+            )
+
+        if response.outcome is SkillOutcome.MISS:
+            return SkillMatch(matched=False, outcome=SkillOutcome.MISS)
+        if response.outcome is SkillOutcome.FAILED:
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.FAILED,
+                error_code=(
+                    response.error.code
+                    if response.error is not None
+                    else "SKILLS_FAILED"
+                ),
+            )
+        if response.outcome is SkillOutcome.NEEDS_CLARIFICATION:
+            metadata = response.match.metadata if response.match else {}
+            text = metadata.get("text")
+            pending = metadata.get("pending_state")
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.NEEDS_CLARIFICATION,
+                text=text if isinstance(text, str) else "",
+                pending_state=pending if isinstance(pending, dict) else {},
+            )
+        if response.match is None or not response.match.matched:
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.FAILED,
+                error_code="SKILLS_INVALID_MATCH",
+            )
+        return SkillMatch(
+            matched=True,
+            token=response.match.token,
+            memory_requirement=response.match.memory_requirement,
+            memory_query=response.match.memory_query,
+            outcome=SkillOutcome.HANDLED,
+        )
+
+    async def execute(self, match, request, context, memory, pending_state):
+        from shared.protocol.skills import SkillMatch as ProtocolSkillMatch
+
+        protocol_match = ProtocolSkillMatch(
+            matched=True,
+            skill_name=None,
+            token=match.token,
+            memory_requirement=match.memory_requirement,
+            memory_query=(
+                match.memory_query.query
+                if hasattr(match.memory_query, "query")
+                else match.memory_query
+            ),
+        )
+        payload = SkillExecuteRequest(
+            correlation=self._correlation(request, context),
+            match=protocol_match,
+            text=request.input.text,
+            language=request.language,
+            context=context.data,
+            memory=memory,
+            pending_state=pending_state,
+        )
+        try:
+            response = await self.client.execute(payload)
+        except SkillsUnavailable:
+            return LifecycleDecision.failed("SKILLS_UNAVAILABLE")
+
+        if response.outcome is SkillOutcome.MISS:
+            return LifecycleDecision(
+                status=RequestStatus.FAILED,
+                llm_fallback=True,
+            )
+        if response.outcome is SkillOutcome.NEEDS_CLARIFICATION:
+            if response.text is None:
+                return LifecycleDecision.failed(
+                    "SKILLS_INVALID_CLARIFICATION"
+                )
+            return LifecycleDecision.needs_clarification(
+                response.text,
+                response.pending_state or {},
+            )
+        if response.outcome is SkillOutcome.FAILED:
+            return LifecycleDecision.failed(
+                response.error.code
+                if response.error is not None
+                else "SKILLS_FAILED"
+            )
+        return LifecycleDecision.completed(response.text)
 
 
 class _LlmPort:
@@ -106,7 +230,11 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         identity_port=audio_relay,
         context_port=context_port,
         memory_port=memory_port,
-        skill_port=_SkillPort(),
+        skill_port=(
+            _RemoteSkillPort(skills_client)
+            if skills_client is not None
+            else _SkillPort()
+        ),
         llm_port=_LlmPort(),
         clarification_timeout_seconds=settings.clarification_timeout_seconds,
         observability=observability,
