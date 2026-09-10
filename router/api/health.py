@@ -27,6 +27,10 @@ async def ready(request: Request, response: Response) -> ServiceStatusResponse:
     if memory_client is not None and not await memory_client.ready():
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return _status(request, ServiceState.NOT_READY, "MEMORY_NOT_READY")
+    skills_client = getattr(request.app.state, "skills_client", None)
+    if skills_client is not None and not await skills_client.ready():
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return _status(request, ServiceState.NOT_READY, "SKILLS_NOT_READY")
     if getattr(request.app.state, "ready", False):
         return _status(request, ServiceState.READY)
     response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

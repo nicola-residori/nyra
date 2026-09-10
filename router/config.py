@@ -21,6 +21,11 @@ class RouterSettings:
     audio_stream_timeout_seconds: float = 30.0
     memory_url: str | None = None
     memory_timeout_seconds: float = 3.0
+    skills_url: str | None = None
+    skills_timeout_seconds: float = 3.0
+    home_assistant_url: str | None = None
+    home_assistant_token: str | None = None
+    home_assistant_timeout_seconds: float = 3.0
 
     @classmethod
     def load(cls, config_file: str | None = None):
@@ -52,5 +57,19 @@ class RouterSettings:
             memory_url=os.getenv("NYRA_MEMORY_URL", data.get("memory_url")),
             memory_timeout_seconds=float(os.getenv(
                 "NYRA_MEMORY_TIMEOUT_SECONDS", data.get("memory_timeout_seconds", 3.0)
+            )),
+            skills_url=os.getenv("NYRA_SKILLS_URL", data.get("skills_url")),
+            skills_timeout_seconds=float(os.getenv(
+                "NYRA_SKILLS_TIMEOUT_SECONDS", data.get("skills_timeout_seconds", 3.0)
+            )),
+            home_assistant_url=os.getenv(
+                "NYRA_HOME_ASSISTANT_URL", data.get("home_assistant_url")
+            ),
+            home_assistant_token=os.getenv(
+                "NYRA_HOME_ASSISTANT_TOKEN", data.get("home_assistant_token")
+            ),
+            home_assistant_timeout_seconds=float(os.getenv(
+                "NYRA_HOME_ASSISTANT_TIMEOUT_SECONDS",
+                data.get("home_assistant_timeout_seconds", 3.0),
             )),
         )

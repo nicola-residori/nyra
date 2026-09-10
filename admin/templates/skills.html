@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2>Skills</h2>
+    <p class="muted">Router-backed diagnostics for deterministic Skills, jobs, and protected capabilities.</p>
+  </div>
+  {% if service.ready %}
+    <span class="badge success">READY</span>
+  {% else %}
+    <span class="badge level-ERROR">{{ service.status|upper }}</span>
+  {% endif %}
+</div>
+
+{% if error %}
+<div class="fault">Skills diagnostics unavailable: {{ error }}</div>
+{% endif %}
+
+<section class="skills-summary">
+  <article class="card">
+    <h3>Service</h3>
+    <dl class="skills-dl">
+      <dt>Configured</dt><dd>{{ "yes" if service.configured else "no" }}</dd>
+      <dt>Status</dt><dd>{{ service.status }}</dd>
+      <dt>Ready</dt><dd>{{ "yes" if service.ready else "no" }}</dd>
+    </dl>
+  </article>
+  <article class="card">
+    <h3>Home Assistant capability</h3>
+    {% set ha = capabilities.get("home_assistant", {}) %}
+    <dl class="skills-dl">
+      <dt>Configured</dt><dd>{{ "yes" if ha.get("configured") else "no" }}</dd>
+      <dt>Operations</dt>
+      <dd>{{ ha.get("operations", [])|join(", ") }}</dd>
+    </dl>
+  </article>
+</section>
+
+<section class="card skills-section">
+  <div class="group-head">
+    <h3>Registered Skills</h3>
+    <span class="badge">{{ skills|length }}</span>
+  </div>
+  <div class="table-shell skills-table-shell">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Priority</th><th>Enabled</th></tr>
+      </thead>
+      <tbody>
+      {% for skill in skills %}
+        <tr>
+          <td><code>{{ skill.name }}</code></td>
+          <td>{{ skill.priority if skill.priority is not none else "—" }}</td>
+          <td>{{ "yes" if skill.enabled else "no" }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="muted">No registered skill metadata available.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card skills-section">
+  <div class="group-head">
+    <h3>Jobs</h3>
+    <span class="badge">{{ jobs|length }}</span>
+  </div>
+  <div class="table-shell skills-table-shell">
+    <table>
+      <thead>
+        <tr>
+          <th>Job</th><th>Status</th><th>Created</th><th>Execute at</th>
+          <th>Started</th><th>Finished</th><th>Error</th>
+          <th>Request</th><th>Origin request</th><th>Trace</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td><code>{{ job.job_id }}</code></td>
+          <td><span class="badge outcome-{{ job.status }}">{{ job.status }}</span></td>
+          <td>{{ job.created_at or "—" }}</td>
+          <td>{{ job.execute_at or "—" }}</td>
+          <td>{{ job.started_at or "—" }}</td>
+          <td>{{ job.finished_at or "—" }}</td>
+          <td>{{ job.error or "—" }}</td>
+          <td><code>{{ job.request_id or "—" }}</code></td>
+          <td><code>{{ job.origin_request_id or "—" }}</code></td>
+          <td><code>{{ job.created_trace_id or "—" }}</code></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10" class="muted">No Skill jobs recorded.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

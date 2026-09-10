@@ -29,6 +29,18 @@ async def trace_detail(request:Request,ident:str): data,error=await fetch(reques
 @router.get("/services",response_class=HTMLResponse)
 async def services(request:Request): data,error=await fetch(request,"/v1/services"); return templates(request).TemplateResponse(request,"services.html",{"items":data or [],"error":error})
 
+@router.get("/skills",response_class=HTMLResponse)
+async def skills_page(request:Request):
+    data,error=await fetch(request,"/v1/admin/skills")
+    data=data or {}
+    return templates(request).TemplateResponse(request,"skills.html",{
+        "service":data.get("service",{"configured":False,"ready":False,"status":"unavailable"}),
+        "skills":data.get("skills",[]),
+        "jobs":data.get("jobs",[]),
+        "capabilities":data.get("capabilities",{}),
+        "error":error,
+    })
+
 @router.get("/memory/operational",response_class=HTMLResponse)
 async def operational_memory(request:Request):
     allowed={"entry_type","scope","owner_user_id","enabled","limit","offset"}

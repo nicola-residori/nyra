@@ -12,3 +12,14 @@ def test_dependency_graph_validation():
     b=ExecutionStep(step_id="b",operation=NyraOperation.TURN_OFF,target=ExecutionTarget(reference="lampada",resource_type=NyraResourceType.LIGHT),depends_on=["a"])
     ExecutionPlan(plan_id="p",origin=PlanOrigin.SKILLS,validation_state=PlanValidationState.VALIDATED,steps=[a,b])
     with pytest.raises(ValidationError): ExecutionPlan(plan_id="p",origin=PlanOrigin.SKILLS,validation_state=PlanValidationState.VALIDATED,steps=[a,a])
+
+
+def test_execution_plan_accepts_behaviors():
+    plan = ExecutionPlan(
+        plan_id="pln_test",
+        origin=PlanOrigin.SKILLS,
+        validation_state=PlanValidationState.PROPOSED,
+        steps=[],
+        behaviors=[],
+    )
+    assert plan.behaviors == []

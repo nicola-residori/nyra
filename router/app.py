@@ -31,10 +31,20 @@ from router.api.wake_word_captures import router as wake_word_captures_router
 from router.api.speaker_id_admin import router as speaker_id_admin_router
 from router.api.users import router as users_router
 from router.api.memory_admin import router as memory_admin_router
+from router.api.capabilities import router as capabilities_router
+from router.skills_admin import SkillsAdminFacade, router as skills_admin_router
+from router.ha_capability import HomeAssistantApiClient, HomeAssistantCapabilityPort
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
-from router.identity_skill import IdentityQuerySkill
 from router.memory_client import MemoryClient
+from router.memory_skill_gateway import MemorySkillGateway
+from router.skills_client import SkillsClient, SkillsUnavailable
+from shared.protocol.skills import (
+    SkillCheckRequest,
+    SkillCorrelation,
+    SkillExecuteRequest,
+    SkillOutcome,
+)
 
 
 class _ContextPort:
@@ -47,8 +57,156 @@ class _MemoryPort:
         return {}
 
 
-class _SkillPort(IdentityQuerySkill):
-    pass
+class _NoSkillPort:
+    async def check(self, request, context, memory, pending_state):
+        return SkillMatch(
+            matched=False,
+            outcome=SkillOutcome.MISS,
+        )
+
+    async def execute(self, match, request, context, memory, pending_state):
+        return LifecycleDecision.failed("SKILL_NOT_CONFIGURED")
+
+
+class _RemoteSkillPort:
+    def __init__(self, client, memory_gateway=None):
+        self.client = client
+        self.memory_gateway = memory_gateway
+
+    @staticmethod
+    def _correlation(request, context):
+        if context.trace_id is None:
+            raise RuntimeError("Skills invocation requires the Router trace")
+        return SkillCorrelation(
+            request_id=request.request_id,
+            origin_request_id=request.origin_request_id,
+            trace_id=context.trace_id,
+        )
+
+    async def check(self, request, context, memory, pending_state):
+        payload = SkillCheckRequest(
+            correlation=self._correlation(request, context),
+            text=request.input.text,
+            language=request.language,
+            context=context.data,
+            pending_state=pending_state,
+        )
+        try:
+            response = await self.client.check(payload)
+        except SkillsUnavailable:
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.FAILED,
+                error_code="SKILLS_UNAVAILABLE",
+            )
+
+        if response.outcome is SkillOutcome.MISS:
+            return SkillMatch(matched=False, outcome=SkillOutcome.MISS)
+        if response.outcome is SkillOutcome.FAILED:
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.FAILED,
+                error_code=(
+                    response.error.code
+                    if response.error is not None
+                    else "SKILLS_FAILED"
+                ),
+            )
+        if response.outcome is SkillOutcome.NEEDS_CLARIFICATION:
+            metadata = response.match.metadata if response.match else {}
+            text = metadata.get("text")
+            pending = metadata.get("pending_state")
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.NEEDS_CLARIFICATION,
+                text=text if isinstance(text, str) else "",
+                pending_state=pending if isinstance(pending, dict) else {},
+            )
+        if response.match is None or not response.match.matched:
+            return SkillMatch(
+                matched=False,
+                outcome=SkillOutcome.FAILED,
+                error_code="SKILLS_INVALID_MATCH",
+            )
+        return SkillMatch(
+            matched=True,
+            skill_name=response.match.skill_name,
+            token=response.match.token,
+            memory_requirement=response.match.memory_requirement,
+            memory_query=response.match.memory_query,
+            outcome=SkillOutcome.HANDLED,
+            metadata=response.match.metadata,
+        )
+
+    async def execute(self, match, request, context, memory, pending_state):
+        from shared.protocol.skills import SkillMatch as ProtocolSkillMatch
+
+        protocol_match = ProtocolSkillMatch(
+            matched=True,
+            skill_name=match.skill_name,
+            token=match.token,
+            memory_requirement=match.memory_requirement,
+            memory_query=(
+                match.memory_query.query
+                if hasattr(match.memory_query, "query")
+                else match.memory_query
+            ),
+            metadata=match.metadata,
+        )
+        payload = SkillExecuteRequest(
+            correlation=self._correlation(request, context),
+            match=protocol_match,
+            text=request.input.text,
+            language=request.language,
+            context=context.data,
+            memory=memory,
+            pending_state=pending_state,
+        )
+        try:
+            response = await self.client.execute(payload)
+        except SkillsUnavailable:
+            return LifecycleDecision.failed("SKILLS_UNAVAILABLE")
+
+        if response.outcome is SkillOutcome.MISS:
+            return LifecycleDecision(
+                status=RequestStatus.FAILED,
+                llm_fallback=True,
+            )
+        if response.outcome is SkillOutcome.NEEDS_CLARIFICATION:
+            if response.text is None:
+                return LifecycleDecision.failed(
+                    "SKILLS_INVALID_CLARIFICATION"
+                )
+            return LifecycleDecision.needs_clarification(
+                response.text,
+                response.pending_state or {},
+            )
+        if response.outcome is SkillOutcome.FAILED:
+            return LifecycleDecision.failed(
+                response.error.code
+                if response.error is not None
+                else "SKILLS_FAILED"
+            )
+
+        router_operation = (
+            response.result.get("router_operation")
+            if isinstance(response.result, dict)
+            else None
+        )
+        if (
+            isinstance(router_operation, dict)
+            and router_operation.get("kind") == "MEMORY_MANAGEMENT"
+        ):
+            if self.memory_gateway is None:
+                return LifecycleDecision.failed("MEMORY_UNAVAILABLE")
+            return await self.memory_gateway.execute(
+                request=request,
+                context=context,
+                operation=router_operation,
+                pending_state=pending_state,
+            )
+
+        return LifecycleDecision.completed(response.text)
 
 
 class _LlmPort:
@@ -57,7 +215,8 @@ class _LlmPort:
 
 
 def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phrase_generator=None,
-               wake_word_dataset=None, speaker_id_admin=None, memory_client=None):
+               wake_word_dataset=None, speaker_id_admin=None, memory_client=None,
+               skills_client=None, ha_capability=None):
     settings = settings or RouterSettings.load()
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
@@ -92,15 +251,45 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         memory_client = MemoryClient(
             settings.memory_url, timeout=settings.memory_timeout_seconds
         )
+    if skills_client is None and settings.skills_url:
+        skills_client = SkillsClient(
+            settings.skills_url, timeout=settings.skills_timeout_seconds
+        )
+    if (
+        ha_capability is None
+        and settings.home_assistant_url
+        and settings.home_assistant_token
+    ):
+        ha_capability = HomeAssistantCapabilityPort(
+            HomeAssistantApiClient(
+                settings.home_assistant_url,
+                settings.home_assistant_token,
+                timeout=settings.home_assistant_timeout_seconds,
+            ),
+            observability=observability,
+        )
+    skills_admin = SkillsAdminFacade(skills_client, ha_capability=ha_capability)
     context_port = memory_client if memory_client is not None else _ContextPort()
     memory_port = memory_client if memory_client is not None else _MemoryPort()
+    memory_skill_gateway = (
+        MemorySkillGateway(memory_client)
+        if memory_client is not None
+        else None
+    )
     lifecycle = RequestLifecycleService(
         store=request_store,
         broker=event_broker,
         identity_port=audio_relay,
         context_port=context_port,
         memory_port=memory_port,
-        skill_port=_SkillPort(),
+        skill_port=(
+            _RemoteSkillPort(
+                skills_client,
+                memory_gateway=memory_skill_gateway,
+            )
+            if skills_client is not None
+            else _NoSkillPort()
+        ),
         llm_port=_LlmPort(),
         clarification_timeout_seconds=settings.clarification_timeout_seconds,
         observability=observability,
@@ -141,6 +330,10 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.wake_word_dataset = wake_word_dataset
     app.state.speaker_id_admin = speaker_id_admin
     app.state.memory_client = memory_client
+    app.state.memory_skill_gateway = memory_skill_gateway
+    app.state.skills_client = skills_client
+    app.state.skills_admin = skills_admin
+    app.state.ha_capability = ha_capability
     app.state.observability = observability
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
@@ -158,6 +351,8 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(speaker_id_admin_router)
     app.include_router(users_router)
     app.include_router(memory_admin_router)
+    app.include_router(skills_admin_router)
+    app.include_router(capabilities_router)
     return app
 
 

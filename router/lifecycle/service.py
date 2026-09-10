@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 from time import monotonic
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
@@ -25,6 +25,7 @@ from shared.protocol.events import (
 )
 from shared.protocol.observability import LogKind, LogLevel, LogRecord
 from shared.protocol.memory import MemoryRequirement, SemanticMemoryType
+from shared.protocol.skills import SkillOutcome
 from shared.protocol.requests import (
     CloseReason, ExecutionType, NyraRequest, NyraRequestResponse, NyraResponseBody, RequestStatus,
 )
@@ -38,6 +39,7 @@ class LifecycleConflict(RuntimeError):
 class ContextResult:
     data: dict[str, Any]
     semantic_memory_required: bool = False
+    trace_id: str | None = None
 
 
 class MemoryAccessError(RuntimeError):
@@ -55,9 +57,15 @@ class MemoryQuery:
 @dataclass(frozen=True)
 class SkillMatch:
     matched: bool
+    skill_name: str | None = None
     token: str | None = None
     memory_requirement: MemoryRequirement = MemoryRequirement.NONE
     memory_query: MemoryQuery | str | None = None
+    outcome: SkillOutcome = SkillOutcome.HANDLED
+    text: str | None = None
+    pending_state: dict[str, Any] | None = None
+    error_code: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -67,6 +75,7 @@ class LifecycleDecision:
     pending_state: dict[str, Any] | None = None
     close_reason: CloseReason | None = None
     error: dict[str, Any] | None = None
+    llm_fallback: bool = False
 
     @classmethod
     def completed(cls, text: str | None = None):
@@ -104,6 +113,20 @@ class SkillPort(Protocol):
 
 class LlmPort(Protocol):
     async def reason(self, request: NyraRequest, context: ContextResult, memory: dict[str, Any] | None, pending_state: dict[str, Any] | None) -> LifecycleDecision: ...
+
+
+_PROTECTED_CAPABILITY_SKILLS = {
+    "home_assistant_action",
+    "delayed_action",
+    "behavior",
+    "memory_management",
+}
+
+
+def skill_interaction_state(skill_name: str | None) -> InteractionState:
+    if skill_name in _PROTECTED_CAPABILITY_SKILLS:
+        return InteractionState.USING_TOOL
+    return InteractionState.PROCESSING_LOCAL
 
 
 class RequestLifecycleService:
@@ -460,10 +483,40 @@ class RequestLifecycleService:
         context = ContextResult(
             data=context_data,
             semantic_memory_required=context.semantic_memory_required,
+            trace_id=trace_id,
         )
         memory = None
         match = await self.skill_port.check(request, context, None, pending_state)
-        if match.matched:
+        if match.outcome is SkillOutcome.NEEDS_CLARIFICATION:
+            decision = LifecycleDecision.needs_clarification(
+                match.text or "",
+                match.pending_state or {},
+            )
+        elif match.outcome is SkillOutcome.FAILED:
+            decision = LifecycleDecision.failed(
+                match.error_code or "SKILLS_FAILED"
+            )
+        elif match.outcome is SkillOutcome.MISS:
+            self._log(
+                request,
+                trace_id,
+                span_id,
+                "MEMORY_SEARCH_SKIPPED",
+                params={"reason": "SKILL_MISS"},
+            )
+            await self._state(
+                request,
+                trace_id,
+                span_id,
+                InteractionState.PROCESSING_GLOBAL,
+            )
+            decision = await self.llm_port.reason(
+                request,
+                context,
+                memory,
+                pending_state,
+            )
+        elif match.matched:
             if match.memory_requirement is MemoryRequirement.NONE:
                 self._log(
                     request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",
@@ -508,7 +561,31 @@ class RequestLifecycleService:
             if match.memory_requirement is MemoryRequirement.NONE:
                 decision = None
             if decision is None:
-                decision = await self.skill_port.execute(match, request, context, memory, pending_state)
+                stage = skill_interaction_state(match.skill_name)
+                if stage is InteractionState.USING_TOOL:
+                    await self._state(
+                        request, trace_id, span_id, InteractionState.USING_TOOL
+                    )
+                decision = await self.skill_port.execute(
+                    match,
+                    request,
+                    context,
+                    memory,
+                    pending_state,
+                )
+            if decision.llm_fallback:
+                await self._state(
+                    request,
+                    trace_id,
+                    span_id,
+                    InteractionState.PROCESSING_GLOBAL,
+                )
+                decision = await self.llm_port.reason(
+                    request,
+                    context,
+                    memory,
+                    pending_state,
+                )
         else:
             self._log(
                 request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import re
 
-from router.lifecycle.service import LifecycleDecision, SkillMatch
 from shared.protocol.memory import MemoryRequirement
+from shared.protocol.skills import (
+    SkillCheckRequest,
+    SkillExecuteRequest,
+    SkillMatch,
+)
 
 
 _QUERY_PHRASES = {
@@ -36,24 +40,28 @@ def _normalized(value: str) -> str:
 
 
 class IdentityQuerySkill:
-    async def check(self, request, context, memory, pending_state):
+    name = "identity_query"
+    priority = 100
+
+    def matches(self, request: SkillCheckRequest) -> bool:
         language = _language(request.language)
-        matched = _normalized(request.input.text) in _QUERY_PHRASES[language]
+        return _normalized(request.text) in _QUERY_PHRASES[language]
+
+    def match(self, request: SkillCheckRequest | None = None) -> SkillMatch:
         return SkillMatch(
-            matched=matched,
-            token="identity_query" if matched else None,
+            matched=True,
+            skill_name=self.name,
+            token=self.name,
             memory_requirement=MemoryRequirement.NONE,
         )
 
-    async def execute(self, match, request, context, memory, pending_state):
-        if not match.matched or match.token != "identity_query":
-            raise ValueError("identity query skill requires a matching request")
-        language = _language(request.language)
-        identity = context.data.get("identity") or {}
+    def execute(self, request: SkillExecuteRequest) -> str:
+        identity = request.context.get("identity") or {}
         display_name = identity.get("display_name")
+        language = _language(request.language)
+
         if isinstance(display_name, str) and display_name.strip():
             name = " ".join(display_name.split())
-            text = f"Sei {name}." if language == "it" else f"You are {name}."
-        else:
-            text = _UNKNOWN_RESPONSES[language]
-        return LifecycleDecision.completed(text)
+            return f"Sei {name}." if language == "it" else f"You are {name}."
+
+        return _UNKNOWN_RESPONSES[language]

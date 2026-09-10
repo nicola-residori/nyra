@@ -14,3 +14,26 @@ def test_idempotency_table_is_exact_and_unknown_outcome_is_representable():
     assert all(is_idempotent_operation(x) for x in yes)
     assert all(not is_idempotent_operation(x) for x in {NyraOperation.TOGGLE,NyraOperation.INCREASE,NyraOperation.DECREASE,NyraOperation.TRIGGER})
     c=CapabilityCorrelation(trace_id=new_trace_id()); resp=ExecuteResponse(correlation=c,outcome=CommonOutcome.UNKNOWN_OUTCOME); assert resp.outcome is CommonOutcome.UNKNOWN_OUTCOME
+
+
+def test_automation_crud_contracts_are_typed_and_do_not_expose_ha_escape_hatches():
+    required = {
+        "AutomationCreateRequest",
+        "AutomationCreateResponse",
+        "AutomationReadRequest",
+        "AutomationReadResponse",
+        "AutomationUpdateRequest",
+        "AutomationUpdateResponse",
+        "AutomationDeleteRequest",
+        "AutomationDeleteResponse",
+    }
+    assert required.issubset(globals())
+
+    forbidden = {"token", "url", "service", "service_data"}
+    for model in (
+        AutomationCreateRequest,
+        AutomationReadRequest,
+        AutomationUpdateRequest,
+        AutomationDeleteRequest,
+    ):
+        assert forbidden.isdisjoint(model.model_fields)
