@@ -7,6 +7,8 @@ from typing import Any
 import httpx
 
 from shared.protocol.capabilities import (
+    AutomationCreateRequest,
+    AutomationCreateResponse,
     CapabilityCorrelation,
     ExecuteRequest,
     ExecuteResponse,
@@ -88,6 +90,27 @@ class RouterHomeAssistantCapabilityClient:
             )
             response.raise_for_status()
         return ExecuteResponse.model_validate(response.json())
+
+
+    async def automation_create(
+        self,
+        request: AutomationCreateRequest,
+        trusted_context: dict[str, Any],
+    ) -> AutomationCreateResponse:
+        async with httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=self.timeout,
+            transport=self.transport,
+        ) as client:
+            response = await client.post(
+                "/v1/capabilities/home-assistant/automations/create",
+                json={
+                    "request": request.model_dump(mode="json"),
+                    "trusted_context": trusted_context,
+                },
+            )
+            response.raise_for_status()
+        return AutomationCreateResponse.model_validate(response.json())
 
 
 _ACTIONS = {

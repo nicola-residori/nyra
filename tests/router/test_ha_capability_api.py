@@ -87,3 +87,58 @@ def test_capability_api_never_accepts_home_assistant_credentials_in_request(tmp_
 
     assert response.status_code == 422
     assert capability.calls == []
+
+def test_automation_create_api_uses_router_owned_capability(tmp_path):
+    from shared.protocol.behavior import (
+        Behavior,
+        BehaviorLifecycle,
+        BehaviorTrigger,
+    )
+    from shared.protocol.capabilities import AutomationCreateResponse
+    from shared.protocol.common import CommonOutcome
+
+    class AutomationCapability:
+        def __init__(self):
+            self.calls = []
+
+        async def create_automation(self, request, trusted_context):
+            self.calls.append((request, trusted_context))
+            return AutomationCreateResponse(
+                correlation=request.correlation,
+                outcome=CommonOutcome.SUCCESS,
+                automation_id="nyra_api",
+                behavior=request.behavior,
+            )
+
+    capability = AutomationCapability()
+    app = create_app(
+        RouterSettings(database_path=tmp_path / "router.db"),
+        ha_capability=capability,
+    )
+    corr = CapabilityCorrelation(
+        request_id=new_request_id(),
+        trace_id=new_trace_id(),
+    )
+    behavior = Behavior(
+        behavior_id="api",
+        lifecycle=BehaviorLifecycle.PERSISTENT,
+        triggers=[BehaviorTrigger(kind="sun", expression="sunset")],
+        actions=[],
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/capabilities/home-assistant/automations/create",
+            json={
+                "request": {
+                    "correlation": corr.model_dump(mode="json"),
+                    "behavior": behavior.model_dump(mode="json"),
+                },
+                "trusted_context": {"allowed_resource_ids": []},
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["automation_id"] == "nyra_api"
+    assert len(capability.calls) == 1
+    assert capability.calls[0][1] == {"allowed_resource_ids": []}

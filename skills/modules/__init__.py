@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from skills.modules.behavior import BehaviorSkill
 from skills.modules.delayed_action import DelayedActionSkill
 from skills.modules.home_assistant import (
     HomeAssistantActionSkill,
@@ -39,6 +40,16 @@ def register_builtin_skills(
                     executor=delayed_action.execute,
                 )
             )
+
+        behavior = BehaviorSkill(home_assistant_capability)
+        registry.register(
+            SkillDefinition(
+                name=behavior.name,
+                priority=behavior.priority,
+                matcher=behavior.matches,
+                executor=behavior.execute,
+            )
+        )
 
         home_assistant = HomeAssistantActionSkill(home_assistant_capability)
         registry.register(

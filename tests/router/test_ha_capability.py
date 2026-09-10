@@ -284,3 +284,186 @@ async def test_resolved_resource_is_detached_from_native_ha_state_payload():
 
     assert response.candidates[0].resource.resource_id == "light.kitchen"
     assert response.candidates[0].resource.name == "Kitchen Light"
+
+from shared.protocol.common import CommonOutcome
+
+@pytest.mark.asyncio
+async def test_automation_transport_uses_nyra_adapter_endpoint():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.method, request.url.path))
+        if request.method == "GET" and request.url.path == "/api/nyra/automations":
+            return httpx.Response(200, json=[])
+        if request.method == "POST":
+            return httpx.Response(200, json=request.json() if hasattr(request, "json") else {})
+        return httpx.Response(200, json={"result": "ok"})
+
+    client = HomeAssistantApiClient(
+        "http://homeassistant.local:8123",
+        "secret-token",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert await client.automation_list() == []
+    assert seen == [("GET", "/api/nyra/automations")]
+
+
+@pytest.mark.asyncio
+async def test_create_automation_marks_nyra_ownership_and_one_shot_cleanup():
+    from shared.protocol.behavior import (
+        Behavior,
+        BehaviorAction,
+        BehaviorActionType,
+        BehaviorLifecycle,
+        BehaviorTrigger,
+    )
+    from shared.protocol.capabilities import AutomationCreateRequest
+    from shared.protocol.execution_common import ExecutionStep, NyraOperation
+
+    class FakeClient:
+        def __init__(self):
+            self.writes = []
+
+        async def automation_list(self):
+            return []
+
+        async def automation_write(self, automation_id, config):
+            self.writes.append((automation_id, config))
+            return config
+
+    fake = FakeClient()
+    capability = HomeAssistantCapabilityPort(fake)
+    behavior = Behavior(
+        behavior_id="morning",
+        lifecycle=BehaviorLifecycle.ONE_SHOT,
+        triggers=[BehaviorTrigger(kind="time", expression="2026-09-11T07:30:00+02:00")],
+        actions=[
+            BehaviorAction(
+                type=BehaviorActionType.ACTION,
+                action=ExecutionStep(
+                    step_id="a",
+                    operation=NyraOperation.TURN_ON,
+                    target={
+                        "reference": "desk light",
+                        "resource_type": NyraResourceType.LIGHT,
+                        "resolved": {
+                            "resource_id": "light.desk",
+                            "resource_type": NyraResourceType.LIGHT,
+                            "semantic_reference": "desk light",
+                        },
+                    },
+                ),
+            )
+        ],
+    )
+
+    response = await capability.create_automation(
+        AutomationCreateRequest(correlation=correlation(), behavior=behavior),
+        {},
+    )
+
+    assert response.outcome is CommonOutcome.SUCCESS
+    automation_id, native = fake.writes[0]
+    assert automation_id.startswith("nyra_")
+    assert native["description"].startswith("[NYRA managed_by=NYRA ")
+    assert native["actions"][-1] == {
+        "action": "nyra.complete_one_shot",
+        "data": {"automation_id": automation_id},
+    }
+
+
+@pytest.mark.asyncio
+async def test_probable_equivalent_manual_automation_requires_clarification():
+    from shared.protocol.behavior import (
+        Behavior,
+        BehaviorAction,
+        BehaviorActionType,
+        BehaviorLifecycle,
+        BehaviorTrigger,
+    )
+    from shared.protocol.capabilities import AutomationCreateRequest
+    from shared.protocol.execution_common import ExecutionStep, NyraOperation
+
+    class FakeClient:
+        async def automation_list(self):
+            return [{
+                "id": "manual",
+                "alias": "Manual",
+                "triggers": [{"trigger": "time", "at": "07:30:00"}],
+                "conditions": [],
+                "actions": [{"action": "light.turn_on", "target": {"entity_id": "light.desk"}}],
+            }]
+        async def automation_write(self, automation_id, config):
+            raise AssertionError("must not duplicate probable manual equivalent")
+
+    behavior = Behavior(
+        behavior_id="daily",
+        lifecycle=BehaviorLifecycle.PERSISTENT,
+        triggers=[BehaviorTrigger(kind="time", expression="07:30:00")],
+        actions=[
+            BehaviorAction(
+                type=BehaviorActionType.ACTION,
+                action=ExecutionStep(
+                    step_id="a",
+                    operation=NyraOperation.TURN_ON,
+                    target={
+                        "reference": "desk light",
+                        "resource_type": NyraResourceType.LIGHT,
+                        "resolved": {
+                            "resource_id": "light.desk",
+                            "resource_type": NyraResourceType.LIGHT,
+                            "semantic_reference": "desk light",
+                        },
+                    },
+                ),
+            )
+        ],
+    )
+    response = await HomeAssistantCapabilityPort(FakeClient()).create_automation(
+        AutomationCreateRequest(correlation=correlation(), behavior=behavior),
+        {},
+    )
+    assert response.outcome is CommonOutcome.AMBIGUOUS
+    assert response.error.code == "PROBABLE_EQUIVALENT_AUTOMATION"
+
+
+@pytest.mark.asyncio
+async def test_manual_automation_cannot_be_updated_or_deleted():
+    from shared.protocol.behavior import Behavior, BehaviorLifecycle
+    from shared.protocol.capabilities import AutomationDeleteRequest, AutomationUpdateRequest
+
+    class FakeClient:
+        async def automation_read(self, automation_id):
+            return {"id": automation_id, "alias": "Manual automation"}
+
+        async def automation_write(self, automation_id, config):
+            raise AssertionError("manual automation must not be updated")
+
+        async def automation_delete(self, automation_id):
+            raise AssertionError("manual automation must not be deleted")
+
+    capability = HomeAssistantCapabilityPort(FakeClient())
+    behavior = Behavior(
+        behavior_id="x",
+        lifecycle=BehaviorLifecycle.PERSISTENT,
+        triggers=[],
+        actions=[],
+    )
+    update = await capability.update_automation(
+        AutomationUpdateRequest(
+            correlation=correlation(),
+            automation_id="manual",
+            behavior=behavior,
+        ),
+        {},
+    )
+    delete = await capability.delete_automation(
+        AutomationDeleteRequest(
+            correlation=correlation(),
+            automation_id="manual",
+        ),
+        {},
+    )
+    assert update.outcome is CommonOutcome.DENIED
+    assert delete.outcome is CommonOutcome.DENIED

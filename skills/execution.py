@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, Protocol
-from shared.protocol.capabilities import CapabilityCorrelation, ExecuteRequest, ExecuteResponse, ResolveCardinality, ResolveResponse, ResolveStatus, ResourceReference
+from shared.protocol.capabilities import AutomationCreateRequest, CapabilityCorrelation, ExecuteRequest, ExecuteResponse, ResolveCardinality, ResolveResponse, ResolveStatus, ResourceReference
 from shared.protocol.common import CommonOutcome
 from shared.protocol.execution import ExecutionPlan, ExecutionResult, StepResult
 from shared.protocol.execution_common import ExecutionStatus, PlanValidationState, StepStatus
@@ -8,6 +8,7 @@ from shared.protocol.execution_common import ExecutionStatus, PlanValidationStat
 class ExecutionCapability(Protocol):
     async def resolve(self, reference: ResourceReference, trusted_context: dict[str, Any], *, correlation: CapabilityCorrelation) -> ResolveResponse: ...
     async def execute(self, request: ExecuteRequest, trusted_context: dict[str, Any]) -> ExecuteResponse: ...
+    async def automation_create(self, request: AutomationCreateRequest, trusted_context: dict[str, Any]): ...
 
 class InvalidExecutionPlan(ValueError): pass
 
@@ -73,6 +74,17 @@ class ExecutionPlanExecutor:
                     results[step.step_id] = StepResult(step_id=step.step_id, status=StepStatus.COMPLETED, result=response.result)
                 else:
                     results[step.step_id] = StepResult(step_id=step.step_id, status=StepStatus.FAILED, error=response.error.code if response.error else response.outcome.value)
+        behavior_failed = False
+        for behavior in plan.behaviors:
+            response = await self.capability.automation_create(
+                AutomationCreateRequest(
+                    correlation=correlation,
+                    behavior=behavior,
+                ),
+                trusted_context,
+            )
+            if response.outcome is not CommonOutcome.SUCCESS:
+                behavior_failed = True
         ordered = [results[s.step_id] for s in plan.steps]
-        overall = ExecutionStatus.COMPLETED if all(r.status is StepStatus.COMPLETED for r in ordered) else ExecutionStatus.PARTIALLY_COMPLETED
+        overall = ExecutionStatus.COMPLETED if (not behavior_failed and all(r.status is StepStatus.COMPLETED for r in ordered)) else ExecutionStatus.PARTIALLY_COMPLETED
         return ExecutionResult(plan_id=plan.plan_id, status=overall, steps=ordered)

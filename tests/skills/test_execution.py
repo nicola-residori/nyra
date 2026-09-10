@@ -44,3 +44,66 @@ def test_cycle_rejected_by_contract():
 def test_no_direct_ha_transport():
     import skills.execution as module
     src=inspect.getsource(module); assert "/api/states" not in src and "/api/services/" not in src and "home_assistant_token" not in src
+
+@pytest.mark.asyncio
+async def test_execution_plan_behaviors_use_same_automation_materialization_path():
+    from shared.protocol.execution_common import ExecutionStep
+    from shared.protocol.behavior import (
+        Behavior,
+        BehaviorAction,
+        BehaviorActionType,
+        BehaviorLifecycle,
+        BehaviorTrigger,
+    )
+
+    class BehaviorCap(Cap):
+        def __init__(self):
+            super().__init__()
+            self.automation_calls = []
+
+        async def automation_create(self, request, trusted_context):
+            from shared.protocol.capabilities import AutomationCreateResponse
+            self.automation_calls.append((request, trusted_context))
+            return AutomationCreateResponse(
+                correlation=request.correlation,
+                outcome=CommonOutcome.SUCCESS,
+                automation_id="nyra_plan_behavior",
+                behavior=request.behavior,
+            )
+
+    behavior = Behavior(
+        behavior_id="plan_behavior",
+        lifecycle=BehaviorLifecycle.PERSISTENT,
+        triggers=[BehaviorTrigger(kind="sun", expression="sunset")],
+        actions=[
+            BehaviorAction(
+                type=BehaviorActionType.ACTION,
+                action=ExecutionStep(
+                    step_id="behavior_action",
+                    operation=NyraOperation.TURN_ON,
+                    target={
+                        "reference": "garden light",
+                        "resource_type": NyraResourceType.LIGHT,
+                    },
+                ),
+            )
+        ],
+    )
+    execution_plan = ExecutionPlan(
+        plan_id="with_behavior",
+        origin=PlanOrigin.SKILLS,
+        validation_state=PlanValidationState.VALIDATED,
+        steps=[],
+        behaviors=[behavior],
+    )
+    capability = BehaviorCap()
+
+    result = await ExecutionPlanExecutor(capability).execute(
+        execution_plan,
+        correlation=CORR,
+        trusted_context={"allowed_resource_ids": ["light.garden"]},
+    )
+
+    assert result.status is ExecutionStatus.COMPLETED
+    assert len(capability.automation_calls) == 1
+    assert capability.automation_calls[0][0].behavior.behavior_id == "plan_behavior"

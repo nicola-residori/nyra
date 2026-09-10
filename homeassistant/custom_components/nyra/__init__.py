@@ -7,6 +7,10 @@ from .protocol_bootstrap import ensure_shared_protocol
 ensure_shared_protocol()
 
 from .client import NyraRouterClient
+from .automation_capability import (
+    disable_automation_capability,
+    register_automation_capability,
+)
 from .audio import (
     HomeAssistantAudioIngress,
     RouterAudioStreamClient,
@@ -116,6 +120,7 @@ async def async_setup_entry(hass, entry) -> bool:
     )
     if not await client.async_ready():
         raise ConfigEntryNotReady("Nyra Router is not ready")
+    register_automation_capability(hass)
 
     async def resolve_speaker_targets():
         device_registry = dr.async_get(hass)
@@ -232,6 +237,7 @@ async def async_unload_entry(hass, entry) -> bool:
         async_unregister_enrollment_panel(hass)
         runtime.enrollment_panel_registered = False
     unregister_enrollment_services(hass)
+    disable_automation_capability(hass)
     unregister_speaking_restore_listener(runtime)
     await unregister_audio_ingress(hass, runtime)
     await runtime.events.stop()
