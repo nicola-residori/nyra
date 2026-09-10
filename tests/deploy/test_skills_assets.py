@@ -96,3 +96,10 @@ def test_skills_deployment_guide_documents_persistence_backup_restore_and_gate()
     assert "--force" in guide
     assert "explicit" in guide.casefold()
     assert "Task 19" in guide
+
+
+
+def test_verifier_imports_skills_with_same_python_path_as_systemd():
+    script = read("deploy/verify/skills.sh")
+
+    assert 'PYTHONPATH="$APP_DIR" "$APP_DIR/.venv/bin/python" -c' in script

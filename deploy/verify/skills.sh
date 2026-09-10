@@ -24,7 +24,7 @@ systemctl is-active --quiet "$SERVICE_NAME"
 test "$(systemctl show "$SERVICE_NAME" -p User --value)" = "root"
 test "$(systemctl show "$SERVICE_NAME" -p WorkingDirectory --value)" = "$APP_DIR"
 
-"$APP_DIR/.venv/bin/python" -c \
+PYTHONPATH="$APP_DIR" "$APP_DIR/.venv/bin/python" -c \
   "import fastapi, httpx, pydantic, uvicorn; from skills.app import create_app"
 
 health_json=$(curl --silent --show-error --fail "$BASE_URL/health")
