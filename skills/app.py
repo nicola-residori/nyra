@@ -105,6 +105,10 @@ def create_app(
     async def execute(request: SkillExecuteRequest) -> SkillExecuteResponse:
         return await service.execute(request)
 
+    @app.get("/v1/skills")
+    def list_skills():
+        return service.list_skills()
+
     @app.get("/v1/jobs")
     def list_jobs():
         return [job.model_dump(mode="json") for job in service.list_jobs()]

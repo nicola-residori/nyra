@@ -70,6 +70,19 @@ class SkillRegistry:
     def get(self, name: str) -> SkillDefinition | None:
         return self._definitions.get(name)
 
+    def list_metadata(self) -> list[dict[str, object]]:
+        return [
+            {
+                "name": definition.name,
+                "priority": definition.priority,
+                "enabled": True,
+            }
+            for definition in sorted(
+                self._definitions.values(),
+                key=lambda item: (-item.priority, item.name),
+            )
+        ]
+
     def is_ready(self) -> bool:
         priorities = [
             definition.priority for definition in self._definitions.values()

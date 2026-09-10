@@ -64,6 +64,12 @@ class SkillsService:
         if inspect.isawaitable(result):
             await result
 
+    def list_skills(self):
+        if self.registry is None:
+            return []
+        metadata = getattr(self.registry, "list_metadata", None)
+        return metadata() if metadata is not None else []
+
     def list_jobs(self):
         return self.job_store.list() if self.job_store is not None else []
 

@@ -32,6 +32,7 @@ from router.api.speaker_id_admin import router as speaker_id_admin_router
 from router.api.users import router as users_router
 from router.api.memory_admin import router as memory_admin_router
 from router.api.capabilities import router as capabilities_router
+from router.skills_admin import SkillsAdminFacade, router as skills_admin_router
 from router.ha_capability import HomeAssistantApiClient, HomeAssistantCapabilityPort
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
@@ -267,6 +268,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
             ),
             observability=observability,
         )
+    skills_admin = SkillsAdminFacade(skills_client, ha_capability=ha_capability)
     context_port = memory_client if memory_client is not None else _ContextPort()
     memory_port = memory_client if memory_client is not None else _MemoryPort()
     memory_skill_gateway = (
@@ -330,6 +332,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.memory_client = memory_client
     app.state.memory_skill_gateway = memory_skill_gateway
     app.state.skills_client = skills_client
+    app.state.skills_admin = skills_admin
     app.state.ha_capability = ha_capability
     app.state.observability = observability
     app.state.events = event_broker
@@ -348,6 +351,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(speaker_id_admin_router)
     app.include_router(users_router)
     app.include_router(memory_admin_router)
+    app.include_router(skills_admin_router)
     app.include_router(capabilities_router)
     return app
 
