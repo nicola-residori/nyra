@@ -131,7 +131,7 @@ def parse_delayed_action(text: str, language: str) -> ParsedDelayedAction | None
 
 class DelayedActionSkill:
     name = "delayed_action"
-    priority = 100
+    priority = 105
 
     def __init__(self, capability: Any, scheduler: Any) -> None:
         self.capability = capability

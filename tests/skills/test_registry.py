@@ -6,6 +6,7 @@ import pytest
 
 from shared.protocol.ids import new_request_id, new_trace_id
 from shared.protocol.skills import SkillCheckRequest, SkillCorrelation
+from skills.modules import register_builtin_skills
 from skills.registry import (
     SkillDefinition,
     SkillRegistry,
@@ -89,3 +90,20 @@ def test_router_visible_match_exposes_metadata_not_module_reference():
     assert not hasattr(match, "matcher")
     assert not hasattr(match, "executor")
     assert not hasattr(match, "module")
+
+
+
+def test_builtin_registry_with_all_production_skills_is_ready():
+    registry = SkillRegistry()
+
+    register_builtin_skills(
+        registry,
+        home_assistant_capability=object(),
+        job_scheduler=object(),
+    )
+
+    metadata = registry.list_metadata()
+    priorities = [item["priority"] for item in metadata]
+
+    assert len(priorities) == len(set(priorities))
+    assert registry.is_ready() is True
