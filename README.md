@@ -22,6 +22,7 @@ Nyra v1 is under active development.
 - **Milestone 2 — Home Assistant adapter and Nyra speaker integration: complete.**
 - **Milestone 3 — Identity and Voice: complete.**
 - **Milestone 4 — Memory and context: complete and deployed in production.**
+- **Milestone 5 — Skills: complete and deployed in production.**
 
 Milestones 2 and 3 established the production Home Assistant speaker path and
 trusted voice identity lifecycle. A physical Nyra speaker has been validated
@@ -30,7 +31,7 @@ service, including enrollment, Wake Word sample capture/export, session-scoped
 identity, localized identity responses, observability, and persistent fresh-CT
 deployment.
 
-The previous implementation remains only a functional reference for specialist services that have not yet been migrated to the Nyra v1 lifecycle.
+The remaining specialist migration is Milestone 6 LLM access; deterministic Skills and Home Assistant capability execution now use the Nyra v1 Router lifecycle.
 
 ## Milestone 2 capabilities
 
@@ -68,6 +69,19 @@ The previous implementation remains only a functional reference for specialist s
 - Debian 12 service bootstrap, readiness and reboot verification, consistent backup, guarded restore, and rollback documentation.
 - Localized identity and failure responses without spoken technical IDs.
 
+
+## Milestone 5 capabilities
+
+- Dedicated deterministic Skills service with a stable Router/Skills protocol.
+- Router-owned Home Assistant resource resolution and capability execution; Skills has no direct Home Assistant credentials.
+- Deterministic light/switch/cover actions with ambiguity-safe target clarification.
+- Persisted ephemeral Jobs with restart recovery semantics and Admin visibility.
+- Persistent and one-shot Behaviors materialized only through the Router-owned Home Assistant automation capability.
+- Explicit remember, forget, and supersede intents routed through the Router-owned Memory authorization gateway.
+- Distributed Skills/capability spans preserving request, trace, parent-child, and async origin correlation.
+- Router-backed Nyra Admin diagnostics for registered Skills, Jobs, service readiness, and capability status.
+- Future LLM action proposals constrained to Router -> Skills validation/materialization -> Router capability.
+- Reproducible Debian 12/systemd deployment, verification, backup, guarded restore, and physical production validation.
 
 ## Documentation
 

@@ -16,6 +16,18 @@ verified.
 
 Milestone 4 — Memory and Context — is complete and deployed in production.
 
+Milestone 5 — Skills — is complete and deployed in production.
+
+The production M5 implementation uses a dedicated deterministic `nyra-skills`
+service behind the Router trust boundary. Skills receives trusted context and
+correlation from Router, never Home Assistant credentials. Router owns Home
+Assistant resolution/execution and Nyra-managed automation capabilities.
+Deterministic Home Assistant actions, target clarification, restart-safe
+ephemeral jobs, persistent Behaviors, explicit Memory management Skills,
+Router-backed Admin diagnostics, and distributed Router/Skills/capability
+observability are deployed and physically verified.
+
+
 The production M4 implementation includes a dedicated SQLite/WAL Memory service,
 typed operational and semantic contracts, deterministic USER → FAMILY → SYSTEM
 resolution, identity-isolated semantic search using the local
@@ -70,7 +82,7 @@ Speaker-ID required no M4 production changes.
 ## Deployment
 
 - `nyra-memory`: CT `105`, `192.168.0.13`, port `8090`
-
+- `nyra-skills`: dedicated Debian 12 CT/service, port `8090`
 - `nyra-router`: CT `108`, `192.168.0.16`, port `8090`
 - `nyra-admin`: CT `108`, `192.168.0.16`, port `80`
 - `nyra-speaker-id`: CT `106`, `192.168.0.14`, port `8090`
@@ -103,6 +115,49 @@ create/read/search/confirm/delete was also exercised through Router, returned
 the production multilingual embedding model and a similarity result, and was
 cleaned up afterward. CT108's `.env`, runtime `data/`, and `backups/` were
 preserved during repository alignment.
+
+### Milestone 5 production verification
+
+M5 production deployment and physical verification completed on 2026-09-10.
+The deployed Router repository revision is
+`348d2d8738132713479d32c1a94f84b2d458a13d`. The dedicated Skills service uses
+`/opt/nyra-skills` for replaceable application code,
+`/var/lib/nyra-skills/jobs.sqlite3` for persistent job state, and
+`/etc/nyra/skills.env` for operator-managed configuration. The legacy
+`/opt/nyra-skills/.env` was removed after successful deployment gates, and the
+active Skills configuration contains no direct Home Assistant URL/token.
+
+The final local regression before deployment completed with 738 passed tests
+and two known non-blocking dependency deprecation warnings. During deployment,
+two production-discovered defects were fixed with permanent regression
+coverage: duplicate builtin Skill priorities preventing readiness, and the
+deployment verifier missing the production `PYTHONPATH`. The corrected
+repository verifier then passed against the deployed service.
+
+Physical verification exercised the real production boundaries. An exact
+Home Assistant resolve returned
+`light.mansarda_scrivania_bianca_lampada`; the authorized light was changed from
+on to off through Skills -> Router Home Assistant capability -> Home Assistant
+and restored to its original on state. The same distributed trace contained
+Skills execution plus Router `ha.resolve` and `ha.execute` spans with
+parent-child correlation. An ambiguous `lampada` reference returned two
+candidates and `NEEDS_CLARIFICATION` without executing either target.
+
+A disposable Nyra-managed Behavior was created, read back with the `NYRA`
+ownership marker, and deleted; a subsequent read returned `NOT_FOUND`. An
+explicit semantic Memory marker was created through Router -> Skills -> Router
+Memory management and then deleted. A far-future disposable job remained
+`SCHEDULED` across a controlled `nyra-skills.service` restart, was visible
+through Router-backed Admin diagnostics, and was then cancelled. SQLite
+integrity remained `ok`, Skills and Router returned ready after restart, and
+the Skills systemd service remained enabled/active.
+
+Pre-M5 rollback archives remain checksum-valid and readable:
+`/var/backups/nyra-skills/pre-m5-20260910T132332Z.tar.gz` and
+`/var/backups/nyra-router/pre-m5-20260910T134732Z.tar.gz`. Verification was
+non-destructive because production remained healthy; no restore was performed.
+The Home Assistant adapter backup created for the coordinated deployment also
+remains the rollback reference for the M5 Home Assistant capability change.
 
 The Speaker-ID container is a fresh Debian 12 deployment built by
 `deploy/bootstrap/speaker-id.sh`. It runs as the unprivileged
@@ -203,11 +258,11 @@ Router and Admin remain separate applications. Installation-specific Home Assist
 
 ## Migration status
 
-Home Assistant, the Speaker-ID/voice-identity domain, and Memory are migrated to
-the Nyra v1 Router lifecycle through Milestone 4. Production Skills and LLM
-specialist integrations are not yet migrated. Existing implementations may
-remain operational as functional references until their Nyra v1 replacements
-are validated.
+Home Assistant, the Speaker-ID/voice-identity domain, Memory, and Skills are
+migrated to the Nyra v1 Router lifecycle through Milestone 5. The Router owns
+the Home Assistant capability boundary used by Skills. LLM specialist
+integration remains scheduled for Milestone 6; no LLM-proposed side effect may
+bypass the Skills validation/action gate.
 
 ## Known follow-up work
 
@@ -215,15 +270,14 @@ These items do not block the completed Milestone 3:
 
 - perform an additional unknown-speaker physical identity check when another
   speaker is available
-- migrate Skills and Router-owned Home Assistant capabilities in Milestone 5
-- migrate LLM access in Milestone 6
+- migrate LLM access in Milestone 6 through the existing Router -> Skills action gate
 - eliminate remaining deployment-only compatibility/manual packaging steps during productization
 - extend multi-speaker physical validation as additional speakers are provisioned
 - improve audio-reactive visuals if a reliable PCM amplitude hook becomes available
 
 ## Next step
 
-Start Milestone 5 — Skills — by reviewing the current Skills service/reference
-implementation, defining the Nyra v1 Router-owned capability boundary, and
-planning the migration with the same reproducible deployment and RED-GREEN
-verification discipline used for M4.
+Start Milestone 6 — LLM — from the deployed M5 trust boundary: Router-managed
+reasoning, provider-independent configuration, context propagation, and
+LLM-proposed actions validated/materialized by Skills before any Router-owned
+capability executes.

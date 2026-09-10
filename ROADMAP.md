@@ -65,10 +65,19 @@
 
 ## Milestone 5 - Skills
 
-- Skills migration to Nyra v1 protocol
-- Router-only capability access
-- Home Assistant capability gateway
+**Status: Complete and deployed in production**
+
+- Dedicated deterministic `nyra-skills` service on the Nyra v1 protocol
+- Router-only capability access; Skills contains no direct Home Assistant credentials
+- Router-owned Home Assistant resolve, execute, and managed-automation gateway
+- Deterministic Home Assistant actions with target clarification
+- Restart-safe persisted ephemeral jobs
+- Persistent and one-shot Behaviors materialized as Nyra-managed Home Assistant automations
+- Explicit remember, forget, and supersede Skills through the Router-owned Memory gateway
+- Distributed Router/Skills/capability observability and correlation
+- Router-backed Skills/Jobs diagnostics in Nyra Admin
 - Removal of standalone Skills UI
+- Reproducible bootstrap, verification, backup, guarded restore, and production validation
 
 ## Milestone 6 - LLM
 

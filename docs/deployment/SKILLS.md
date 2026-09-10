@@ -100,3 +100,33 @@ These assets do not authorize a deployment. M5 Task 19 requires explicit
 production authorization after integration regression is green, actual target
 state has been inspected, and a backup/rollback artifact has been created and
 verified.
+
+## Verified M5 production deployment
+
+M5 Task 19 production verification completed on 2026-09-10. The deployed
+Router repository revision is
+`348d2d8738132713479d32c1a94f84b2d458a13d`.
+
+Production verification confirmed:
+
+- `nyra-skills.service` is enabled, active, healthy, and ready;
+- Router remains healthy/ready with Skills configured;
+- Skills has no direct Home Assistant credentials and the legacy
+  `/opt/nyra-skills/.env` is absent;
+- exact Home Assistant resolve and an explicitly authorized real action work
+  through Skills -> Router capability -> Home Assistant;
+- ambiguous target resolution produces clarification without a side effect;
+- persisted Jobs survive a controlled Skills service restart and remain
+  manageable through Router-backed Admin diagnostics;
+- a disposable Nyra-managed Behavior can be created/read/deleted safely;
+- explicit Memory create/delete works through the Router-owned Memory gateway;
+- Router/Skills/Home Assistant capability spans preserve distributed
+  correlation;
+- the persistent Jobs SQLite database passes integrity checking.
+
+The pre-M5 Skills rollback archive is retained at
+`/var/backups/nyra-skills/pre-m5-20260910T132332Z.tar.gz`. Its checksum and
+archive readability were revalidated after deployment. The corresponding
+Router pre-M5 rollback archive is retained at
+`/var/backups/nyra-router/pre-m5-20260910T134732Z.tar.gz`. No destructive
+restore was performed because production remained healthy.
