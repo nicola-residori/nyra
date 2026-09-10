@@ -42,6 +42,42 @@ class SkillsService:
             for component in (self.registry, self.job_store, self.scheduler)
         )
 
+    async def start(self) -> None:
+        if self.scheduler is None:
+            return
+        start = getattr(self.scheduler, "start", None)
+        if start is None:
+            return
+        result = start()
+        if inspect.isawaitable(result):
+            await result
+
+    async def shutdown(self) -> None:
+        if self.scheduler is None:
+            return
+        shutdown = getattr(self.scheduler, "shutdown", None)
+        if shutdown is None:
+            return
+        result = shutdown()
+        if inspect.isawaitable(result):
+            await result
+
+    def list_jobs(self):
+        return self.job_store.list() if self.job_store is not None else []
+
+    def get_job(self, job_id: str):
+        return self.job_store.get(job_id) if self.job_store is not None else None
+
+    async def cancel_job(self, job_id: str):
+        if self.scheduler is None:
+            return None
+        return await self.scheduler.cancel_job(job_id)
+
+    async def stop_job(self, job_id: str):
+        if self.scheduler is None:
+            return None
+        return await self.scheduler.stop_job(job_id)
+
     async def check(self, request: SkillCheckRequest) -> SkillCheckResponse:
         if self.registry is None:
             return SkillCheckResponse(
