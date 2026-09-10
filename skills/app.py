@@ -14,6 +14,7 @@ from shared.protocol.skills import (
 from skills.config import SkillsSettings
 from skills.job_store import JobStore
 from skills.jobs import JobScheduler, UnsupportedJobStop
+from skills.observability import RouterObservabilityClient, SkillsObservability
 from skills.modules import (
     RouterHomeAssistantCapabilityClient,
     register_builtin_skills,
@@ -33,10 +34,22 @@ def _default_service(settings: SkillsSettings) -> SkillsService:
         else None
     )
     job_store = JobStore(settings.job_db_path)
+    observability_client = (
+        RouterObservabilityClient(
+            settings.router_url,
+            timeout=settings.router_timeout_seconds,
+        )
+        if settings.router_url
+        else None
+    )
+    observability = SkillsObservability(
+        observability_client.ingest if observability_client is not None else None
+    )
     scheduler = JobScheduler(
         job_store,
         capability,
         poll_interval_seconds=settings.job_poll_interval_seconds,
+        observability=observability,
     )
     register_builtin_skills(
         registry,
@@ -47,6 +60,7 @@ def _default_service(settings: SkillsSettings) -> SkillsService:
         registry=registry,
         job_store=job_store,
         scheduler=scheduler,
+        observability=observability,
     )
 
 

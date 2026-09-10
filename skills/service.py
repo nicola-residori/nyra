@@ -22,10 +22,12 @@ class SkillsService:
         registry: Any = None,
         job_store: Any = None,
         scheduler: Any = None,
+        observability: Any = None,
     ) -> None:
         self.registry = registry
         self.job_store = job_store
         self.scheduler = scheduler
+        self.observability = observability
 
     @staticmethod
     def _component_ready(component: Any) -> bool:
@@ -79,6 +81,8 @@ class SkillsService:
         return await self.scheduler.stop_job(job_id)
 
     async def check(self, request: SkillCheckRequest) -> SkillCheckResponse:
+        if self.observability is not None:
+            self.observability.span("skills.check", request.correlation)
         if self.registry is None:
             return SkillCheckResponse(
                 correlation=request.correlation,
@@ -119,6 +123,17 @@ class SkillsService:
         self,
         request: SkillExecuteRequest,
     ) -> SkillExecuteResponse:
+        if self.observability is not None:
+            execute_span_id = self.observability.span(
+                "skills.execute", request.correlation
+            )
+            request = request.model_copy(
+                update={
+                    "correlation": request.correlation.model_copy(
+                        update={"parent_span_id": execute_span_id}
+                    )
+                }
+            )
         if self.registry is None:
             return SkillExecuteResponse(
                 correlation=request.correlation,

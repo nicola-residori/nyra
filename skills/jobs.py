@@ -8,6 +8,7 @@ from shared.protocol.capabilities import CapabilityCorrelation, ExecuteRequest
 from shared.protocol.common import CommonOutcome
 from shared.protocol.execution_common import NyraOperation, NyraResourceType
 from shared.protocol.ids import new_trace_id
+from types import SimpleNamespace
 from shared.protocol.skills import JobStatus
 
 from skills.job_store import JobRecord, JobStore
@@ -26,14 +27,29 @@ class JobScheduler:
         capability: Any = None,
         *,
         poll_interval_seconds: float = 0.25,
+        observability: Any = None,
     ) -> None:
         self.store = store
         self.capability = capability
         self.poll_interval_seconds = poll_interval_seconds
+        self.observability = observability
         self._worker: asyncio.Task | None = None
 
     def is_ready(self) -> bool:
         return self.store.is_ready()
+
+    def _job_span(self, operation: str, job: JobRecord, trace_id: str, *, parent_span_id=None):
+        if self.observability is None:
+            return None
+        correlation = SimpleNamespace(
+            request_id=None,
+            origin_request_id=job.origin_request_id,
+            trace_id=trace_id,
+            parent_span_id=parent_span_id,
+        )
+        return self.observability.span(
+            operation, correlation, params={"job_id": job.job_id}
+        )
 
     def schedule_action(
         self,
@@ -47,7 +63,7 @@ class JobScheduler:
         trusted_context: dict[str, Any],
         parameters: dict[str, Any] | None = None,
     ) -> JobRecord:
-        return self.store.create_scheduled(
+        job = self.store.create_scheduled(
             execute_at=execute_at,
             origin_request_id=origin_request_id,
             request_id=None,
@@ -61,8 +77,12 @@ class JobScheduler:
                 "trusted_context": dict(trusted_context),
             },
         )
+        self._job_span("skills.job.schedule", job, created_trace_id)
+        return job
 
     async def _execute_claimed(self, job: JobRecord) -> JobRecord:
+        trace_id = new_trace_id()
+        start_span_id = self._job_span("skills.job.start", job, trace_id)
         if self.capability is None:
             return self.store.set_terminal(
                 job.job_id,
@@ -87,7 +107,8 @@ class JobScheduler:
         correlation = CapabilityCorrelation(
             request_id=None,
             origin_request_id=job.origin_request_id,
-            trace_id=new_trace_id(),
+            trace_id=trace_id,
+            parent_span_id=start_span_id,
         )
         try:
             response = await self.capability.execute(
@@ -108,6 +129,9 @@ class JobScheduler:
             )
 
         if response.outcome is CommonOutcome.SUCCESS:
+            self._job_span(
+                "skills.job.complete", job, trace_id, parent_span_id=start_span_id
+            )
             return self.store.set_terminal(job.job_id, JobStatus.COMPLETED)
         if response.outcome is CommonOutcome.UNKNOWN_OUTCOME:
             return self.store.set_terminal(
@@ -119,6 +143,9 @@ class JobScheduler:
                     else "UNKNOWN_OUTCOME"
                 ),
             )
+        self._job_span(
+            "skills.job.fail", job, trace_id, parent_span_id=start_span_id
+        )
         return self.store.set_terminal(
             job.job_id,
             JobStatus.FAILED,
@@ -144,7 +171,10 @@ class JobScheduler:
         return results
 
     async def cancel_job(self, job_id: str) -> JobRecord | None:
-        return self.store.cancel(job_id)
+        job = self.store.cancel(job_id)
+        if job is not None:
+            self._job_span("skills.job.cancel", job, new_trace_id())
+        return job
 
     async def stop_job(self, job_id: str) -> JobRecord | None:
         job = self.store.get(job_id)

@@ -264,7 +264,8 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
                 settings.home_assistant_url,
                 settings.home_assistant_token,
                 timeout=settings.home_assistant_timeout_seconds,
-            )
+            ),
+            observability=observability,
         )
     context_port = memory_client if memory_client is not None else _ContextPort()
     memory_port = memory_client if memory_client is not None else _MemoryPort()

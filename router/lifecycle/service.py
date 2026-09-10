@@ -115,6 +115,20 @@ class LlmPort(Protocol):
     async def reason(self, request: NyraRequest, context: ContextResult, memory: dict[str, Any] | None, pending_state: dict[str, Any] | None) -> LifecycleDecision: ...
 
 
+_PROTECTED_CAPABILITY_SKILLS = {
+    "home_assistant_action",
+    "delayed_action",
+    "behavior",
+    "memory_management",
+}
+
+
+def skill_interaction_state(skill_name: str | None) -> InteractionState:
+    if skill_name in _PROTECTED_CAPABILITY_SKILLS:
+        return InteractionState.USING_TOOL
+    return InteractionState.PROCESSING_LOCAL
+
+
 class RequestLifecycleService:
     def __init__(self, store, broker, identity_port: SpeakerIdentityPort, context_port: ContextPort,
                  memory_port: MemoryPort, skill_port: SkillPort, llm_port: LlmPort,
@@ -547,6 +561,11 @@ class RequestLifecycleService:
             if match.memory_requirement is MemoryRequirement.NONE:
                 decision = None
             if decision is None:
+                stage = skill_interaction_state(match.skill_name)
+                if stage is InteractionState.USING_TOOL:
+                    await self._state(
+                        request, trace_id, span_id, InteractionState.USING_TOOL
+                    )
                 decision = await self.skill_port.execute(
                     match,
                     request,

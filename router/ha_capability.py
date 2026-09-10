@@ -29,6 +29,8 @@ from shared.protocol.capabilities import (
 from shared.protocol.behavior import Behavior, BehaviorActionType, BehaviorLifecycle
 from shared.protocol.execution_common import NyraOperation, NyraResourceType
 from shared.protocol.common import CommonOutcome, ErrorDetail
+from shared.protocol.ids import new_span_id
+from shared.protocol.observability import LogKind, LogLevel, LogRecord
 
 
 _RESOURCE_DOMAIN = {
@@ -233,10 +235,24 @@ def _translate_trigger(kind: str, expression: str) -> dict[str, Any]:
     raise ValueError("UNSUPPORTED_BEHAVIOR_TRIGGER")
 
 class HomeAssistantCapabilityPort:
-    def __init__(self, client: HomeAssistantApiClient) -> None:
+    def __init__(self, client: HomeAssistantApiClient, observability=None) -> None:
         self.client = client
+        self.observability = observability
+
+    def _observe(self, operation: str, correlation: CapabilityCorrelation) -> str:
+        span_id = new_span_id("ROUTER", operation)
+        if self.observability is not None:
+            self.observability.ingest([LogRecord(
+                ct="ROUTER", level=LogLevel.INFO, kind=LogKind.EVENT,
+                event=operation, request_id=correlation.request_id,
+                origin_request_id=correlation.origin_request_id,
+                trace_id=correlation.trace_id, span_id=span_id,
+                parent_span_id=correlation.parent_span_id, operation=operation,
+            )])
+        return span_id
 
     async def execute(self, request: ExecuteRequest, trusted_context: dict[str, Any]) -> ExecuteResponse:
+        self._observe("ha.execute", request.correlation)
         allowed = trusted_context.get("allowed_resource_ids")
         if isinstance(allowed, list) and request.resource_id not in {item for item in allowed if isinstance(item, str)}:
             return ExecuteResponse(correlation=request.correlation, outcome=CommonOutcome.DENIED, error=ErrorDetail(code="RESOURCE_DENIED"))
@@ -353,6 +369,7 @@ class HomeAssistantCapabilityPort:
         request: AutomationCreateRequest,
         trusted_context: dict[str, Any],
     ) -> AutomationCreateResponse:
+        self._observe("ha.automation.create", request.correlation)
         automation_id = _automation_id(request.behavior)
         try:
             native = await self._native_behavior_config(
@@ -451,6 +468,7 @@ class HomeAssistantCapabilityPort:
         request: AutomationUpdateRequest,
         trusted_context: dict[str, Any],
     ) -> AutomationUpdateResponse:
+        self._observe("ha.automation.update", request.correlation)
         try:
             current = await self.client.automation_read(request.automation_id)
             if current is None:
@@ -506,6 +524,7 @@ class HomeAssistantCapabilityPort:
         request: AutomationDeleteRequest,
         trusted_context: dict[str, Any],
     ) -> AutomationDeleteResponse:
+        self._observe("ha.automation.delete", request.correlation)
         del trusted_context
         try:
             current = await self.client.automation_read(request.automation_id)
@@ -556,6 +575,7 @@ class HomeAssistantCapabilityPort:
         *,
         correlation: CapabilityCorrelation,
     ) -> ResolveResponse:
+        self._observe("ha.resolve", correlation)
         states = await self.client.states()
         allowed = trusted_context.get("allowed_resource_ids")
         allowed_ids = (

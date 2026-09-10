@@ -13,9 +13,10 @@ class ExecutionCapability(Protocol):
 class InvalidExecutionPlan(ValueError): pass
 
 class ExecutionPlanExecutor:
-    def __init__(self, capability: ExecutionCapability, *, condition_evaluator=None):
+    def __init__(self, capability: ExecutionCapability, *, condition_evaluator=None, observability=None):
         self.capability = capability
         self.condition_evaluator = condition_evaluator or self._default_condition
+        self.observability = observability
 
     @staticmethod
     def _default_condition(expression, context):
@@ -43,7 +44,14 @@ class ExecutionPlanExecutor:
         for node in graph: visit(node)
 
     async def execute(self, plan, *, correlation, trusted_context):
+        validate_span = None
+        if self.observability is not None:
+            validate_span = self.observability.span("skills.plan.validate", correlation)
         self.validate(plan)
+        if self.observability is not None:
+            self.observability.span(
+                "skills.plan.execute", correlation, parent_span_id=validate_span
+            )
         by_id = {s.step_id: s for s in plan.steps}
         pending, results = set(by_id), {}
         while pending:
