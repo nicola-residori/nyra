@@ -1,0 +1,23 @@
+[Unit]
+Description=Nyra Skills
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nyra-skills
+EnvironmentFile=-/etc/nyra/skills.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/nyra-skills
+Environment=NYRA_SKILLS_JOB_DB_PATH=/var/lib/nyra-skills/jobs.sqlite3
+ExecStart=/opt/nyra-skills/.venv/bin/uvicorn skills.app:app --host 0.0.0.0 --port 8090
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nyra-skills /etc/nyra
+
+[Install]
+WantedBy=multi-user.target
