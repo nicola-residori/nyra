@@ -7,6 +7,7 @@ from skills.modules.home_assistant import (
     RouterHomeAssistantCapabilityClient,
 )
 from skills.modules.identity import IdentityQuerySkill
+from skills.modules.memory_management import MemoryManagementSkill
 from skills.registry import SkillDefinition, SkillRegistry
 
 
@@ -16,6 +17,16 @@ def register_builtin_skills(
     home_assistant_capability: RouterHomeAssistantCapabilityClient | None = None,
     job_scheduler=None,
 ) -> None:
+    memory_management = MemoryManagementSkill()
+    registry.register(
+        SkillDefinition(
+            name=memory_management.name,
+            priority=memory_management.priority,
+            matcher=memory_management.matches,
+            executor=memory_management.execute,
+        )
+    )
+
     identity = IdentityQuerySkill()
     registry.register(
         SkillDefinition(

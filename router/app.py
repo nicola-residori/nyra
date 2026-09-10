@@ -36,6 +36,7 @@ from router.ha_capability import HomeAssistantApiClient, HomeAssistantCapability
 from router.speaker_id_admin import SpeakerIdAdminClient
 from router.user_directory import UserDirectory
 from router.memory_client import MemoryClient
+from router.memory_skill_gateway import MemorySkillGateway
 from router.skills_client import SkillsClient, SkillsUnavailable
 from shared.protocol.skills import (
     SkillCheckRequest,
@@ -67,8 +68,9 @@ class _NoSkillPort:
 
 
 class _RemoteSkillPort:
-    def __init__(self, client):
+    def __init__(self, client, memory_gateway=None):
         self.client = client
+        self.memory_gateway = memory_gateway
 
     @staticmethod
     def _correlation(request, context):
@@ -184,6 +186,25 @@ class _RemoteSkillPort:
                 if response.error is not None
                 else "SKILLS_FAILED"
             )
+
+        router_operation = (
+            response.result.get("router_operation")
+            if isinstance(response.result, dict)
+            else None
+        )
+        if (
+            isinstance(router_operation, dict)
+            and router_operation.get("kind") == "MEMORY_MANAGEMENT"
+        ):
+            if self.memory_gateway is None:
+                return LifecycleDecision.failed("MEMORY_UNAVAILABLE")
+            return await self.memory_gateway.execute(
+                request=request,
+                context=context,
+                operation=router_operation,
+                pending_state=pending_state,
+            )
+
         return LifecycleDecision.completed(response.text)
 
 
@@ -247,6 +268,11 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         )
     context_port = memory_client if memory_client is not None else _ContextPort()
     memory_port = memory_client if memory_client is not None else _MemoryPort()
+    memory_skill_gateway = (
+        MemorySkillGateway(memory_client)
+        if memory_client is not None
+        else None
+    )
     lifecycle = RequestLifecycleService(
         store=request_store,
         broker=event_broker,
@@ -254,7 +280,10 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         context_port=context_port,
         memory_port=memory_port,
         skill_port=(
-            _RemoteSkillPort(skills_client)
+            _RemoteSkillPort(
+                skills_client,
+                memory_gateway=memory_skill_gateway,
+            )
             if skills_client is not None
             else _NoSkillPort()
         ),
@@ -298,6 +327,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.wake_word_dataset = wake_word_dataset
     app.state.speaker_id_admin = speaker_id_admin
     app.state.memory_client = memory_client
+    app.state.memory_skill_gateway = memory_skill_gateway
     app.state.skills_client = skills_client
     app.state.ha_capability = ha_capability
     app.state.observability = observability
