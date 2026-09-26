@@ -39,6 +39,10 @@ from router.user_directory import UserDirectory
 from router.memory_client import MemoryClient
 from router.memory_skill_gateway import MemorySkillGateway
 from router.skills_client import SkillsClient, SkillsUnavailable
+from router.llm_client import LlmClient
+from router.reasoning_capabilities import ReasoningCapabilityDispatcher
+from router.reasoning_orchestrator import ReasoningOrchestrator
+from router.router_llm_port import RouterLlmPort
 from shared.protocol.skills import (
     SkillCheckRequest,
     SkillCorrelation,
@@ -206,11 +210,6 @@ class _RemoteSkillPort:
         return LifecycleDecision.completed(response.text)
 
 
-class _LlmPort:
-    async def reason(self, request, context, memory, pending_state):
-        return LifecycleDecision(status=RequestStatus.FAILED)
-
-
 def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phrase_generator=None,
                wake_word_dataset=None, speaker_id_admin=None, memory_client=None,
                skills_client=None, ha_capability=None):
@@ -273,6 +272,20 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         if memory_client is not None
         else None
     )
+    if settings.llm_url:
+        llm_client = LlmClient(settings.llm_url, timeout=settings.llm_timeout_seconds)
+        dispatcher = ReasoningCapabilityDispatcher(memory_port=memory_port, ha_capability=ha_capability)
+        llm_port = RouterLlmPort(ReasoningOrchestrator(
+            llm_client, dispatcher,
+            max_rounds=settings.llm_max_rounds,
+            total_timeout_seconds=settings.llm_total_timeout_seconds,
+        ))
+    else:
+        class _UnavailableLlmPort:
+            async def reason(self, request, context, memory, pending_state):
+                return LifecycleDecision.failed("LLM_NOT_CONFIGURED")
+        llm_port = _UnavailableLlmPort()
+
     lifecycle = RequestLifecycleService(
         store=request_store,
         broker=event_broker,
@@ -287,7 +300,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
             if skills_client is not None
             else _NoSkillPort()
         ),
-        llm_port=_LlmPort(),
+        llm_port=llm_port,
         clarification_timeout_seconds=settings.clarification_timeout_seconds,
         observability=observability,
         identity_config=identity_config,
