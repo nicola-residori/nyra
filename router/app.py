@@ -43,6 +43,8 @@ from router.llm_client import LlmClient
 from router.reasoning_capabilities import ReasoningCapabilityDispatcher
 from router.reasoning_orchestrator import ReasoningOrchestrator
 from router.router_llm_port import RouterLlmPort
+from router.llm_action_gate import LlmActionGate
+from router.plan_execution import RouterPlanExecutor
 from shared.protocol.skills import (
     SkillCheckRequest,
     SkillCorrelation,
@@ -275,11 +277,14 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     if settings.llm_url:
         llm_client = LlmClient(settings.llm_url, timeout=settings.llm_timeout_seconds)
         dispatcher = ReasoningCapabilityDispatcher(memory_port=memory_port, ha_capability=ha_capability)
-        llm_port = RouterLlmPort(ReasoningOrchestrator(
+        orchestrator = ReasoningOrchestrator(
             llm_client, dispatcher,
             max_rounds=settings.llm_max_rounds,
             total_timeout_seconds=settings.llm_total_timeout_seconds,
-        ))
+        )
+        action_gate = LlmActionGate(skills_client) if skills_client is not None else None
+        plan_executor = RouterPlanExecutor(ha_capability) if ha_capability is not None else None
+        llm_port = RouterLlmPort(orchestrator, action_gate=action_gate, plan_executor=plan_executor)
     else:
         class _UnavailableLlmPort:
             async def reason(self, request, context, memory, pending_state):
