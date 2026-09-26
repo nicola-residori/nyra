@@ -23,6 +23,10 @@ class RouterSettings:
     memory_timeout_seconds: float = 3.0
     skills_url: str | None = None
     skills_timeout_seconds: float = 3.0
+    llm_url: str | None = None
+    llm_timeout_seconds: float = 8.0
+    llm_max_rounds: int = 3
+    llm_total_timeout_seconds: float = 15.0
     home_assistant_url: str | None = None
     home_assistant_token: str | None = None
     home_assistant_timeout_seconds: float = 3.0
@@ -62,6 +66,10 @@ class RouterSettings:
             skills_timeout_seconds=float(os.getenv(
                 "NYRA_SKILLS_TIMEOUT_SECONDS", data.get("skills_timeout_seconds", 3.0)
             )),
+            llm_url=os.getenv("NYRA_LLM_URL", data.get("llm_url")),
+            llm_timeout_seconds=float(os.getenv("NYRA_LLM_TIMEOUT_SECONDS", data.get("llm_timeout_seconds", 8.0))),
+            llm_max_rounds=int(os.getenv("NYRA_LLM_MAX_ROUNDS", data.get("llm_max_rounds", 3))),
+            llm_total_timeout_seconds=float(os.getenv("NYRA_LLM_TOTAL_TIMEOUT_SECONDS", data.get("llm_total_timeout_seconds", 15.0))),
             home_assistant_url=os.getenv(
                 "NYRA_HOME_ASSISTANT_URL", data.get("home_assistant_url")
             ),
