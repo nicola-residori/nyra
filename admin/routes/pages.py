@@ -131,3 +131,8 @@ async def memory_proxy(request:Request,path:str):
         return JSONResponse(data,status_code=status_code)
     except RouterUnavailable as exc:
         return JSONResponse({"error":str(exc)},status_code=503)
+
+@router.get("/llm",response_class=HTMLResponse)
+async def llm_diagnostics(request:Request):
+    data,error=await fetch(request,"/v1/admin/llm/diagnostics")
+    return templates(request).TemplateResponse(request,"llm_diagnostics.html",{"items":(data or {}).get("items",[]),"error":error})
