@@ -168,10 +168,7 @@ class _RemoteSkillPort:
             return LifecycleDecision.failed("SKILLS_UNAVAILABLE")
 
         if response.outcome is SkillOutcome.MISS:
-            return LifecycleDecision(
-                status=RequestStatus.FAILED,
-                llm_fallback=True,
-            )
+            return LifecycleDecision.failed("SKILLS_EXECUTE_MISS")
         if response.outcome is SkillOutcome.NEEDS_CLARIFICATION:
             if response.text is None:
                 return LifecycleDecision.failed(

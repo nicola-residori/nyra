@@ -573,26 +573,8 @@ class RequestLifecycleService:
                     memory,
                     pending_state,
                 )
-            if decision.llm_fallback:
-                await self._state(
-                    request,
-                    trace_id,
-                    span_id,
-                    InteractionState.PROCESSING_GLOBAL,
-                )
-                decision = await self.llm_port.reason(
-                    request,
-                    context,
-                    memory,
-                    pending_state,
-                )
         else:
-            self._log(
-                request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",
-                params={"reason": "NO_SKILL_MATCH"},
-            )
-            await self._state(request, trace_id, span_id, InteractionState.PROCESSING_GLOBAL)
-            decision = await self.llm_port.reason(request, context, memory, pending_state)
+            decision = LifecycleDecision.failed("SKILLS_INVALID_MATCH")
 
         if request_context.request_id is not None:
             if existing is None:
