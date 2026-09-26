@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from skills.plan_validation import PlanValidator
 from typing import Any
 
 from shared.protocol.common import ErrorDetail
@@ -85,6 +86,9 @@ class SkillsService:
         if self.scheduler is None:
             return None
         return await self.scheduler.stop_job(job_id)
+
+    async def validate_plan(self, request):
+        return await PlanValidator().validate(request)
 
     async def check(self, request: SkillCheckRequest) -> SkillCheckResponse:
         if self.observability is not None:

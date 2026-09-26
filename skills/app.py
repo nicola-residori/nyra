@@ -10,6 +10,8 @@ from shared.protocol.skills import (
     SkillCheckResponse,
     SkillExecuteRequest,
     SkillExecuteResponse,
+    PlanValidationRequest,
+    PlanValidationResponse,
 )
 from skills.config import SkillsSettings
 from skills.job_store import JobStore
@@ -96,6 +98,10 @@ def create_app(
             {"service": "nyra-skills", "status": "not_ready"},
             status_code=503,
         )
+
+    @app.post("/v1/plans/validate", response_model=PlanValidationResponse)
+    async def validate_plan(request: PlanValidationRequest) -> PlanValidationResponse:
+        return await service.validate_plan(request)
 
     @app.post("/v1/skills/check", response_model=SkillCheckResponse)
     async def check(request: SkillCheckRequest) -> SkillCheckResponse:
