@@ -32,6 +32,7 @@ from router.api.speaker_id_admin import router as speaker_id_admin_router
 from router.api.users import router as users_router
 from router.api.memory_admin import router as memory_admin_router
 from router.api.capabilities import router as capabilities_router
+from router.api.llm_diagnostics import router as llm_diagnostics_router
 from router.skills_admin import SkillsAdminFacade, router as skills_admin_router
 from router.ha_capability import HomeAssistantApiClient, HomeAssistantCapabilityPort
 from router.speaker_id_admin import SpeakerIdAdminClient
@@ -350,6 +351,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.skills_admin = skills_admin
     app.state.ha_capability = ha_capability
     app.state.observability = observability
+    app.state.llm_diagnostics = []
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
     app.state.ready = False
@@ -368,6 +370,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(memory_admin_router)
     app.include_router(skills_admin_router)
     app.include_router(capabilities_router)
+    app.include_router(llm_diagnostics_router)
     return app
 
 
