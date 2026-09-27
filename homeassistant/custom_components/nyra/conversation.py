@@ -82,6 +82,41 @@ def conversation_key_for_input(
     return conversation_id or f"ha:{context_id}"
 
 
+def _registry_value(item, field: str):
+    if isinstance(item, dict):
+        return item.get(field)
+    return getattr(item, field, None)
+
+
+def resolve_speaker_area(satellite_id: str, entities, devices, areas) -> str | None:
+    # Home Assistant registry relationships are authoritative.
+    satellite = next(
+        (e for e in entities if _registry_value(e, "entity_id") == satellite_id),
+        None,
+    )
+    if satellite is None:
+        return None
+
+    area_id = _registry_value(satellite, "area_id")
+    if not area_id:
+        device_id = _registry_value(satellite, "device_id")
+        device = next(
+            (d for d in devices if _registry_value(d, "id") == device_id),
+            None,
+        )
+        area_id = _registry_value(device, "area_id") if device is not None else None
+
+    if not area_id:
+        return None
+
+    area = next((a for a in areas if _registry_value(a, "id") == area_id), None)
+    name = _registry_value(area, "name") if area is not None else None
+    if not isinstance(name, str):
+        return None
+    normalized = name.strip()
+    return normalized or None
+
+
 def build_request(data: AdapterInput, sessions: SessionManager) -> NyraRequest:
     execution_type = ExecutionType.HA_SPEAKER if data.is_speaker else ExecutionType.HA_ASSIST
     identity = None
@@ -143,6 +178,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
 
     from homeassistant.components import conversation
     from homeassistant.const import MATCH_ALL
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import device_registry as dr
     from homeassistant.helpers import entity_registry as er
     from homeassistant.helpers import intent
 
@@ -166,6 +203,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
 
         async def _async_handle_message(self, user_input, chat_log):
             nyra_source_id = None
+            speaker_area = None
             if user_input.satellite_id:
                 registry = er.async_get(self.hass)
                 entities = list(registry.entities.values())
@@ -185,6 +223,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                     user_input.satellite_id,
                     entities,
                     states,
+                )
+                speaker_area = resolve_speaker_area(
+                    user_input.satellite_id,
+                    entities,
+                    list(dr.async_get(self.hass).devices.values()),
+                    list(ar.async_get(self.hass).areas.values()),
                 )
 
             conversation_key = conversation_key_for_input(
@@ -207,6 +251,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                 device_id=user_input.device_id,
                 satellite_id=user_input.satellite_id,
                 nyra_source_id=nyra_source_id,
+                area=speaker_area,
                 user_id=user_input.context.user_id,
                 user_display_name=(
                     user_reference.display_name if user_reference is not None else None
