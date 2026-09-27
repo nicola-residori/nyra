@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from shared.protocol.capabilities import ResolveCardinality
+
 import pytest
 
 from shared.protocol.capabilities import (
@@ -151,5 +153,9 @@ async def test_unrelated_question_is_miss_not_failed():
 
     assert response.outcome is SkillOutcome.MISS
     assert response.error is None
-    assert capability.resolve_calls == []
+    # Deterministic named-resource lookup is read-only before LLM fallback.
+    assert len(capability.resolve_calls) == 1
+    assert capability.resolve_calls[0][0].reference == "what is the weather tomorrow"
+    assert capability.resolve_calls[0][0].resource_type is None
+    assert capability.resolve_calls[0][0].cardinality is ResolveCardinality.MANY
     assert capability.execute_calls == []
