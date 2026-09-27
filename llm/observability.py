@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass,asdict
+from collections import deque
 
 @dataclass
 class LlmDiagnostic:
@@ -17,6 +18,7 @@ class LlmDiagnostic:
     cost:float|None=None
 
 class LlmDiagnostics:
-    def __init__(self): self._items=[]
+    def __init__(self, max_items: int = 200):
+        self._items=deque(maxlen=max(1,int(max_items)))
     def record(self,**kwargs): self._items.append(LlmDiagnostic(**kwargs))
     def items(self): return [asdict(x) for x in self._items]

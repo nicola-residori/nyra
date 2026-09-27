@@ -486,7 +486,11 @@ class RequestLifecycleService:
             trace_id=trace_id,
         )
         memory = None
+        self._log(request, trace_id, span_id, "SKILLS_CHECK_STARTED", params={"stage":"skills.check"})
         match = await self.skill_port.check(request, context, None, pending_state)
+        self._log(request, trace_id, span_id, "SKILLS_CHECK_COMPLETED",
+                  result=("HIT" if match.matched else match.outcome.value),
+                  params={"stage":"skills.check","skill_name":match.skill_name})
         if match.outcome is SkillOutcome.NEEDS_CLARIFICATION:
             decision = LifecycleDecision.needs_clarification(
                 match.text or "",
@@ -510,12 +514,17 @@ class RequestLifecycleService:
                 span_id,
                 InteractionState.PROCESSING_GLOBAL,
             )
+            self._log(request, trace_id, span_id, "LLM_REASONING_STARTED",
+                      params={"stage":"llm.reason"})
             decision = await self.llm_port.reason(
                 request,
                 context,
                 memory,
                 pending_state,
             )
+            self._log(request, trace_id, span_id, "LLM_REASONING_COMPLETED",
+                      result=decision.status.value,
+                      params={"stage":"llm.reason","fallback":decision.llm_fallback})
         elif match.matched:
             if match.memory_requirement is MemoryRequirement.NONE:
                 self._log(
@@ -566,6 +575,8 @@ class RequestLifecycleService:
                     await self._state(
                         request, trace_id, span_id, InteractionState.USING_TOOL
                     )
+                self._log(request, trace_id, span_id, "SKILLS_EXECUTE_STARTED",
+                          params={"stage":"skills.execute","skill_name":match.skill_name})
                 decision = await self.skill_port.execute(
                     match,
                     request,
@@ -573,6 +584,9 @@ class RequestLifecycleService:
                     memory,
                     pending_state,
                 )
+                self._log(request, trace_id, span_id, "SKILLS_EXECUTE_COMPLETED",
+                          result=decision.status.value,
+                          params={"stage":"skills.execute","skill_name":match.skill_name})
         else:
             decision = LifecycleDecision.failed("SKILLS_INVALID_MATCH")
 

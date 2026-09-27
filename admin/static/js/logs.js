@@ -7,6 +7,14 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 function link(k,v){return v?`<a href="/logs?${encodeURIComponent(k)}=${encodeURIComponent(v)}">${esc(v)}</a>`:'';}
 function clip(value){return String(value??'').length>120?String(value).slice(0,117)+'…':String(value??'');}
 function rowKey(x){return [x.timestamp,x.ct,x.span_id,x.event].join('|');}
+function pipelineLabel(x){
+  const e=String(x.event||'');
+  if(e.startsWith('identity.')||['IDENTIFIED','CONFIRMED','CHANGED','CONTINUITY','GUEST'].includes(e))return 'Identity';
+  if(e.startsWith('SKILLS_')||x.ct==='SKILLS')return 'Skills';
+  if(e.startsWith('LLM_'))return 'LLM';
+  if(e.startsWith('ha.')||String(x.operation||'').startsWith('ha.'))return 'HA';
+  return x.ct||'Router';
+}
 
 function extractRequestText(x){
   const candidates=[x?.params?.input?.text,x?.input?.text,x?.payload?.input?.text,x?.params?.text,x?.text,x?.message?.input?.text];
@@ -71,7 +79,7 @@ async function load(){
     const tr=document.createElement('tr');const elapsed=x.span_elapsed_ms??x.trace_elapsed_ms??x.request_elapsed_ms??x.session_elapsed_ms??'';
     const input=extractRequestText(x);
     tr.dataset.rowKey=rowKey(x);if(tr.dataset.rowKey===selectedKey)tr.classList.add('selected');
-    tr.innerHTML=`<td>${esc(formatNyraTimestamp(x.timestamp))}</td><td><span class="badge">${esc(x.ct)}</span></td><td class="level-${esc(x.level)}">${esc(x.level)}</td><td class="kind-${esc(x.kind)}">${esc(x.kind)}</td><td class="request-input" title="${esc(input)}">${esc(clip(input))}</td><td>${link('session_id',x.session_id)}</td><td>${link('request_id',x.request_id)}</td><td>${link('trace_id',x.trace_id)}</td><td>${link('span_id',x.span_id)}</td><td>${esc(x.event)}</td><td>${esc(elapsed)}${elapsed!==''?' ms':''}</td><td>${esc(x.result)}</td>`;
+    tr.innerHTML=`<td>${esc(formatNyraTimestamp(x.timestamp))}</td><td><span class="badge">${esc(x.ct)}</span></td><td class="level-${esc(x.level)}">${esc(x.level)}</td><td class="kind-${esc(x.kind)}">${esc(x.kind)}</td><td class="request-input" title="${esc(input)}">${esc(clip(input))}</td><td>${link('session_id',x.session_id)}</td><td>${link('request_id',x.request_id)}</td><td>${link('trace_id',x.trace_id)}</td><td>${link('span_id',x.span_id)}</td><td title="${esc(pipelineLabel(x))}">${esc(x.event)}</td><td>${esc(x.operation)}</td><td>${esc(elapsed)}${elapsed!==''?' ms':''}</td><td>${esc(x.result)}</td>`;
     tr.onclick=e=>{if(e.target.closest('a'))return;selectedKey=rowKey(x);document.querySelectorAll('#rows tr').forEach(row=>row.classList.toggle('selected',row===tr));loadRequestDetail(x);};
     tb.appendChild(tr);
   }
@@ -79,7 +87,7 @@ async function load(){
 
 function renderTimeline(items){
   if(!items.length)return '<p class="muted">No correlated records found.</p>';
-  return `<div class="request-timeline">${items.map(x=>`<div class="timeline-entry"><div class="timeline-time">${esc(formatNyraTimestamp(x.timestamp))}</div><div><strong>${esc(x.event||x.kind||'Record')}</strong><div class="timeline-meta">${esc(x.ct||'')} ${x.result?`· ${esc(x.result)}`:''}</div></div></div>`).join('')}</div>`;
+  return `<div class="request-timeline">${items.map(x=>`<div class="timeline-entry"><div class="timeline-time">${esc(formatNyraTimestamp(x.timestamp))}</div><div><strong>${esc(pipelineLabel(x))} · ${esc(x.event||x.kind||'Record')}</strong><div class="timeline-meta">${esc(x.ct||'')}${x.operation?` · ${esc(x.operation)}`:''}${x.result?` · ${esc(x.result)}`:''}</div></div></div>`).join('')}</div>`;
 }
 async function loadRequestDetail(selected){
   const detail=document.getElementById('detail');detail.innerHTML='<div class="detail-loading">Loading request…</div>';

@@ -283,6 +283,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
             llm_client, dispatcher,
             max_rounds=settings.llm_max_rounds,
             total_timeout_seconds=settings.llm_total_timeout_seconds,
+            observability=observability,
         )
         action_gate = LlmActionGate(skills_client) if skills_client is not None else None
         plan_executor = RouterPlanExecutor(ha_capability) if ha_capability is not None else None
