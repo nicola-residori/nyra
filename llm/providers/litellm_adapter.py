@@ -131,6 +131,7 @@ class LiteLlmAdapter(ProviderAdapter):
                 properties = node.get("properties")
                 if isinstance(properties, dict):
                     node["required"] = list(properties)
+                if node.get("type") == "object":
                     node["additionalProperties"] = False
 
                 # Provider strict schemas reject default siblings on $ref; defaults are not part of the provider contract.

@@ -246,3 +246,16 @@ def test_strict_schema_normalizer_removes_default_sibling_from_ref_nodes():
     }
     strict = LiteLlmAdapter._strict_response_schema(schema)
     assert strict["properties"]["on_timeout"] == {"$ref": "#/$defs/TimeoutBehavior"}
+
+def test_strict_schema_normalizer_closes_plain_object_nodes_without_properties():
+    schema = {
+        "type": "object",
+        "properties": {
+            "parameters": {
+                "type": "object",
+                "additionalProperties": True,
+            }
+        },
+    }
+    strict = LiteLlmAdapter._strict_response_schema(schema)
+    assert strict["properties"]["parameters"]["additionalProperties"] is False
