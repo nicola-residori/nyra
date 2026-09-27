@@ -17,21 +17,26 @@ Completion = Callable[..., Awaitable[Any]]
 
 
 class LiteLlmAdapter(ProviderAdapter):
-    def __init__(self, completion: Completion | None = None) -> None:
+    def __init__(self, completion: Completion | None = None, api_keys: dict[str, str] | None = None) -> None:
         if completion is None:
             from litellm import acompletion
 
             completion = acompletion
         self._completion = completion
+        self._api_keys = dict(api_keys or {})
 
     async def infer(self, request: ProviderRequest) -> ProviderResponse:
         provider, model = self._split_model(request.model)
         try:
-            raw = await self._completion(
-                model=request.model,
-                messages=[dict(message) for message in request.messages],
-                stream=False,
-            )
+            completion_args = {
+                "model": request.model,
+                "messages": [dict(message) for message in request.messages],
+                "stream": False,
+            }
+            api_key = self._api_keys.get(provider)
+            if api_key:
+                completion_args["api_key"] = api_key
+            raw = await self._completion(**completion_args)
         except Exception as exc:
             raise self._map_error(exc, provider, model) from exc
 

@@ -10,7 +10,7 @@ from llm.service import LlmService
 def build_service(settings:LlmSettings|None=None,diagnostics:LlmDiagnostics|None=None)->LlmService:
     settings=settings or LlmSettings.load()
     return LlmService(ProviderService(
-            LiteLlmAdapter(),settings.primary,settings.fallback,
+            LiteLlmAdapter(api_keys=settings.api_keys),settings.primary,settings.fallback,
             purpose_targets={
                 LlmPurpose.SEMANTIC.value: settings.semantic,
                 LlmPurpose.REASONING.value: settings.reasoning,

@@ -85,3 +85,26 @@ async def test_adapter_maps_provider_exceptions(exc, kind, retryable):
 
     assert raised.value.kind is kind
     assert raised.value.retryable is retryable
+@pytest.mark.asyncio
+async def test_adapter_uses_provider_scoped_api_key_without_putting_it_in_request():
+    seen={}
+    async def completion(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true}'))],usage=None)
+    adapter=LiteLlmAdapter(completion=completion,api_keys={"openai":"secret-openai-key"})
+    provider_request=request()
+    assert not hasattr(provider_request,"api_key")
+    await adapter.infer(provider_request)
+    assert seen["api_key"]=="secret-openai-key"
+    assert "secret-openai-key" not in repr(provider_request)
+
+@pytest.mark.asyncio
+async def test_adapter_does_not_reuse_key_for_another_provider():
+    seen={}
+    async def completion(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok":true}'))],usage=None)
+    adapter=LiteLlmAdapter(completion=completion,api_keys={"openai":"secret-openai-key"})
+    req=ProviderRequest(purpose="REASONING",model="anthropic/model-b",messages=(),response_schema={})
+    await adapter.infer(req)
+    assert "api_key" not in seen
