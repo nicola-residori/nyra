@@ -247,7 +247,7 @@ def test_strict_schema_normalizer_removes_default_sibling_from_ref_nodes():
     strict = LiteLlmAdapter._strict_response_schema(schema)
     assert strict["properties"]["on_timeout"] == {"$ref": "#/$defs/TimeoutBehavior"}
 
-def test_strict_schema_normalizer_closes_plain_object_nodes_without_properties():
+def test_schema_with_open_mapping_is_not_strict_compatible():
     schema = {
         "type": "object",
         "properties": {
@@ -257,5 +257,14 @@ def test_strict_schema_normalizer_closes_plain_object_nodes_without_properties()
             }
         },
     }
-    strict = LiteLlmAdapter._strict_response_schema(schema)
-    assert strict["properties"]["parameters"]["additionalProperties"] is False
+    assert LiteLlmAdapter._is_strict_schema_compatible(schema) is False
+
+
+def test_real_reasoning_result_schema_is_detected_as_non_strict_compatible():
+    from shared.protocol.llm import ReasoningResult
+
+    schema = ReasoningResult.model_json_schema()
+
+    parameters_schema = schema["$defs"]["CapabilityRequest"]["properties"]["parameters"]
+    assert parameters_schema.get("additionalProperties") is True
+    assert LiteLlmAdapter._is_strict_schema_compatible(schema) is False

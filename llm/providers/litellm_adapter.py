@@ -97,6 +97,12 @@ class LiteLlmAdapter(ProviderAdapter):
             if not any(key in node for key in structural_keywords):
                 return False
 
+            # Open mappings (for example dict[str, Any]) cannot be represented
+            # faithfully by the provider strict subset. Keep the Nyra schema
+            # unchanged and request non-strict JSON-schema output instead.
+            if node.get("additionalProperties") is True:
+                return False
+
             properties = node.get("properties")
             if isinstance(properties, dict):
                 if not all(visit(child) for child in properties.values()):
