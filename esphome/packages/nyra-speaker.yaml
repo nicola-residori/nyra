@@ -168,19 +168,33 @@ light:
           update_interval: 500ms
           lambda: |-
             const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            if (n < 3) return;
+
+            // Physical front mapping on the 7-LED Waveshare ring.
+            const int left = 1;
+            const int center = 0;
+            const int right = n - 1;
+
             float pct = id(nyra_battery_percent).state;
             if (isnan(pct)) pct = 0.0f;
             if (pct < 0.0f) pct = 0.0f;
             if (pct > 100.0f) pct = 100.0f;
-            const int filled = static_cast<int>(ceilf((pct / 100.0f) * n));
-            for (int i = 0; i < n; i++) {
-              if (i >= filled) { it[i] = Color(0, 0, 0); continue; }
-              const float zone = (i + 0.5f) / n;
-              if (zone < 0.20f)      it[i] = Color(255, 0, 0);
-              else if (zone < 0.40f) it[i] = Color(255, 96, 0);
-              else if (zone < 0.60f) it[i] = Color(255, 210, 0);
-              else                   it[i] = Color(0, 255, 0);
-            }
+
+            Color color(0, 255, 0);
+            int count = 3;
+            if (pct <= 5.0f)       { color = Color(255, 0, 0); count = 1; }
+            else if (pct <= 10.0f) { color = Color(255, 0, 0); count = 2; }
+            else if (pct <= 15.0f) { color = Color(255, 0, 0); count = 3; }
+            else if (pct <= 20.0f) { color = Color(255, 210, 0); count = 1; }
+            else if (pct <= 30.0f) { color = Color(255, 210, 0); count = 2; }
+            else if (pct <= 40.0f) { color = Color(255, 210, 0); count = 3; }
+            else if (pct <= 60.0f) { color = Color(0, 255, 0); count = 1; }
+            else if (pct <= 80.0f) { color = Color(0, 255, 0); count = 2; }
+
+            it[left] = color;
+            if (count >= 2) it[center] = color;
+            if (count >= 3) it[right] = color;
 
       - addressable_lambda:
           name: "nyra_listening_white_fast"
