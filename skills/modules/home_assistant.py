@@ -34,6 +34,8 @@ class ParsedHomeAssistantCommand:
     operation: NyraOperation
     resource_type: NyraResourceType
     reference: str
+    many: bool = False
+    area: str | None = None
 
 
 class RouterHomeAssistantCapabilityClient:
@@ -121,10 +123,10 @@ _ACTIONS = {
         (re.compile(r"^close (?:the )?(.+)$"), NyraOperation.CLOSE),
     ),
     "it": (
-        (re.compile(r"^accendi (?:la |il |lo |l )?(.+)$"), NyraOperation.TURN_ON),
-        (re.compile(r"^spegni (?:la |il |lo |l )?(.+)$"), NyraOperation.TURN_OFF),
-        (re.compile(r"^apri (?:la |il |lo |l )?(.+)$"), NyraOperation.OPEN),
-        (re.compile(r"^chiudi (?:la |il |lo |l )?(.+)$"), NyraOperation.CLOSE),
+        (re.compile(r"^accendi (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.TURN_ON),
+        (re.compile(r"^spegni (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.TURN_OFF),
+        (re.compile(r"^apri (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.OPEN),
+        (re.compile(r"^chiudi (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.CLOSE),
     ),
 }
 
@@ -135,9 +137,9 @@ _RESOURCE_TERMS = {
         (NyraResourceType.COVER, {"blind", "cover", "shutter"}),
     ),
     "it": (
-        (NyraResourceType.LIGHT, {"luce", "lampada"}),
-        (NyraResourceType.SWITCH, {"interruttore"}),
-        (NyraResourceType.COVER, {"tenda", "tapparella"}),
+        (NyraResourceType.LIGHT, {"luce", "luci", "lampada", "lampade"}),
+        (NyraResourceType.SWITCH, {"interruttore", "interruttori"}),
+        (NyraResourceType.COVER, {"tenda", "tende", "tapparella", "tapparelle"}),
     ),
 }
 
@@ -153,6 +155,12 @@ _STOP_WORDS = {
 _CONTINUATION_PREFIXES = {
     "en": ("the ", "that ", "this "),
     "it": ("quella ", "quello ", "quell "),
+}
+
+_TRIGGERABLE_NAMED_RESOURCES = {NyraResourceType.SCRIPT, NyraResourceType.SCENE, NyraResourceType.AUTOMATION}
+_TRIGGER_PREFIXES = {
+    "en": ("run ", "trigger ", "activate ", "start "),
+    "it": ("esegui ", "avvia ", "attiva ", "lancia "),
 }
 
 
@@ -287,10 +295,29 @@ def parse_command(text: str, language: str) -> ParsedHomeAssistantCommand | None
         elif resource_type is NyraResourceType.COVER:
             return None
 
+        plural_terms = (
+            {"luci", "lampade", "interruttori", "tende", "tapparelle"}
+            if selected_language == "it"
+            else set()
+        )
+        reference_tokens = _normalized(reference).split()
+        resource_terms = next(
+            terms
+            for candidate_type, terms in _RESOURCE_TERMS[selected_language]
+            if candidate_type is resource_type
+        )
+        explicit_area_tokens = [token for token in reference_tokens if token not in resource_terms]
+        explicit_area = (
+            " ".join(explicit_area_tokens) or None
+            if bool(set(reference_tokens) & plural_terms)
+            else None
+        )
         return ParsedHomeAssistantCommand(
             operation=operation,
             resource_type=resource_type,
             reference=reference,
+            many=bool(set(reference_tokens) & plural_terms),
+            area=explicit_area,
         )
 
     return None
@@ -317,7 +344,9 @@ class HomeAssistantActionSkill:
         self.capability = capability
 
     def matches(self, request: SkillCheckRequest) -> bool:
-        if parse_command(request.text, request.language) is not None or _semantic_command(request) is not None:
+        if request.semantic is not None:
+            return _semantic_command(request) is not None
+        if parse_command(request.text, request.language) is not None:
             return True
 
         state = _clarification_state(request.pending_state, self.name)
@@ -332,12 +361,56 @@ class HomeAssistantActionSkill:
         normalized = _normalized(request.text)
         return normalized.startswith(_CONTINUATION_PREFIXES[language])
 
+    async def fast_path_match(self, request: SkillCheckRequest) -> SkillMatch | None:
+        if request.semantic is not None or _clarification_state(request.pending_state, self.name) is not None:
+            return None
+        language = _language(request.language)
+        reference = _normalized(request.text)
+        for prefix in _TRIGGER_PREFIXES[language]:
+            if reference.startswith(prefix):
+                reference = reference[len(prefix):].strip()
+                break
+        if not reference:
+            return None
+        correlation = CapabilityCorrelation(**request.correlation.model_dump())
+        resolved = await self.capability.resolve(ResourceReference(reference=reference, resource_type=None, cardinality=ResolveCardinality.MANY), dict(request.context), correlation=correlation)
+        candidates = [c for c in resolved.candidates if c.resource.resource_type in _TRIGGERABLE_NAMED_RESOURCES]
+        if not candidates:
+            return None
+        exact = [c for c in candidates if _normalized(c.resource.name or "") == reference or _normalized(c.resource.resource_id.split(".",1)[-1]) == reference]
+        if exact:
+            candidates = exact
+        if len(candidates) == 1:
+            target=candidates[0].resource
+            return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":NyraOperation.TRIGGER.value,"resource_type":target.resource_type.value,"reference":reference,"selected_resource_id":target.resource_id,"selected_resource_type":target.resource_type.value,"selected_name":target.name,"fast_path":"named_ha_resource"})
+        choices=[{"resource_id":c.resource.resource_id,"resource_type":c.resource.resource_type.value,"name":c.resource.name or c.resource.resource_id} for c in candidates]
+        return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":NyraOperation.TRIGGER.value,"resource_type":candidates[0].resource.resource_type.value,"reference":reference,"fast_path":"named_ha_resource","fast_path_candidates":choices})
+
     def match(self, request: SkillCheckRequest) -> SkillMatch:
         parsed = parse_command(request.text, request.language)
         semantic_parsed = _semantic_command(request)
         if parsed is not None or semantic_parsed is not None:
             operation,resource_type,reference=(parsed.operation,parsed.resource_type,parsed.reference) if parsed is not None else semantic_parsed
-            return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":operation.value,"resource_type":resource_type.value,"reference":reference})
+            metadata = {
+                "operation": operation.value,
+                "resource_type": resource_type.value,
+                "reference": reference,
+            }
+            if parsed is not None:
+                metadata["cardinality"] = (
+                    ResolveCardinality.MANY.value
+                    if parsed.many
+                    else ResolveCardinality.ONE.value
+                )
+                if parsed.area is not None:
+                    metadata["area"] = parsed.area
+            return SkillMatch(
+                matched=True,
+                skill_name=self.name,
+                token=self.name,
+                memory_requirement=MemoryRequirement.NONE,
+                metadata=metadata,
+            )
 
         state = _clarification_state(request.pending_state, self.name)
         if state is None:
@@ -388,6 +461,9 @@ class HomeAssistantActionSkill:
             **request.correlation.model_dump()
         )
         trusted_context = dict(request.context)
+        explicit_area = metadata.get("area")
+        if isinstance(explicit_area, str) and explicit_area.strip():
+            trusted_context["area"] = explicit_area.strip()
         language = _language(request.language)
 
         selected_resource_id = metadata.get("selected_resource_id")
@@ -431,6 +507,11 @@ class HomeAssistantActionSkill:
                 },
             )
 
+        fast_path_candidates = metadata.get("fast_path_candidates")
+        if isinstance(fast_path_candidates, list) and fast_path_candidates:
+            pending_state = {"kind":"ha_target_clarification","skill_name":self.name,"operation":operation.value,"resource_type":resource_type.value,"reference":reference_text,"candidates":fast_path_candidates}
+            return SkillExecuteResponse(correlation=request.correlation,outcome=SkillOutcome.NEEDS_CLARIFICATION,text=_clarification_prompt(fast_path_candidates, language),pending_state=pending_state)
+
         state = _clarification_state(request.pending_state, self.name)
         if metadata.get("clarification") and state is not None:
             return SkillExecuteResponse(
@@ -440,11 +521,30 @@ class HomeAssistantActionSkill:
                 pending_state=state,
             )
 
+        cardinality = ResolveCardinality(
+            metadata.get("cardinality", ResolveCardinality.ONE.value)
+        )
+        canonical_terms = {
+            "luci": "luce",
+            "lampade": "lampada",
+            "interruttori": "interruttore",
+            "tende": "tenda",
+            "tapparelle": "tapparella",
+        }
+        canonical_tokens = [
+            canonical_terms.get(token, token)
+            for token in _normalized(reference_text).split()
+        ]
+        if isinstance(explicit_area, str) and explicit_area.strip():
+            area_tokens = _normalized(explicit_area).split()
+            if area_tokens and canonical_tokens[-len(area_tokens):] == area_tokens:
+                canonical_tokens = canonical_tokens[:-len(area_tokens)]
+        canonical_reference = " ".join(canonical_tokens)
         resolved = await self.capability.resolve(
             ResourceReference(
-                reference=reference_text,
+                reference=canonical_reference,
                 resource_type=resource_type,
-                cardinality=ResolveCardinality.ONE,
+                cardinality=cardinality,
             ),
             trusted_context,
             correlation=correlation,
@@ -481,30 +581,46 @@ class HomeAssistantActionSkill:
                 pending_state=pending_state,
             )
 
-        if len(resolved.candidates) != 1:
+        if cardinality is ResolveCardinality.ONE and len(resolved.candidates) != 1:
+            return SkillExecuteResponse(
+                correlation=request.correlation,
+                outcome=SkillOutcome.FAILED,
+                error=ErrorDetail(code="HA_INVALID_RESOLVE_RESULT"),
+            )
+        if cardinality is ResolveCardinality.MANY and not resolved.candidates:
             return SkillExecuteResponse(
                 correlation=request.correlation,
                 outcome=SkillOutcome.FAILED,
                 error=ErrorDetail(code="HA_INVALID_RESOLVE_RESULT"),
             )
 
-        target = resolved.candidates[0].resource
-        executed = await self.capability.execute(
-            ExecuteRequest(
-                correlation=correlation,
-                operation=operation,
-                resource_id=target.resource_id,
-                resource_type=target.resource_type,
-            ),
-            trusted_context,
-        )
+        targets = [candidate.resource for candidate in resolved.candidates]
+        successful_targets = []
+        first_failure = None
+        for target in targets:
+            executed = await self.capability.execute(
+                ExecuteRequest(
+                    correlation=correlation,
+                    operation=operation,
+                    resource_id=target.resource_id,
+                    resource_type=target.resource_type,
+                ),
+                trusted_context,
+            )
+            if executed.outcome is CommonOutcome.SUCCESS:
+                successful_targets.append(target)
+            elif first_failure is None:
+                first_failure = executed
 
-        if executed.outcome is not CommonOutcome.SUCCESS:
+        if not successful_targets:
             return SkillExecuteResponse(
                 correlation=request.correlation,
                 outcome=SkillOutcome.FAILED,
-                error=executed.error
-                or ErrorDetail(code=f"HA_{executed.outcome.value}"),
+                error=(
+                    first_failure.error
+                    if first_failure is not None and first_failure.error is not None
+                    else ErrorDetail(code="HA_NO_TARGET_EXECUTED")
+                ),
             )
 
         return SkillExecuteResponse(
@@ -513,8 +629,8 @@ class HomeAssistantActionSkill:
             text="Fatto." if language == "it" else "Done.",
             result={
                 "operation": operation.value,
-                "resource_type": target.resource_type.value,
-                "resource_id": target.resource_id,
+                "resource_type": resource_type.value,
+                "resource_ids": [target.resource_id for target in successful_targets],
                 "reference": reference_text,
             },
         )

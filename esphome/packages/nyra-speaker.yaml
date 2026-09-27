@@ -3,6 +3,19 @@
 # Room/device identity belongs only in esphome/devices/*.yaml.
 packages:
   waveshare_audio_va: !include ../vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml
+  nyra_identification: !include nyra-identification.yaml
+
+# Optional battery gauge value exposed natively to Home Assistant.
+number:
+  - platform: template
+    id: nyra_battery_percent
+    name: "Nyra Battery Gauge Percent"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
+    entity_category: config
 
 # Stable, read-only source identity consumed by the Nyra Home Assistant adapter.
 # The value comes from the per-device `source_id` substitution created at provisioning.
@@ -37,6 +50,31 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  # Exact ring state visible immediately before Nyra acquires it.
+  - id: nyra_ring_restore_state
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_ring_restore_effect
+    type: std::string
+    restore_value: no
+    initial_value: '"None"'
+  - id: nyra_ring_restore_red
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_green
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_blue
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_brightness
+    type: float
+    restore_value: no
+    initial_value: '1.0'
 
 # Router/HA owns semantic pipeline state. Firmware owns rendering only.
 # These public effect names are the contract consumed by the Nyra HA adapter.
@@ -46,7 +84,19 @@ globals:
 # component that knows the actual playback lifetime.
 voice_assistant:
   on_listening:
-    - lambda: id(nyra_ring_owned) = true;
+    - lambda: |-
+        // Snapshot only on the ownership transition. Nyra's later visual
+        // phases must never overwrite the external/background state.
+        if (!id(nyra_ring_owned)) {
+          const auto &values = id(status_ring).remote_values;
+          id(nyra_ring_restore_state) = values.is_on();
+          id(nyra_ring_restore_effect) = std::string(id(status_ring).get_effect_name());
+          id(nyra_ring_restore_red) = values.get_red();
+          id(nyra_ring_restore_green) = values.get_green();
+          id(nyra_ring_restore_blue) = values.get_blue();
+          id(nyra_ring_restore_brightness) = values.get_brightness();
+        }
+        id(nyra_ring_owned) = true;
     - light.turn_on:
         id: status_ring
         effect: "Pulse Fast"
@@ -67,7 +117,7 @@ voice_assistant:
         effect: "nyra_listening_white_fast"
   on_end:
     - lambda: id(nyra_ring_owned) = false;
-    - light.turn_off: status_ring
+    - script.execute: nyra_ring_restore
 
 media_player:
   - id: !extend external_media_player
@@ -113,6 +163,39 @@ light:
   - id: !extend status_ring
     name: "Nyra Status Ring"
     effects:
+      - addressable_lambda:
+          name: "nyra_battery_gauge"
+          update_interval: 500ms
+          lambda: |-
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            if (n < 3) return;
+
+            // Physical front mapping on the 7-LED Waveshare ring.
+            const int left = 1;
+            const int center = 0;
+            const int right = n - 1;
+
+            float pct = id(nyra_battery_percent).state;
+            if (isnan(pct)) pct = 0.0f;
+            if (pct < 0.0f) pct = 0.0f;
+            if (pct > 100.0f) pct = 100.0f;
+
+            Color color(0, 255, 0);
+            int count = 3;
+            if (pct <= 5.0f)       { color = Color(255, 0, 0); count = 1; }
+            else if (pct <= 10.0f) { color = Color(255, 0, 0); count = 2; }
+            else if (pct <= 15.0f) { color = Color(255, 0, 0); count = 3; }
+            else if (pct <= 20.0f) { color = Color(255, 210, 0); count = 1; }
+            else if (pct <= 30.0f) { color = Color(255, 210, 0); count = 2; }
+            else if (pct <= 40.0f) { color = Color(255, 210, 0); count = 3; }
+            else if (pct <= 60.0f) { color = Color(0, 255, 0); count = 1; }
+            else if (pct <= 80.0f) { color = Color(0, 255, 0); count = 2; }
+
+            it[left] = color;
+            if (count >= 2) it[center] = color;
+            if (count >= 3) it[right] = color;
+
       - addressable_lambda:
           name: "nyra_listening_white_fast"
           update_interval: 30ms
@@ -259,6 +342,27 @@ audio_file:
     file: ${nyra_assets_dir}/nyra_close.wav
 
 script:
+  # Restore the exact state that was visible before Nyra temporarily acquired
+  # the ring. External HA uses (alarm/battery/etc.) therefore survive a session.
+  - id: nyra_ring_restore
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(nyra_ring_restore_state);'
+          then:
+            - lambda: |-
+                auto call = id(status_ring).turn_on();
+                call.set_rgb(id(nyra_ring_restore_red),
+                             id(nyra_ring_restore_green),
+                             id(nyra_ring_restore_blue));
+                call.set_brightness(id(nyra_ring_restore_brightness));
+                const std::string effect = id(nyra_ring_restore_effect);
+                call.set_effect(effect.empty() ? "None" : effect);
+                call.perform();
+          else:
+            - light.turn_off: status_ring
+
   # Replace only the upstream final LED dispatcher. control_leds and the rest of
   # the Waveshare voice state machine stay intact; phase-driven writes are simply
   # ignored while Nyra owns the semantic ring.

@@ -101,10 +101,16 @@ class SkillsService:
 
         selected = self.registry.check(request)
         if selected is None:
-            return SkillCheckResponse(
-                correlation=request.correlation,
-                outcome=SkillOutcome.MISS,
-            )
+            definition = self.registry.get("home_assistant_action")
+            skill = getattr(definition.matcher, "__self__", None) if definition is not None else None
+            fast_path = getattr(skill, "fast_path_match", None)
+            if fast_path is not None:
+                match = fast_path(request)
+                if inspect.isawaitable(match):
+                    match = await match
+                if match is not None and match.matched:
+                    return SkillCheckResponse(correlation=request.correlation,outcome=SkillOutcome.HANDLED,match=match)
+            return SkillCheckResponse(correlation=request.correlation,outcome=SkillOutcome.MISS)
 
         definition = self.registry.get(selected.skill_name)
         if definition is None:

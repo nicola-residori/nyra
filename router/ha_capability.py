@@ -96,6 +96,21 @@ class HomeAssistantApiClient:
             response.raise_for_status()
 
 
+    async def area_entities(self, area: str) -> set[str]:
+        area_literal = json.dumps(area)
+        template = "{{ area_entities(" + area_literal + ") | tojson }}"
+        async with httpx.AsyncClient(
+            base_url=self.base_url, timeout=self.timeout, transport=self.transport,
+            headers={"Authorization": f"Bearer {self.token}"},
+        ) as client:
+            response = await client.post("/api/template", json={"template": template})
+            response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise ValueError("Home Assistant area_entities response must be a list")
+        return {item for item in payload if isinstance(item, str)}
+
+
     async def automation_list(self) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(
             base_url=self.base_url,
@@ -182,6 +197,7 @@ _OPERATION_MAP = {
     (NyraResourceType.COVER, NyraOperation.CLOSE): ("cover", "close_cover"),
     (NyraResourceType.SCRIPT, NyraOperation.TRIGGER): ("script", "turn_on"),
     (NyraResourceType.SCENE, NyraOperation.TRIGGER): ("scene", "turn_on"),
+    (NyraResourceType.AUTOMATION, NyraOperation.TRIGGER): ("automation", "trigger"),
 }
 
 
@@ -623,6 +639,16 @@ class HomeAssistantCapabilityPort:
         query_tokens = _tokens(reference.reference)
         candidates: list[ResolveCandidate] = []
 
+        area_ids: set[str] | None = None
+        area = trusted_context.get("area")
+        if (
+            isinstance(area, str)
+            and area.strip()
+            and reference.resource_type is not None
+            and len(query_tokens) == 1
+        ):
+            area_ids = await self.client.area_entities(area.strip())
+
         for native in states:
             entity_id = native.get("entity_id")
             if not isinstance(entity_id, str) or "." not in entity_id:
@@ -639,6 +665,8 @@ class HomeAssistantCapabilityPort:
                 continue
             if allowed_ids is not None and entity_id not in allowed_ids:
                 continue
+            if area_ids is not None and entity_id not in area_ids:
+                continue
 
             attributes = native.get("attributes")
             attributes = attributes if isinstance(attributes, dict) else {}
@@ -654,7 +682,12 @@ class HomeAssistantCapabilityPort:
                 if value
             )
             searchable_tokens = _tokens(searchable)
-            if query_tokens and not query_tokens.issubset(searchable_tokens):
+            area_scoped_generic = area_ids is not None and len(query_tokens) == 1
+            if (
+                query_tokens
+                and not area_scoped_generic
+                and not query_tokens.issubset(searchable_tokens)
+            ):
                 continue
 
             score = (
