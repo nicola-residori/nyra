@@ -11,10 +11,10 @@ class ReasoningOrchestrator:
         self.llm_client=llm_client; self.dispatcher=dispatcher; self.observability=observability
         self.max_rounds=int(max_rounds); self.total_timeout_seconds=float(total_timeout_seconds)
 
-    async def reason(self, *, request, context, pending_state, identity_user_id):
+    async def reason(self, *, request, context, pending_state, identity_user_id, conversation_history=None):
         async def run():
             reasoning_id=None; results=[]
-            reasoning_context=build_reasoning_context(request,context,pending_state)
+            reasoning_context=build_reasoning_context(request,context,pending_state,conversation_history=conversation_history)
             for _ in range(self.max_rounds):
                 if self.observability is not None:
                     self.observability.trace_event(

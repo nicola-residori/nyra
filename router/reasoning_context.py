@@ -3,8 +3,9 @@ from shared.protocol.llm import ReasoningContext
 
 _ALLOWED_OPERATIONAL={"mode","timezone","locale"}
 
-def build_reasoning_context(request, context, pending_state=None)->ReasoningContext:
+def build_reasoning_context(request, context, pending_state=None, conversation_history=None)->ReasoningContext:
     data=context.data if isinstance(context.data,dict) else {}
+    history=list(conversation_history or [])[-6:]
     identity=data.get("identity")
     trusted=None
     if isinstance(identity,dict):
@@ -26,5 +27,5 @@ def build_reasoning_context(request, context, pending_state=None)->ReasoningCont
         trusted_identity=trusted,policy=policy,
         source=request.source.id if request.source else None,
         area=request.source.area if request.source else None,
-        conversation_history=[],clarification=clarification,operational=operational,
+        conversation_history=history,clarification=clarification,operational=operational,
     )

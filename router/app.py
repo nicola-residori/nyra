@@ -296,7 +296,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         )
         action_gate = LlmActionGate(skills_client) if skills_client is not None else None
         plan_executor = RouterPlanExecutor(ha_capability) if ha_capability is not None else None
-        llm_port = RouterLlmPort(orchestrator, action_gate=action_gate, plan_executor=plan_executor, semantic_min_confidence=settings.llm_semantic_min_confidence)
+        llm_port = RouterLlmPort(orchestrator, action_gate=action_gate, plan_executor=plan_executor, semantic_min_confidence=settings.llm_semantic_min_confidence, history_store=request_store, history_limit=settings.llm_conversation_history_turns)
     else:
         class _UnavailableLlmPort:
             async def reason(self, request, context, memory, pending_state):

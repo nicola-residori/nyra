@@ -11,22 +11,36 @@ from shared.protocol.skills import SkillCorrelation
 from shared.protocol.execution_common import ExecutionStatus
 
 class RouterLlmPort:
-    def __init__(self,orchestrator,action_gate=None,plan_executor=None,semantic_min_confidence:float=.80):
+    def __init__(self,orchestrator,action_gate=None,plan_executor=None,semantic_min_confidence:float=.80,history_store=None,history_limit:int=6):
         self.orchestrator=orchestrator; self.action_gate=action_gate; self.plan_executor=plan_executor
         self.semantic_bridge=SemanticSkillBridge(semantic_min_confidence)
+        self.history_store=history_store
+        self.history_limit=max(1,min(int(history_limit),20))
+
+    def _conversation_history(self,request):
+        if self.history_store is None or request.session_id is None:
+            return []
+        states=self.history_store.list_recent_for_session(request.session_id,self.history_limit)
+        return [{"role":"user","content":state.original_input} for state in states if state.request_id != request.request_id]
 
     async def semantic(self,request,context,pending_state):
         semantic_context=build_reasoning_context(request,context,pending_state)
         semantic_context=semantic_context.model_copy(
             update={"operational":{**semantic_context.operational,"mode":"skill_routing"}}
         )
+        observability=getattr(self.orchestrator,"observability",None)
+        if observability is not None:
+            observability.trace_event("LLM_PROVIDER_REQUEST",request_id=request.request_id,origin_request_id=request.origin_request_id or request.request_id,trace_id=context.trace_id,operation="llm.provider",params={"purpose":"SEMANTIC"})
         try:
-            result=await self.orchestrator.llm_client.semantic(
-                LlmRequest(purpose=LlmPurpose.SEMANTIC,context=semantic_context)
-            )
+            result=await self.orchestrator.llm_client.semantic(LlmRequest(purpose=LlmPurpose.SEMANTIC,context=semantic_context))
         except LlmUnavailable:
-            return None
-        return self.semantic_bridge.accept(result)
+            if observability is not None:
+                observability.trace_event("LLM_PROVIDER_RESPONSE",request_id=request.request_id,origin_request_id=request.origin_request_id or request.request_id,trace_id=context.trace_id,operation="llm.provider",result="UNAVAILABLE",params={"purpose":"SEMANTIC"})
+            raise
+        accepted=self.semantic_bridge.accept(result)
+        if observability is not None:
+            observability.trace_event("LLM_PROVIDER_RESPONSE",request_id=request.request_id,origin_request_id=request.origin_request_id or request.request_id,trace_id=context.trace_id,operation="llm.provider",result="ACCEPTED" if accepted is not None else "REJECTED",params={"purpose":"SEMANTIC"})
+        return accepted
 
     async def reason(self,request,context,memory,pending_state):
         del memory
@@ -34,7 +48,8 @@ class RouterLlmPort:
         user_id=identity.get("user_id")
         try:
             result=await self.orchestrator.reason(
-                request=request,context=context,pending_state=pending_state,identity_user_id=user_id
+                request=request,context=context,pending_state=pending_state,identity_user_id=user_id,
+                conversation_history=self._conversation_history(request),
             )
         except LlmUnavailable:
             return LifecycleDecision.failed("LLM_UNAVAILABLE")
