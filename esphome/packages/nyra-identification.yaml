@@ -1,0 +1,26 @@
+# Normal Assist speaker-identification overlay.
+substitutions:
+  nyra_audio_ingress_url: "ws://homeassistant.local:8123/api/nyra/audio"
+  nyra_language: "it-IT"
+external_components:
+  - source:
+      type: local
+      path: /config/esphome/components
+    components: [nyra_audio_ingress]
+nyra_audio_ingress:
+  id: nyra_audio_tee
+  microphone: i2s_mics
+  url: ${nyra_audio_ingress_url}
+  token: !secret nyra_ingress_token
+  source_id: "${source_id}"
+  language: "${nyra_language}"
+  timeout: 60s
+  speech_rms: 45
+  continuation_rms: 20
+  speech_on: 100ms
+  trailing_silence: 900ms
+voice_assistant:
+  on_listening:
+    - lambda: 'id(nyra_audio_tee).start_identification_stream();'
+  on_stt_vad_end:
+    - lambda: 'id(nyra_audio_tee).end_stream();'

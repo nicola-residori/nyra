@@ -72,9 +72,9 @@ def test_wake_detection_shows_listening_white_while_the_clean_audio_wait_runs():
 def test_stable_speaker_package_cannot_enable_experimental_enrollment():
     text = PACKAGE.read_text(encoding="utf-8")
 
-    assert "nyra_audio_ingress" not in text
     assert "nyra_enrollment_capture" not in text
-    assert "start_identification_stream" not in text
+    assert "start_enrollment_capture" not in text
+    assert "start_wake_word_capture" not in text
 
 
 def test_audio_tee_preserves_the_existing_listening_visual_sequence():
@@ -289,3 +289,15 @@ def test_new_speaker_template_inherits_shared_ingress_configuration():
     assert "nyra_language" not in example
     assert "nyra_ingress_token:" in secrets
     assert "speaker-id" not in example.lower()
+
+def test_stable_speaker_includes_normal_identification_overlay():
+    package = PACKAGE.read_text(encoding="utf-8")
+    overlay_path = ROOT / "esphome/packages/nyra-identification.yaml"
+    assert "nyra_identification: !include nyra-identification.yaml" in package
+    assert overlay_path.exists()
+    overlay = overlay_path.read_text(encoding="utf-8")
+    assert "nyra_audio_ingress:" in overlay
+    assert "start_identification_stream();" in overlay
+    assert "end_stream();" in overlay
+    assert "start_enrollment_capture" not in overlay
+    assert "start_wake_word_capture" not in overlay

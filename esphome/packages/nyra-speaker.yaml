@@ -3,6 +3,7 @@
 # Room/device identity belongs only in esphome/devices/*.yaml.
 packages:
   waveshare_audio_va: !include ../vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml
+  nyra_identification: !include nyra-identification.yaml
 
 # Stable, read-only source identity consumed by the Nyra Home Assistant adapter.
 # The value comes from the per-device `source_id` substitution created at provisioning.
