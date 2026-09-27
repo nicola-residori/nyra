@@ -191,3 +191,42 @@ async def test_adapter_normalizes_pydantic_schema_for_strict_provider_without_mu
     assert strict["additionalProperties"] is False
     assert strict["$defs"]["Target"]["additionalProperties"] is False
     assert original_schema == expected_original
+
+
+@pytest.mark.asyncio
+async def test_adapter_uses_non_strict_json_schema_when_contract_contains_unconstrained_any():
+    seen = {}
+
+    async def completion(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"intent":"query"}'))],
+            usage=None,
+        )
+
+    schema = {
+        "type": "object",
+        "properties": {"intent": {"type": "string"}, "value": {"title": "Value"}},
+        "required": ["intent", "value"],
+        "additionalProperties": False,
+    }
+    req = ProviderRequest(
+        purpose="SEMANTIC",
+        model="openai/gpt-test",
+        messages=({"role": "user", "content": "hello"},),
+        response_schema=schema,
+    )
+    await LiteLlmAdapter(completion=completion).infer(req)
+    response_format = seen["response_format"]["json_schema"]
+    assert response_format["strict"] is False
+    assert response_format["schema"] == schema
+
+
+def test_real_semantic_result_schema_is_detected_as_non_strict_compatible():
+    from shared.protocol.semantic import SemanticResult
+
+    schema = SemanticResult.model_json_schema()
+
+    value_schema = schema["$defs"]["SemanticParameter"]["properties"]["value"]
+    assert value_schema == {"title": "Value"}
+    assert LiteLlmAdapter._is_strict_schema_compatible(schema) is False

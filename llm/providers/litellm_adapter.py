@@ -29,6 +29,12 @@ class LiteLlmAdapter(ProviderAdapter):
     async def infer(self, request: ProviderRequest) -> ProviderResponse:
         provider, model = self._split_model(request.model)
         try:
+            strict_compatible = self._is_strict_schema_compatible(request.response_schema)
+            provider_schema = (
+                self._strict_response_schema(request.response_schema)
+                if strict_compatible
+                else deepcopy(request.response_schema)
+            )
             completion_args = {
                 "model": request.model,
                 "messages": [dict(message) for message in request.messages],
@@ -37,8 +43,8 @@ class LiteLlmAdapter(ProviderAdapter):
                     "type": "json_schema",
                     "json_schema": {
                         "name": "nyra_response",
-                        "strict": True,
-                        "schema": self._strict_response_schema(request.response_schema),
+                        "strict": strict_compatible,
+                        "schema": provider_schema,
                     },
                 },
             }
@@ -73,6 +79,47 @@ class LiteLlmAdapter(ProviderAdapter):
                 output_tokens=getattr(usage, "completion_tokens", None),
             ),
         )
+
+    @staticmethod
+    def _is_strict_schema_compatible(schema: dict[str, Any]) -> bool:
+        # Pydantic Any is emitted as an unconstrained schema such as
+        # {"title": "Value"}. Inspect only actual schema nodes: mappings
+        # under properties/$defs are containers whose values are schemas.
+        structural_keywords = {
+            "$ref", "type", "anyOf", "oneOf", "allOf", "enum", "const",
+            "properties", "items", "prefixItems",
+        }
+
+        def visit(node: Any) -> bool:
+            if not isinstance(node, dict):
+                return True
+
+            if not any(key in node for key in structural_keywords):
+                return False
+
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                if not all(visit(child) for child in properties.values()):
+                    return False
+
+            definitions = node.get("$defs")
+            if isinstance(definitions, dict):
+                if not all(visit(child) for child in definitions.values()):
+                    return False
+
+            for key in ("anyOf", "oneOf", "allOf", "prefixItems"):
+                children = node.get(key)
+                if isinstance(children, list):
+                    if not all(visit(child) for child in children):
+                        return False
+
+            items = node.get("items")
+            if isinstance(items, dict) and not visit(items):
+                return False
+
+            return True
+
+        return visit(schema)
 
     @staticmethod
     def _strict_response_schema(schema: dict[str, Any]) -> dict[str, Any]:
