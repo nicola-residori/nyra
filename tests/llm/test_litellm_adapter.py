@@ -230,3 +230,19 @@ def test_real_semantic_result_schema_is_detected_as_non_strict_compatible():
     value_schema = schema["$defs"]["SemanticParameter"]["properties"]["value"]
     assert value_schema == {"title": "Value"}
     assert LiteLlmAdapter._is_strict_schema_compatible(schema) is False
+
+def test_strict_schema_normalizer_removes_default_sibling_from_ref_nodes():
+    schema = {
+        "type": "object",
+        "properties": {
+            "on_timeout": {
+                "$ref": "#/$defs/TimeoutBehavior",
+                "default": "FAIL",
+            }
+        },
+        "$defs": {
+            "TimeoutBehavior": {"type": "string", "enum": ["FAIL", "CONTINUE"]}
+        },
+    }
+    strict = LiteLlmAdapter._strict_response_schema(schema)
+    assert strict["properties"]["on_timeout"] == {"$ref": "#/$defs/TimeoutBehavior"}

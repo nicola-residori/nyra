@@ -133,8 +133,8 @@ class LiteLlmAdapter(ProviderAdapter):
                     node["required"] = list(properties)
                     node["additionalProperties"] = False
 
-                if node.get("default") is None:
-                    node.pop("default", None)
+                # Provider strict schemas reject default siblings on $ref; defaults are not part of the provider contract.
+                node.pop("default", None)
 
                 for value in list(node.values()):
                     normalize(value)
