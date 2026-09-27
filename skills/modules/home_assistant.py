@@ -296,6 +296,19 @@ def parse_command(text: str, language: str) -> ParsedHomeAssistantCommand | None
     return None
 
 
+def _semantic_command(request: SkillCheckRequest):
+    x=request.semantic
+    if x is None or x.temporal is not None or x.triggers or x.conditions or len(x.actions)!=1: return None
+    a=x.actions[0]
+    if a.parameters or a.target is None: return None
+    try: operation=NyraOperation(a.operation); resource_type=NyraResourceType(a.target.kind)
+    except (TypeError,ValueError): return None
+    reference=a.target.reference.strip()
+    if not reference: return None
+    area=(a.target.area or "").strip()
+    if area and area.casefold() not in reference.casefold(): reference=f"{reference} {area}"
+    return operation,resource_type,reference
+
 class HomeAssistantActionSkill:
     name = "home_assistant_action"
     priority = 90
@@ -304,7 +317,7 @@ class HomeAssistantActionSkill:
         self.capability = capability
 
     def matches(self, request: SkillCheckRequest) -> bool:
-        if parse_command(request.text, request.language) is not None:
+        if parse_command(request.text, request.language) is not None or _semantic_command(request) is not None:
             return True
 
         state = _clarification_state(request.pending_state, self.name)
@@ -321,18 +334,10 @@ class HomeAssistantActionSkill:
 
     def match(self, request: SkillCheckRequest) -> SkillMatch:
         parsed = parse_command(request.text, request.language)
-        if parsed is not None:
-            return SkillMatch(
-                matched=True,
-                skill_name=self.name,
-                token=self.name,
-                memory_requirement=MemoryRequirement.NONE,
-                metadata={
-                    "operation": parsed.operation.value,
-                    "resource_type": parsed.resource_type.value,
-                    "reference": parsed.reference,
-                },
-            )
+        semantic_parsed = _semantic_command(request)
+        if parsed is not None or semantic_parsed is not None:
+            operation,resource_type,reference=(parsed.operation,parsed.resource_type,parsed.reference) if parsed is not None else semantic_parsed
+            return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":operation.value,"resource_type":resource_type.value,"reference":reference})
 
         state = _clarification_state(request.pending_state, self.name)
         if state is None:

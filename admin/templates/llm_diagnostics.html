@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>LLM diagnostics</h2>
+{% if error %}<p>{{ error }}</p>{% endif %}
+<div class="table-shell"><table><thead><tr><th>Purpose</th><th>Outcome</th><th>Provider</th><th>Model</th><th>Latency</th><th>Tokens</th><th>Fallback</th><th>Capabilities</th><th>Cost</th><th>Error</th></tr></thead>
+<tbody>{% for x in items %}<tr><td>{{ x.purpose }}</td><td>{{ x.outcome }}</td><td>{{ x.provider }}</td><td>{{ x.model }}</td><td>{{ x.latency_ms }}</td><td>{{ x.input_tokens }}/{{ x.output_tokens }}</td><td>{{ x.fallback }}</td><td>{{ x.capabilities|join(", ") }}</td><td>{{ x.cost if x.cost is not none else "—" }}</td><td>{{ x.error_code or "" }}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

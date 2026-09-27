@@ -286,6 +286,42 @@ class HomeAssistantCapabilityPort:
         )
 
 
+    @staticmethod
+    def _reasoning_allowed(entity_id: str, trusted_context: dict[str, Any]) -> None:
+        allowed = trusted_context.get("allowed_resource_ids")
+        if isinstance(allowed, list) and entity_id not in {item for item in allowed if isinstance(item, str)}:
+            raise ValueError("RESOURCE_DENIED")
+
+    async def reasoning_read_state(self, entity_id: str, trusted_context: dict[str, Any], *, correlation: CapabilityCorrelation) -> dict[str, Any]:
+        self._observe("ha.reasoning.read_state", correlation)
+        self._reasoning_allowed(entity_id, trusted_context)
+        native = await self.client.state(entity_id)
+        if native is None: raise ValueError("RESOURCE_NOT_FOUND")
+        return {"entity_id": native.get("entity_id"), "state": native.get("state")}
+
+    async def reasoning_read_attribute(self, entity_id: str, attribute: str, trusted_context: dict[str, Any], *, correlation: CapabilityCorrelation) -> dict[str, Any]:
+        self._observe("ha.reasoning.read_attribute", correlation)
+        self._reasoning_allowed(entity_id, trusted_context)
+        native = await self.client.state(entity_id)
+        attrs = native.get("attributes", {}) if isinstance(native, dict) else {}
+        if attribute not in attrs: raise ValueError("ATTRIBUTE_NOT_FOUND")
+        return {"entity_id": entity_id, "attribute": attribute, "value": attrs[attribute]}
+
+    async def reasoning_discover_resources(self, query: str, trusted_context: dict[str, Any], *, correlation: CapabilityCorrelation) -> dict[str, Any]:
+        self._observe("ha.reasoning.discover_resources", correlation)
+        allowed = trusted_context.get("allowed_resource_ids")
+        allowed_ids = {item for item in allowed if isinstance(item, str)} if isinstance(allowed, list) else None
+        query = query.casefold(); items = []
+        for item in await self.client.states():
+            entity = item.get("entity_id")
+            if not isinstance(entity, str): continue
+            if allowed_ids is not None and entity not in allowed_ids: continue
+            name = (item.get("attributes") or {}).get("friendly_name")
+            if query and query not in f"{entity} {name or ''}".casefold(): continue
+            items.append({"entity_id": entity, "name": name, "state": item.get("state")})
+            if len(items) >= 20: break
+        return {"items": items}
+
     async def _native_behavior_config(
         self,
         behavior: Behavior,

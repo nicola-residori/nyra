@@ -13,6 +13,7 @@ from router.user_directory import UserDirectory
 from shared.protocol.events import EventCategory, IdentityFeedback, InteractionState
 from shared.protocol.requests import CloseReason, NyraRequest, RequestStatus
 from shared.protocol.memory import MemoryRequirement
+from shared.protocol.skills import SkillOutcome
 from router.memory_client import MemoryUnavailable
 from router.observability.ids import generate_request_id, generate_session_id
 
@@ -261,6 +262,16 @@ async def test_user_directory_failure_does_not_block_a_request(tmp_path):
 @pytest.mark.asyncio
 async def test_memory_skill_and_llm_state_paths(tmp_path):
     context=ContextPort(semantic=True); memory=MemoryPort(); skill=SkillPort(match=False); llm=LlmPort()
+    async def explicit_miss(request, context, memory, pending_state):
+        skill.checked += 1
+        skill.contexts.append(context)
+        return SkillMatch(matched=False, outcome=SkillOutcome.MISS)
+    skill.check = explicit_miss
+    async def explicit_miss(request, context, memory, pending_state):
+        skill.checked += 1
+        skill.contexts.append(context)
+        return SkillMatch(matched=False, outcome=SkillOutcome.MISS)
+    skill.check = explicit_miss
     svc, _, broker=service(tmp_path, context_port=context, memory_port=memory, skill_port=skill, llm_port=llm)
     sub=await broker.subscribe({EventCategory.INTERACTION_STATE})
     result=await svc.execute(request(kind="ha_assist", identity={"user_id":"user-a","provider":"home_assistant","confidence":1.0}))

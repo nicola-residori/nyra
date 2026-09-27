@@ -1,0 +1,20 @@
+[Unit]
+Description=Nyra LLM
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nyra-llm
+EnvironmentFile=-/etc/nyra/llm.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/nyra-llm
+ExecStart=/opt/nyra-llm/.venv/bin/uvicorn llm.app:create_app --factory --host 0.0.0.0 --port 8090
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/nyra
+[Install]
+WantedBy=multi-user.target

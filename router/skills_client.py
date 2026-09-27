@@ -10,6 +10,8 @@ from shared.protocol.skills import (
     SkillCheckResponse,
     SkillExecuteRequest,
     SkillExecuteResponse,
+    PlanValidationRequest,
+    PlanValidationResponse,
 )
 
 
@@ -90,6 +92,16 @@ class SkillsClient:
             raise InvalidSkillsResponse(
                 "Skills returned invalid execute response"
             ) from exc
+
+    async def validate_plan(self, plan, *, correlation, trusted_context):
+        request = PlanValidationRequest(correlation=correlation, plan=plan, trusted_context=trusted_context)
+        response = await self._request("POST", "/v1/plans/validate", payload=request.model_dump(mode="json"))
+        if response.status_code != 200:
+            raise SkillsUnavailable(f"Skills plan validation returned HTTP {response.status_code}")
+        try:
+            return PlanValidationResponse.model_validate(self._json(response))
+        except ValidationError as exc:
+            raise InvalidSkillsResponse("Skills returned invalid plan validation response") from exc
 
     async def diagnostics(self) -> dict[str, Any]:
         health_response = await self._request("GET", "/health")

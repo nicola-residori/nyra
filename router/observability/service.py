@@ -27,6 +27,18 @@ class ObservabilityService:
         self.store.insert_logs(clean)
         return len(clean)
 
+
+    def trace_event(self, event: str, *, request_id: str, trace_id: str,
+                    operation: str, origin_request_id: str | None = None,
+                    result: str | None = None, params: dict | None = None,
+                    ct: str = "ROUTER") -> None:
+        self.ingest([LogRecord(
+            ct=ct, level=LogLevel.INFO, kind=LogKind.EVENT, event=event,
+            request_id=request_id, origin_request_id=origin_request_id or request_id,
+            trace_id=trace_id, span_id=new_span_id("ROUTER", operation),
+            operation=operation, result=result, params=params or {},
+        )])
+
     def emit(self, event: str, *, operation: str, result: str | None = None,
              params: dict | None = None) -> None:
         self.ingest([LogRecord(

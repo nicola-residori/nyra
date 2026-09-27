@@ -97,6 +97,15 @@ class RequestStateStore:
         state = self.get(request_id)
         return state.session_id if state is not None else None
 
+    def list_recent_for_session(self, session_id: str, limit: int = 6) -> list[PersistedRequestState]:
+        bounded=max(1,min(int(limit),20))
+        with self._connection() as conn:
+            rows=conn.execute(
+                "SELECT * FROM request_states WHERE session_id=? ORDER BY updated_at DESC, rowid DESC LIMIT ?",
+                (session_id,bounded),
+            ).fetchall()
+        return [self._decode(row) for row in reversed(rows)]
+
     def get_latest_for_session(self, session_id: str) -> PersistedRequestState | None:
         with self._connection() as conn:
             row = conn.execute(

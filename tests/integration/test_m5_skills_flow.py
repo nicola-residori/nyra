@@ -120,109 +120,21 @@ async def test_m5_observability_keeps_trace_and_parent_child_across_skills_capab
 
 
 @pytest.mark.asyncio
-async def test_future_llm_plan_must_pass_router_to_skills_gate_before_capability():
+async def test_future_llm_plan_gate_validates_before_router_execution():
     from router.llm_action_gate import LlmActionGate
     from shared.protocol.execution import ExecutionPlan
-    from shared.protocol.execution_common import (
-        ExecutionStatus,
-        ExecutionStep,
-        ExecutionTarget,
-        NyraOperation,
-        NyraResourceType,
-        PlanOrigin,
-        PlanValidationState,
-    )
-    from shared.protocol.capabilities import (
-        ExecuteResponse,
-        ResolveResponse,
-        ResolveStatus,
-        ResolveCandidate,
-        ResolvedResource,
-    )
-    from skills.execution import ExecutionPlanExecutor
-
-    calls = []
-
-    class RouterCapability:
-        async def resolve(self, reference, trusted_context, *, correlation):
-            calls.append("router.capability.resolve")
-            return ResolveResponse(
-                correlation=correlation,
-                status=ResolveStatus.RESOLVED,
-                reference=reference,
-                candidates=[
-                    ResolveCandidate(
-                        resource=ResolvedResource(
-                            resource_id="light.kitchen",
-                            resource_type=NyraResourceType.LIGHT,
-                            name="Kitchen Light",
-                        ),
-                        score=1.0,
-                    )
-                ],
-            )
-
-        async def execute(self, request, trusted_context):
-            calls.append("router.capability.execute")
-            return ExecuteResponse(
-                correlation=request.correlation,
-                outcome=CommonOutcome.SUCCESS,
-                result={"ok": True},
-            )
-
-        async def automation_create(self, request, trusted_context):
-            raise AssertionError("not expected")
-
+    from shared.protocol.execution_common import ExecutionStep,ExecutionTarget,NyraOperation,NyraResourceType,PlanOrigin,PlanValidationState
+    from shared.protocol.skills import PlanValidationResponse,PlanValidationOutcome,SkillCorrelation
+    calls=[]
     class SkillsBoundary:
-        def __init__(self):
-            self.executor = ExecutionPlanExecutor(RouterCapability())
-
-        async def validate_and_execute(self, plan, *, correlation, trusted_context):
+        async def validate_plan(self, plan, *, correlation, trusted_context):
             calls.append("skills.validate_materialize")
-            validated = plan.model_copy(
-                update={"validation_state": PlanValidationState.VALIDATED}
-            )
-            return await self.executor.execute(
-                validated,
-                correlation=correlation,
-                trusted_context=trusted_context,
-            )
-
-    gate = LlmActionGate(SkillsBoundary())
-    plan = ExecutionPlan(
-        plan_id="llm-plan",
-        origin=PlanOrigin.REASONING_LLM,
-        validation_state=PlanValidationState.PROPOSED,
-        steps=[
-            ExecutionStep(
-                step_id="one",
-                operation=NyraOperation.TURN_ON,
-                target=ExecutionTarget(
-                    reference="kitchen light",
-                    resource_type=NyraResourceType.LIGHT,
-                ),
-            )
-        ],
-    )
-    request_id = new_request_id()
-    corr = CapabilityCorrelation(
-        request_id=request_id,
-        origin_request_id=request_id,
-        trace_id=new_trace_id(),
-    )
-
-    result = await gate.execute_proposal(
-        plan,
-        correlation=corr,
-        trusted_context={"allowed_resource_ids": ["light.kitchen"]},
-    )
-
-    assert result.status is ExecutionStatus.COMPLETED
-    assert calls == [
-        "skills.validate_materialize",
-        "router.capability.resolve",
-        "router.capability.execute",
-    ]
+            return PlanValidationResponse(correlation=correlation,outcome=PlanValidationOutcome.VALIDATED,plan=plan.model_copy(update={"validation_state":PlanValidationState.VALIDATED}))
+    plan=ExecutionPlan(plan_id="llm-plan",origin=PlanOrigin.REASONING_LLM,validation_state=PlanValidationState.PROPOSED,steps=[ExecutionStep(step_id="one",operation=NyraOperation.TURN_ON,target=ExecutionTarget(reference="kitchen light",resource_type=NyraResourceType.LIGHT))])
+    corr=SkillCorrelation(request_id=(rid:=new_request_id()),origin_request_id=rid,trace_id=new_trace_id())
+    validated=await LlmActionGate(SkillsBoundary()).validate_proposal(plan,correlation=corr,trusted_context={})
+    assert validated.validation_state is PlanValidationState.VALIDATED
+    assert calls==["skills.validate_materialize"]
 
 
 @pytest.mark.asyncio
@@ -232,7 +144,7 @@ async def test_llm_action_gate_rejects_non_llm_origin_before_skills_or_capabilit
     from shared.protocol.execution_common import PlanOrigin, PlanValidationState
 
     class SkillsBoundary:
-        async def validate_and_execute(self, *args, **kwargs):
+        async def validate_plan(self, *args, **kwargs):
             raise AssertionError("must not be called")
 
     gate = LlmActionGate(SkillsBoundary())
@@ -248,7 +160,7 @@ async def test_llm_action_gate_rejects_non_llm_origin_before_skills_or_capabilit
     )
 
     with pytest.raises(ValueError, match="LLM-origin"):
-        await gate.execute_proposal(plan, correlation=corr, trusted_context={})
+        await gate.validate_proposal(plan, correlation=corr, trusted_context={})
 
 
 def test_skills_configuration_cannot_contain_home_assistant_credentials():

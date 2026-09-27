@@ -32,6 +32,7 @@ from router.api.speaker_id_admin import router as speaker_id_admin_router
 from router.api.users import router as users_router
 from router.api.memory_admin import router as memory_admin_router
 from router.api.capabilities import router as capabilities_router
+from router.api.llm_diagnostics import router as llm_diagnostics_router
 from router.skills_admin import SkillsAdminFacade, router as skills_admin_router
 from router.ha_capability import HomeAssistantApiClient, HomeAssistantCapabilityPort
 from router.speaker_id_admin import SpeakerIdAdminClient
@@ -39,6 +40,12 @@ from router.user_directory import UserDirectory
 from router.memory_client import MemoryClient
 from router.memory_skill_gateway import MemorySkillGateway
 from router.skills_client import SkillsClient, SkillsUnavailable
+from router.llm_client import LlmClient
+from router.reasoning_capabilities import ReasoningCapabilityDispatcher
+from router.reasoning_orchestrator import ReasoningOrchestrator
+from router.router_llm_port import RouterLlmPort
+from router.llm_action_gate import LlmActionGate
+from router.plan_execution import RouterPlanExecutor
 from shared.protocol.skills import (
     SkillCheckRequest,
     SkillCorrelation,
@@ -138,6 +145,15 @@ class _RemoteSkillPort:
             metadata=response.match.metadata,
         )
 
+    async def semantic_check(self, request, context, pending_state, semantic):
+        payload=SkillCheckRequest(correlation=self._correlation(request,context),text=request.input.text,language=request.language,context=context.data,pending_state=pending_state,semantic=semantic)
+        try: response=await self.client.check(payload)
+        except SkillsUnavailable: return SkillMatch(matched=False,outcome=SkillOutcome.FAILED,error_code="SKILLS_UNAVAILABLE")
+        if response.outcome is SkillOutcome.MISS: return SkillMatch(matched=False,outcome=SkillOutcome.MISS)
+        if response.outcome is SkillOutcome.FAILED: return SkillMatch(matched=False,outcome=SkillOutcome.FAILED,error_code=response.error.code if response.error else "SKILLS_FAILED")
+        if response.match is None or not response.match.matched: return SkillMatch(matched=False,outcome=SkillOutcome.FAILED,error_code="SKILLS_INVALID_MATCH")
+        return SkillMatch(matched=True,skill_name=response.match.skill_name,token=response.match.token,memory_requirement=response.match.memory_requirement,memory_query=response.match.memory_query,outcome=SkillOutcome.HANDLED,metadata=response.match.metadata)
+
     async def execute(self, match, request, context, memory, pending_state):
         from shared.protocol.skills import SkillMatch as ProtocolSkillMatch
 
@@ -168,10 +184,7 @@ class _RemoteSkillPort:
             return LifecycleDecision.failed("SKILLS_UNAVAILABLE")
 
         if response.outcome is SkillOutcome.MISS:
-            return LifecycleDecision(
-                status=RequestStatus.FAILED,
-                llm_fallback=True,
-            )
+            return LifecycleDecision.failed("SKILLS_EXECUTE_MISS")
         if response.outcome is SkillOutcome.NEEDS_CLARIFICATION:
             if response.text is None:
                 return LifecycleDecision.failed(
@@ -209,14 +222,9 @@ class _RemoteSkillPort:
         return LifecycleDecision.completed(response.text)
 
 
-class _LlmPort:
-    async def reason(self, request, context, memory, pending_state):
-        return LifecycleDecision(status=RequestStatus.FAILED)
-
-
 def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phrase_generator=None,
                wake_word_dataset=None, speaker_id_admin=None, memory_client=None,
-               skills_client=None, ha_capability=None):
+               skills_client=None, ha_capability=None, llm_client=None):
     settings = settings or RouterSettings.load()
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
@@ -276,6 +284,25 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         if memory_client is not None
         else None
     )
+    if settings.llm_url or llm_client is not None:
+        if llm_client is None:
+            llm_client = LlmClient(settings.llm_url, timeout=settings.llm_timeout_seconds)
+        dispatcher = ReasoningCapabilityDispatcher(memory_port=memory_port, ha_capability=ha_capability)
+        orchestrator = ReasoningOrchestrator(
+            llm_client, dispatcher,
+            max_rounds=settings.llm_max_rounds,
+            total_timeout_seconds=settings.llm_total_timeout_seconds,
+            observability=observability,
+        )
+        action_gate = LlmActionGate(skills_client) if skills_client is not None else None
+        plan_executor = RouterPlanExecutor(ha_capability) if ha_capability is not None else None
+        llm_port = RouterLlmPort(orchestrator, action_gate=action_gate, plan_executor=plan_executor, semantic_min_confidence=settings.llm_semantic_min_confidence, history_store=request_store, history_limit=settings.llm_conversation_history_turns)
+    else:
+        class _UnavailableLlmPort:
+            async def reason(self, request, context, memory, pending_state):
+                return LifecycleDecision.failed("LLM_NOT_CONFIGURED")
+        llm_port = _UnavailableLlmPort()
+
     lifecycle = RequestLifecycleService(
         store=request_store,
         broker=event_broker,
@@ -290,7 +317,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
             if skills_client is not None
             else _NoSkillPort()
         ),
-        llm_port=_LlmPort(),
+        llm_port=llm_port,
         clarification_timeout_seconds=settings.clarification_timeout_seconds,
         observability=observability,
         identity_config=identity_config,
@@ -335,6 +362,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.skills_admin = skills_admin
     app.state.ha_capability = ha_capability
     app.state.observability = observability
+    app.state.llm_client = llm_client
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
     app.state.ready = False
@@ -353,6 +381,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(memory_admin_router)
     app.include_router(skills_admin_router)
     app.include_router(capabilities_router)
+    app.include_router(llm_diagnostics_router)
     return app
 
 

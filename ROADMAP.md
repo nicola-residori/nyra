@@ -81,10 +81,19 @@
 
 ## Milestone 6 - LLM
 
-- Router-managed LLM access
-- Context propagation
-- Controlled capability calls
-- Provider-independent configuration
+**Status: Complete and deployed in production; final merge authorization pending**
+
+- Dedicated first-level `nyra-llm` service behind the Router trust boundary
+- Typed `SEMANTIC` and buffered `REASONING` contracts
+- Provider-independent `ProviderAdapter` with provider/model routing owned by `nyra-llm`
+- Technical/contract-only provider fallback
+- Deterministic Skills MISS -> semantic bridge -> general reasoning routing
+- Router-owned bounded conversation history, clarification, budgets, and timeout
+- Router-mediated read-only `SEARCH_MEMORY`, `READ_STATE`, `READ_ATTRIBUTE`, and `DISCOVER_RESOURCES`
+- Mandatory LLM proposal -> Skills validation/materialization -> Router capability action gate
+- Privacy-safe distributed LLM observability and Router-backed Admin diagnostics
+- Selectable centralized log export and correlated Router/Skills/Memory/LLM traces
+- Reproducible systemd/bootstrap/backup/restore/verification assets and production validation
 
 ## Milestone 7 - Productization
 
