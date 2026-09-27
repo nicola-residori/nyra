@@ -155,6 +155,12 @@ _CONTINUATION_PREFIXES = {
     "it": ("quella ", "quello ", "quell "),
 }
 
+_TRIGGERABLE_NAMED_RESOURCES = {NyraResourceType.SCRIPT, NyraResourceType.SCENE, NyraResourceType.AUTOMATION}
+_TRIGGER_PREFIXES = {
+    "en": ("run ", "trigger ", "activate ", "start "),
+    "it": ("esegui ", "avvia ", "attiva ", "lancia "),
+}
+
 
 def _language(value: str) -> str:
     language = value.split("-", 1)[0].lower()
@@ -332,6 +338,31 @@ class HomeAssistantActionSkill:
         normalized = _normalized(request.text)
         return normalized.startswith(_CONTINUATION_PREFIXES[language])
 
+    async def fast_path_match(self, request: SkillCheckRequest) -> SkillMatch | None:
+        if request.semantic is not None or _clarification_state(request.pending_state, self.name) is not None:
+            return None
+        language = _language(request.language)
+        reference = _normalized(request.text)
+        for prefix in _TRIGGER_PREFIXES[language]:
+            if reference.startswith(prefix):
+                reference = reference[len(prefix):].strip()
+                break
+        if not reference:
+            return None
+        correlation = CapabilityCorrelation(**request.correlation.model_dump())
+        resolved = await self.capability.resolve(ResourceReference(reference=reference, resource_type=None, cardinality=ResolveCardinality.MANY), dict(request.context), correlation=correlation)
+        candidates = [c for c in resolved.candidates if c.resource.resource_type in _TRIGGERABLE_NAMED_RESOURCES]
+        if not candidates:
+            return None
+        exact = [c for c in candidates if _normalized(c.resource.name or "") == reference or _normalized(c.resource.resource_id.split(".",1)[-1]) == reference]
+        if exact:
+            candidates = exact
+        if len(candidates) == 1:
+            target=candidates[0].resource
+            return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":NyraOperation.TRIGGER.value,"resource_type":target.resource_type.value,"reference":reference,"selected_resource_id":target.resource_id,"selected_resource_type":target.resource_type.value,"selected_name":target.name,"fast_path":"named_ha_resource"})
+        choices=[{"resource_id":c.resource.resource_id,"resource_type":c.resource.resource_type.value,"name":c.resource.name or c.resource.resource_id} for c in candidates]
+        return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":NyraOperation.TRIGGER.value,"resource_type":candidates[0].resource.resource_type.value,"reference":reference,"fast_path":"named_ha_resource","fast_path_candidates":choices})
+
     def match(self, request: SkillCheckRequest) -> SkillMatch:
         parsed = parse_command(request.text, request.language)
         semantic_parsed = _semantic_command(request)
@@ -430,6 +461,11 @@ class HomeAssistantActionSkill:
                     "reference": reference_text,
                 },
             )
+
+        fast_path_candidates = metadata.get("fast_path_candidates")
+        if isinstance(fast_path_candidates, list) and fast_path_candidates:
+            pending_state = {"kind":"ha_target_clarification","skill_name":self.name,"operation":operation.value,"resource_type":resource_type.value,"reference":reference_text,"candidates":fast_path_candidates}
+            return SkillExecuteResponse(correlation=request.correlation,outcome=SkillOutcome.NEEDS_CLARIFICATION,text=_clarification_prompt(fast_path_candidates, language),pending_state=pending_state)
 
         state = _clarification_state(request.pending_state, self.name)
         if metadata.get("clarification") and state is not None:

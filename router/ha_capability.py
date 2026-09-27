@@ -182,6 +182,7 @@ _OPERATION_MAP = {
     (NyraResourceType.COVER, NyraOperation.CLOSE): ("cover", "close_cover"),
     (NyraResourceType.SCRIPT, NyraOperation.TRIGGER): ("script", "turn_on"),
     (NyraResourceType.SCENE, NyraOperation.TRIGGER): ("scene", "turn_on"),
+    (NyraResourceType.AUTOMATION, NyraOperation.TRIGGER): ("automation", "trigger"),
 }
 
 
