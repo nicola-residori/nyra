@@ -1,6 +1,7 @@
 from __future__ import annotations
 import httpx
 from shared.protocol.llm import LlmRequest, ReasoningResult
+from shared.protocol.semantic import SemanticResult
 
 class LlmUnavailable(RuntimeError):
     pass
@@ -22,6 +23,18 @@ class LlmClient:
             return payload
         except (httpx.TimeoutException,httpx.TransportError,httpx.HTTPStatusError,ValueError) as exc:
             raise LlmUnavailable("LLM diagnostics unavailable") from exc
+        finally:
+            if own: await client.aclose()
+
+    async def semantic(self, request:LlmRequest)->SemanticResult:
+        own=self.client is None
+        client=self.client or httpx.AsyncClient(timeout=self.timeout)
+        try:
+            response=await client.post(f"{self.base_url}/v1/llm/semantic",json=request.model_dump(mode="json"))
+            response.raise_for_status()
+            return SemanticResult.model_validate(response.json())
+        except (httpx.TimeoutException,httpx.TransportError,httpx.HTTPStatusError,ValueError) as exc:
+            raise LlmUnavailable("LLM semantic service unavailable") from exc
         finally:
             if own: await client.aclose()
 

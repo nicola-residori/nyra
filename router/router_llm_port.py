@@ -3,14 +3,24 @@ from router.lifecycle.service import LifecycleDecision
 from router.llm_client import LlmUnavailable
 from router.skills_client import SkillsUnavailable,InvalidSkillsResponse
 from router.reasoning_orchestrator import ReasoningBudgetExceeded
-from shared.protocol.llm import ReasoningOutcome
+from shared.protocol.llm import LlmPurpose,LlmRequest,ReasoningOutcome
+from router.reasoning_context import build_reasoning_context
+from router.semantic_skill_bridge import SemanticSkillBridge
 from shared.protocol.capabilities import CapabilityCorrelation
 from shared.protocol.skills import SkillCorrelation
 from shared.protocol.execution_common import ExecutionStatus
 
 class RouterLlmPort:
-    def __init__(self,orchestrator,action_gate=None,plan_executor=None):
+    def __init__(self,orchestrator,action_gate=None,plan_executor=None,semantic_min_confidence:float=.80):
         self.orchestrator=orchestrator; self.action_gate=action_gate; self.plan_executor=plan_executor
+        self.semantic_bridge=SemanticSkillBridge(semantic_min_confidence)
+
+    async def semantic(self,request,context,pending_state):
+        try:
+            result=await self.orchestrator.llm_client.semantic(LlmRequest(purpose=LlmPurpose.SEMANTIC,context=build_reasoning_context(request,context,pending_state)))
+        except LlmUnavailable:
+            return None
+        return self.semantic_bridge.accept(result)
 
     async def reason(self,request,context,memory,pending_state):
         del memory

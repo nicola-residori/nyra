@@ -8,6 +8,7 @@ from .ids import CorrelationContext
 from .memory import MemoryRequirement
 from .execution import ExecutionPlan
 from .execution_common import PlanOrigin, PlanValidationState
+from .semantic import SemanticResult
 
 
 class SkillOutcome(str, Enum):
@@ -84,6 +85,7 @@ class SkillCheckRequest(BaseModel):
     language: str
     context: dict[str, Any] = Field(default_factory=dict)
     pending_state: dict[str, Any] | None = None
+    semantic: SemanticResult | None = None
 
 
 class SkillCheckResponse(BaseModel):

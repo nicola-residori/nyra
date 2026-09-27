@@ -10,6 +10,7 @@ class SemanticTarget(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reference: str
     kind: str | None = None
+    area: str | None = None
 
 class SemanticParameter(BaseModel):
     model_config = ConfigDict(extra="forbid")

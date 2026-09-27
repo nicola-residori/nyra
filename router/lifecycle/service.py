@@ -501,30 +501,25 @@ class RequestLifecycleService:
                 match.error_code or "SKILLS_FAILED"
             )
         elif match.outcome is SkillOutcome.MISS:
-            self._log(
-                request,
-                trace_id,
-                span_id,
-                "MEMORY_SEARCH_SKIPPED",
-                params={"reason": "SKILL_MISS"},
-            )
-            await self._state(
-                request,
-                trace_id,
-                span_id,
-                InteractionState.PROCESSING_GLOBAL,
-            )
-            self._log(request, trace_id, span_id, "LLM_REASONING_STARTED",
-                      params={"stage":"llm.reason"})
-            decision = await self.llm_port.reason(
-                request,
-                context,
-                memory,
-                pending_state,
-            )
-            self._log(request, trace_id, span_id, "LLM_REASONING_COMPLETED",
-                      result=decision.status.value,
-                      params={"stage":"llm.reason","fallback":decision.llm_fallback})
+            self._log(request,trace_id,span_id,"LLM_SEMANTIC_STARTED",params={"stage":"llm.semantic"})
+            semantic=await self.llm_port.semantic(request,context,pending_state) if hasattr(self.llm_port,"semantic") else None
+            self._log(request,trace_id,span_id,"LLM_SEMANTIC_COMPLETED",result="ACCEPTED" if semantic is not None else "REJECTED",params={"stage":"llm.semantic"})
+            semantic_match=await self.skill_port.semantic_check(request,context,pending_state,semantic) if semantic is not None and hasattr(self.skill_port,"semantic_check") else None
+            if semantic_match is not None:
+                self._log(request,trace_id,span_id,"SKILLS_SEMANTIC_CHECK_COMPLETED",result="HIT" if semantic_match.matched else semantic_match.outcome.value,params={"stage":"skills.semantic_check","skill_name":semantic_match.skill_name})
+            if semantic_match is not None and semantic_match.matched:
+                await self._state(request,trace_id,span_id,skill_interaction_state(semantic_match.skill_name))
+                self._log(request,trace_id,span_id,"SKILLS_EXECUTE_STARTED",params={"stage":"skills.execute","skill_name":semantic_match.skill_name})
+                decision=await self.skill_port.execute(semantic_match,request,context,None,pending_state)
+                self._log(request,trace_id,span_id,"SKILLS_EXECUTE_COMPLETED",result=decision.status.value,params={"stage":"skills.execute","skill_name":semantic_match.skill_name})
+            elif semantic_match is not None and semantic_match.outcome is SkillOutcome.FAILED:
+                decision=LifecycleDecision.failed(semantic_match.error_code or "SKILLS_FAILED")
+            else:
+                self._log(request,trace_id,span_id,"MEMORY_SEARCH_SKIPPED",params={"reason":"SKILL_MISS"})
+                await self._state(request,trace_id,span_id,InteractionState.PROCESSING_GLOBAL)
+                self._log(request,trace_id,span_id,"LLM_REASONING_STARTED",params={"stage":"llm.reason"})
+                decision=await self.llm_port.reason(request,context,memory,pending_state)
+                self._log(request,trace_id,span_id,"LLM_REASONING_COMPLETED",result=decision.status.value,params={"stage":"llm.reason","fallback":decision.llm_fallback})
         elif match.matched:
             if match.memory_requirement is MemoryRequirement.NONE:
                 self._log(

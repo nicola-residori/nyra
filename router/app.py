@@ -145,6 +145,15 @@ class _RemoteSkillPort:
             metadata=response.match.metadata,
         )
 
+    async def semantic_check(self, request, context, pending_state, semantic):
+        payload=SkillCheckRequest(correlation=self._correlation(request,context),text=request.input.text,language=request.language,context=context.data,pending_state=pending_state,semantic=semantic)
+        try: response=await self.client.check(payload)
+        except SkillsUnavailable: return SkillMatch(matched=False,outcome=SkillOutcome.FAILED,error_code="SKILLS_UNAVAILABLE")
+        if response.outcome is SkillOutcome.MISS: return SkillMatch(matched=False,outcome=SkillOutcome.MISS)
+        if response.outcome is SkillOutcome.FAILED: return SkillMatch(matched=False,outcome=SkillOutcome.FAILED,error_code=response.error.code if response.error else "SKILLS_FAILED")
+        if response.match is None or not response.match.matched: return SkillMatch(matched=False,outcome=SkillOutcome.FAILED,error_code="SKILLS_INVALID_MATCH")
+        return SkillMatch(matched=True,skill_name=response.match.skill_name,token=response.match.token,memory_requirement=response.match.memory_requirement,memory_query=response.match.memory_query,outcome=SkillOutcome.HANDLED,metadata=response.match.metadata)
+
     async def execute(self, match, request, context, memory, pending_state):
         from shared.protocol.skills import SkillMatch as ProtocolSkillMatch
 
@@ -287,7 +296,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         )
         action_gate = LlmActionGate(skills_client) if skills_client is not None else None
         plan_executor = RouterPlanExecutor(ha_capability) if ha_capability is not None else None
-        llm_port = RouterLlmPort(orchestrator, action_gate=action_gate, plan_executor=plan_executor)
+        llm_port = RouterLlmPort(orchestrator, action_gate=action_gate, plan_executor=plan_executor, semantic_min_confidence=settings.llm_semantic_min_confidence)
     else:
         class _UnavailableLlmPort:
             async def reason(self, request, context, memory, pending_state):
