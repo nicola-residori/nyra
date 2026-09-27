@@ -108,3 +108,29 @@ async def test_adapter_does_not_reuse_key_for_another_provider():
     req=ProviderRequest(purpose="REASONING",model="anthropic/model-b",messages=(),response_schema={})
     await adapter.infer(req)
     assert "api_key" not in seen
+
+
+@pytest.mark.asyncio
+async def test_adapter_sends_json_schema_response_format_to_provider():
+    seen={}
+    async def completion(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"intent":"query"}'))],
+            usage=None,
+        )
+    req=ProviderRequest(
+        purpose="SEMANTIC",
+        model="openai/gpt-test",
+        messages=({"role":"user","content":"hello"},),
+        response_schema={"type":"object","properties":{"intent":{"type":"string"}},"required":["intent"]},
+    )
+    await LiteLlmAdapter(completion=completion).infer(req)
+    assert seen["response_format"] == {
+        "type":"json_schema",
+        "json_schema":{
+            "name":"nyra_response",
+            "strict":True,
+            "schema":req.response_schema,
+        },
+    }

@@ -32,6 +32,14 @@ class LiteLlmAdapter(ProviderAdapter):
                 "model": request.model,
                 "messages": [dict(message) for message in request.messages],
                 "stream": False,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "nyra_response",
+                        "strict": True,
+                        "schema": dict(request.response_schema),
+                    },
+                },
             }
             api_key = self._api_keys.get(provider)
             if api_key:
