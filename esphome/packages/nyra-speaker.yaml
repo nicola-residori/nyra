@@ -5,6 +5,18 @@ packages:
   waveshare_audio_va: !include ../vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml
   nyra_identification: !include nyra-identification.yaml
 
+# Optional battery gauge value exposed natively to Home Assistant.
+number:
+  - platform: template
+    id: nyra_battery_percent
+    name: "Nyra Battery Gauge Percent"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
+    entity_category: config
+
 # Stable, read-only source identity consumed by the Nyra Home Assistant adapter.
 # The value comes from the per-device `source_id` substitution created at provisioning.
 text_sensor:
@@ -151,6 +163,25 @@ light:
   - id: !extend status_ring
     name: "Nyra Status Ring"
     effects:
+      - addressable_lambda:
+          name: "nyra_battery_gauge"
+          update_interval: 500ms
+          lambda: |-
+            const int n = it.size();
+            float pct = id(nyra_battery_percent).state;
+            if (isnan(pct)) pct = 0.0f;
+            if (pct < 0.0f) pct = 0.0f;
+            if (pct > 100.0f) pct = 100.0f;
+            const int filled = static_cast<int>(ceilf((pct / 100.0f) * n));
+            for (int i = 0; i < n; i++) {
+              if (i >= filled) { it[i] = Color(0, 0, 0); continue; }
+              const float zone = (i + 0.5f) / n;
+              if (zone < 0.20f)      it[i] = Color(255, 0, 0);
+              else if (zone < 0.40f) it[i] = Color(255, 96, 0);
+              else if (zone < 0.60f) it[i] = Color(255, 210, 0);
+              else                   it[i] = Color(0, 255, 0);
+            }
+
       - addressable_lambda:
           name: "nyra_listening_white_fast"
           update_interval: 30ms
