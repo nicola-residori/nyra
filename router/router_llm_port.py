@@ -16,8 +16,14 @@ class RouterLlmPort:
         self.semantic_bridge=SemanticSkillBridge(semantic_min_confidence)
 
     async def semantic(self,request,context,pending_state):
+        semantic_context=build_reasoning_context(request,context,pending_state)
+        semantic_context=semantic_context.model_copy(
+            update={"operational":{**semantic_context.operational,"mode":"skill_routing"}}
+        )
         try:
-            result=await self.orchestrator.llm_client.semantic(LlmRequest(purpose=LlmPurpose.SEMANTIC,context=build_reasoning_context(request,context,pending_state)))
+            result=await self.orchestrator.llm_client.semantic(
+                LlmRequest(purpose=LlmPurpose.SEMANTIC,context=semantic_context)
+            )
         except LlmUnavailable:
             return None
         return self.semantic_bridge.accept(result)
