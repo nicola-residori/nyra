@@ -78,7 +78,7 @@ voice_assistant:
         if (!id(nyra_ring_owned)) {
           const auto &values = id(status_ring).remote_values;
           id(nyra_ring_restore_state) = values.is_on();
-          id(nyra_ring_restore_effect) = values.get_effect();
+          id(nyra_ring_restore_effect) = std::string(id(status_ring).get_effect_name());
           id(nyra_ring_restore_red) = values.get_red();
           id(nyra_ring_restore_green) = values.get_green();
           id(nyra_ring_restore_blue) = values.get_blue();

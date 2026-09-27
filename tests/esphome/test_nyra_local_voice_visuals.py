@@ -181,3 +181,10 @@ def test_nyra_snapshots_and_restores_external_ring_state():
     assert "remote_values" in listening
     assert "if (!id(nyra_ring_owned))" in listening
     assert "id: nyra_ring_restore" in text
+
+def test_ring_snapshot_uses_lightstate_effect_api_not_lightcolorvalues():
+    text = _speaker_yaml()
+    voice = text.split("voice_assistant:", 1)[1].split("light:", 1)[0]
+    listening = voice.split("on_listening:", 1)[1].split("on_stt_vad_start:", 1)[0]
+    assert "id(status_ring).get_effect_name()" in listening
+    assert "values.get_effect()" not in listening
