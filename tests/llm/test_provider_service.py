@@ -142,3 +142,11 @@ async def test_without_fallback_original_error_is_raised():
         await service.infer(request())
 
     assert raised.value is error
+@pytest.mark.asyncio
+@pytest.mark.parametrize("purpose,model",[("SEMANTIC","openai/semantic"),("REASONING","openai/reasoning")])
+async def test_routes_model_by_purpose(purpose,model):
+    a=ScriptedAdapter([ProviderResponse("{}","openai","x")])
+    s=ProviderService(a,ModelTarget("openai","default"),None,purpose_targets={"SEMANTIC":ModelTarget("openai","semantic"),"REASONING":ModelTarget("openai","reasoning")})
+    r=ProviderRequest(purpose=purpose,model="ignored",messages=(),response_schema={})
+    await s.infer(r)
+    assert a.calls[0].model==model

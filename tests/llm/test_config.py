@@ -72,3 +72,29 @@ def test_api_keys_are_not_required_for_provider_independent_config(monkeypatch):
     settings = LlmSettings.load()
 
     assert settings.api_keys == {}
+def test_purpose_targets_override_primary(monkeypatch):
+    monkeypatch.setenv("NYRA_LLM_PRIMARY_PROVIDER","openai")
+    monkeypatch.setenv("NYRA_LLM_PRIMARY_MODEL","default")
+    monkeypatch.setenv("NYRA_LLM_SEMANTIC_PROVIDER","openai")
+    monkeypatch.setenv("NYRA_LLM_SEMANTIC_MODEL","semantic")
+    monkeypatch.setenv("NYRA_LLM_REASONING_PROVIDER","openai")
+    monkeypatch.setenv("NYRA_LLM_REASONING_MODEL","reasoning")
+    s=LlmSettings.load()
+    assert s.semantic.model=="semantic"
+    assert s.reasoning.model=="reasoning"
+
+def test_purpose_targets_default_to_primary(monkeypatch):
+    monkeypatch.setenv("NYRA_LLM_PRIMARY_PROVIDER","openai")
+    monkeypatch.setenv("NYRA_LLM_PRIMARY_MODEL","default")
+    for n in ("NYRA_LLM_SEMANTIC_PROVIDER","NYRA_LLM_SEMANTIC_MODEL","NYRA_LLM_REASONING_PROVIDER","NYRA_LLM_REASONING_MODEL"):
+        monkeypatch.delenv(n,raising=False)
+    s=LlmSettings.load()
+    assert s.semantic==s.primary and s.reasoning==s.primary
+
+@pytest.mark.parametrize("prefix",["SEMANTIC","REASONING"])
+def test_purpose_target_requires_provider_and_model(monkeypatch,prefix):
+    monkeypatch.setenv("NYRA_LLM_PRIMARY_PROVIDER","openai")
+    monkeypatch.setenv("NYRA_LLM_PRIMARY_MODEL","default")
+    monkeypatch.setenv(f"NYRA_LLM_{prefix}_PROVIDER","openai")
+    monkeypatch.delenv(f"NYRA_LLM_{prefix}_MODEL",raising=False)
+    with pytest.raises(ValueError): LlmSettings.load()

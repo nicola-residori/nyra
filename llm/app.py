@@ -8,7 +8,13 @@ from llm.service import LlmService
 
 def build_service(settings:LlmSettings|None=None)->LlmService:
     settings=settings or LlmSettings.load()
-    return LlmService(ProviderService(LiteLlmAdapter(),settings.primary,settings.fallback))
+    return LlmService(ProviderService(
+            LiteLlmAdapter(),settings.primary,settings.fallback,
+            purpose_targets={
+                LlmPurpose.SEMANTIC.value: settings.semantic,
+                LlmPurpose.REASONING.value: settings.reasoning,
+            },
+        ))
 
 def create_app(*,service=None,settings:LlmSettings|None=None)->FastAPI:
     app=FastAPI(title="Nyra LLM")

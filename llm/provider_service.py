@@ -18,14 +18,20 @@ class ProviderService:
         adapter: ProviderAdapter,
         primary: ModelTarget,
         fallback: ModelTarget | None,
+        *,
+        purpose_targets: dict[str, ModelTarget] | None = None,
+        diagnostics=None,
     ) -> None:
         self._adapter = adapter
         self._primary = primary
         self._fallback = fallback
+        self._purpose_targets = dict(purpose_targets or {})
+        self._diagnostics = diagnostics
 
     async def infer(self, request: ProviderRequest) -> ProviderResponse:
+        primary = self._purpose_targets.get(request.purpose, self._primary)
         try:
-            return await self._infer_target(request, self._primary)
+            return await self._infer_target(request, primary)
         except ProviderError as error:
             if self._fallback is None or not self._eligible_for_fallback(error):
                 raise
