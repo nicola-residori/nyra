@@ -35,6 +35,7 @@ class ParsedHomeAssistantCommand:
     resource_type: NyraResourceType
     reference: str
     many: bool = False
+    area: str | None = None
 
 
 class RouterHomeAssistantCapabilityClient:
@@ -299,11 +300,24 @@ def parse_command(text: str, language: str) -> ParsedHomeAssistantCommand | None
             if selected_language == "it"
             else set()
         )
+        reference_tokens = _normalized(reference).split()
+        resource_terms = next(
+            terms
+            for candidate_type, terms in _RESOURCE_TERMS[selected_language]
+            if candidate_type is resource_type
+        )
+        explicit_area_tokens = [token for token in reference_tokens if token not in resource_terms]
+        explicit_area = (
+            " ".join(explicit_area_tokens) or None
+            if bool(set(reference_tokens) & plural_terms)
+            else None
+        )
         return ParsedHomeAssistantCommand(
             operation=operation,
             resource_type=resource_type,
             reference=reference,
-            many=bool(set(_normalized(reference).split()) & plural_terms),
+            many=bool(set(reference_tokens) & plural_terms),
+            area=explicit_area,
         )
 
     return None
@@ -388,6 +402,8 @@ class HomeAssistantActionSkill:
                     if parsed.many
                     else ResolveCardinality.ONE.value
                 )
+                if parsed.area is not None:
+                    metadata["area"] = parsed.area
             return SkillMatch(
                 matched=True,
                 skill_name=self.name,
@@ -445,6 +461,9 @@ class HomeAssistantActionSkill:
             **request.correlation.model_dump()
         )
         trusted_context = dict(request.context)
+        explicit_area = metadata.get("area")
+        if isinstance(explicit_area, str) and explicit_area.strip():
+            trusted_context["area"] = explicit_area.strip()
         language = _language(request.language)
 
         selected_resource_id = metadata.get("selected_resource_id")
@@ -512,10 +531,15 @@ class HomeAssistantActionSkill:
             "tende": "tenda",
             "tapparelle": "tapparella",
         }
-        canonical_reference = " ".join(
+        canonical_tokens = [
             canonical_terms.get(token, token)
             for token in _normalized(reference_text).split()
-        )
+        ]
+        if isinstance(explicit_area, str) and explicit_area.strip():
+            area_tokens = _normalized(explicit_area).split()
+            if area_tokens and canonical_tokens[-len(area_tokens):] == area_tokens:
+                canonical_tokens = canonical_tokens[:-len(area_tokens)]
+        canonical_reference = " ".join(canonical_tokens)
         resolved = await self.capability.resolve(
             ResourceReference(
                 reference=canonical_reference,
@@ -571,7 +595,8 @@ class HomeAssistantActionSkill:
             )
 
         targets = [candidate.resource for candidate in resolved.candidates]
-        executed = None
+        successful_targets = []
+        first_failure = None
         for target in targets:
             executed = await self.capability.execute(
                 ExecuteRequest(
@@ -582,15 +607,20 @@ class HomeAssistantActionSkill:
                 ),
                 trusted_context,
             )
-            if executed.outcome is not CommonOutcome.SUCCESS:
-                break
+            if executed.outcome is CommonOutcome.SUCCESS:
+                successful_targets.append(target)
+            elif first_failure is None:
+                first_failure = executed
 
-        if executed is None or executed.outcome is not CommonOutcome.SUCCESS:
+        if not successful_targets:
             return SkillExecuteResponse(
                 correlation=request.correlation,
                 outcome=SkillOutcome.FAILED,
-                error=executed.error
-                or ErrorDetail(code=f"HA_{executed.outcome.value}"),
+                error=(
+                    first_failure.error
+                    if first_failure is not None and first_failure.error is not None
+                    else ErrorDetail(code="HA_NO_TARGET_EXECUTED")
+                ),
             )
 
         return SkillExecuteResponse(
@@ -599,8 +629,8 @@ class HomeAssistantActionSkill:
             text="Fatto." if language == "it" else "Done.",
             result={
                 "operation": operation.value,
-                "resource_type": target.resource_type.value,
-                "resource_id": target.resource_id,
+                "resource_type": resource_type.value,
+                "resource_ids": [target.resource_id for target in successful_targets],
                 "reference": reference_text,
             },
         )

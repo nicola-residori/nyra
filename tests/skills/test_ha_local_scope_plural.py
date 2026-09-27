@@ -128,6 +128,7 @@ async def test_explicit_area_overrides_speaker_area():
     )
 
     assert cap.resolve_calls[0][0].reference == "luce soggiorno"
+    assert cap.resolve_calls[0][1]["area"] == "cucina"
 
 
 @pytest.mark.asyncio
@@ -198,5 +199,18 @@ async def test_plural_explicit_area_executes_all_there():
         )
     )
 
-    assert cap.resolve_calls[0][0].reference == "luce soggiorno"
+    assert cap.resolve_calls[0][0].reference == "luce"
+    assert cap.resolve_calls[0][1]["area"] == "soggiorno"
     assert len(cap.execute_calls) == 2
+
+def test_parse_explicit_area_is_extracted():
+    parsed = parse_command("accendi luci soggiorno", "it-IT")
+    assert parsed is not None
+    assert parsed.resource_type is NyraResourceType.LIGHT
+    assert parsed.many is True
+    assert parsed.area == "soggiorno"
+
+def test_parse_explicit_other_area_is_extracted():
+    parsed = parse_command("spegni le luci cucina", "it-IT")
+    assert parsed is not None
+    assert parsed.area == "cucina"
