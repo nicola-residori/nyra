@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from typing import Any, Awaitable, Callable
 
 from llm.providers.base import (
@@ -37,7 +38,7 @@ class LiteLlmAdapter(ProviderAdapter):
                     "json_schema": {
                         "name": "nyra_response",
                         "strict": True,
-                        "schema": dict(request.response_schema),
+                        "schema": self._strict_response_schema(request.response_schema),
                     },
                 },
             }
@@ -72,6 +73,30 @@ class LiteLlmAdapter(ProviderAdapter):
                 output_tokens=getattr(usage, "completion_tokens", None),
             ),
         )
+
+    @staticmethod
+    def _strict_response_schema(schema: dict[str, Any]) -> dict[str, Any]:
+        # Build a provider-strict copy without changing Nyra's contract schema.
+        strict = deepcopy(schema)
+
+        def normalize(node: Any) -> None:
+            if isinstance(node, dict):
+                properties = node.get("properties")
+                if isinstance(properties, dict):
+                    node["required"] = list(properties)
+                    node["additionalProperties"] = False
+
+                if node.get("default") is None:
+                    node.pop("default", None)
+
+                for value in list(node.values()):
+                    normalize(value)
+            elif isinstance(node, list):
+                for value in node:
+                    normalize(value)
+
+        normalize(strict)
+        return strict
 
     @staticmethod
     def _split_model(value: str) -> tuple[str, str]:

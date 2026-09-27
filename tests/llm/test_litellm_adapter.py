@@ -126,11 +126,68 @@ async def test_adapter_sends_json_schema_response_format_to_provider():
         response_schema={"type":"object","properties":{"intent":{"type":"string"}},"required":["intent"]},
     )
     await LiteLlmAdapter(completion=completion).infer(req)
-    assert seen["response_format"] == {
-        "type":"json_schema",
-        "json_schema":{
-            "name":"nyra_response",
-            "strict":True,
-            "schema":req.response_schema,
+    assert seen["response_format"]["type"] == "json_schema"
+    assert seen["response_format"]["json_schema"]["name"] == "nyra_response"
+    assert seen["response_format"]["json_schema"]["strict"] is True
+    provider_schema = seen["response_format"]["json_schema"]["schema"]
+    assert provider_schema["type"] == "object"
+    assert provider_schema["required"] == ["intent"]
+    assert provider_schema["additionalProperties"] is False
+    assert provider_schema["properties"]["intent"] == {"type": "string"}
+
+
+@pytest.mark.asyncio
+async def test_adapter_normalizes_pydantic_schema_for_strict_provider_without_mutating_contract():
+    seen = {}
+
+    async def completion(**kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"intent":"query","target":null}'))],
+            usage=None,
+        )
+
+    original_schema = {
+        "type": "object",
+        "properties": {
+            "intent": {"type": "string"},
+            "target": {
+                "anyOf": [{"$ref": "#/$defs/Target"}, {"type": "null"}],
+                "default": None,
+            },
         },
+        "required": ["intent"],
+        "$defs": {
+            "Target": {
+                "type": "object",
+                "properties": {
+                    "reference": {"type": "string"},
+                    "kind": {
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                        "default": None,
+                    },
+                },
+                "required": ["reference"],
+                "additionalProperties": False,
+            }
+        },
+        "additionalProperties": False,
     }
+    expected_original = json.loads(json.dumps(original_schema))
+    req = ProviderRequest(
+        purpose="SEMANTIC",
+        model="openai/gpt-test",
+        messages=({"role": "user", "content": "hello"},),
+        response_schema=original_schema,
+    )
+
+    await LiteLlmAdapter(completion=completion).infer(req)
+
+    strict = seen["response_format"]["json_schema"]["schema"]
+    assert strict["required"] == ["intent", "target"]
+    assert "default" not in strict["properties"]["target"]
+    assert strict["$defs"]["Target"]["required"] == ["reference", "kind"]
+    assert "default" not in strict["$defs"]["Target"]["properties"]["kind"]
+    assert strict["additionalProperties"] is False
+    assert strict["$defs"]["Target"]["additionalProperties"] is False
+    assert original_schema == expected_original
