@@ -23,6 +23,7 @@ Nyra v1 is under active development.
 - **Milestone 3 — Identity and Voice: complete.**
 - **Milestone 4 — Memory and context: complete and deployed in production.**
 - **Milestone 5 — Skills: complete and deployed in production.**
+- **Milestone 6 — LLM: complete and deployed in production; final merge authorization pending.**
 
 Milestones 2 and 3 established the production Home Assistant speaker path and
 trusted voice identity lifecycle. A physical Nyra speaker has been validated
@@ -31,7 +32,7 @@ service, including enrollment, Wake Word sample capture/export, session-scoped
 identity, localized identity responses, observability, and persistent fresh-CT
 deployment.
 
-The remaining specialist migration is Milestone 6 LLM access; deterministic Skills and Home Assistant capability execution now use the Nyra v1 Router lifecycle.
+The first-level specialist migration through Milestone 6 is now production-verified. Router centrally orchestrates deterministic Skills, Memory, Speaker-ID, and provider-independent LLM semantic/reasoning paths while retaining policy and capability authority.
 
 ## Milestone 2 capabilities
 
@@ -82,6 +83,19 @@ The remaining specialist migration is Milestone 6 LLM access; deterministic Skil
 - Router-backed Nyra Admin diagnostics for registered Skills, Jobs, service readiness, and capability status.
 - Future LLM action proposals constrained to Router -> Skills validation/materialization -> Router capability.
 - Reproducible Debian 12/systemd deployment, verification, backup, guarded restore, and physical production validation.
+
+## Milestone 6 capabilities
+
+- Dedicated `nyra-llm` service; Router sends typed purpose/context and never selects provider/model.
+- Stateless structured `SEMANTIC` plus buffered global `REASONING`.
+- Deterministic Skills CHECK remains first; semantic interpretation and global reasoning open only through Router-controlled fallback paths.
+- Router-owned bounded conversation history, clarification lifecycle, capability budget, and total reasoning timeout.
+- Read-only reasoning capabilities limited to `SEARCH_MEMORY`, `READ_STATE`, `READ_ATTRIBUTE`, and `DISCOVER_RESOURCES`, with Router policy enforcement.
+- LLM-proposed side effects remain `PROPOSED` until Skills validates/materializes them and Router executes the authorized capability.
+- Technical/contract failures may use LLM-private fallback; valid semantic rejection or low confidence does not trigger model shopping.
+- Privacy-safe correlated observability across Router, Skills, Memory, and LLM; no normal persistence of prompts, full history, Memory payloads, chain-of-thought, or credentials.
+- Router-backed LLM diagnostics and selectable JSON/CSV centralized log export in Nyra Admin.
+- Reproducible LLM systemd/bootstrap/backup/restore/verification assets and authorized production validation.
 
 ## Documentation
 

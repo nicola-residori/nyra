@@ -18,6 +18,17 @@ Milestone 4 — Memory and Context — is complete and deployed in production.
 
 Milestone 5 — Skills — is complete and deployed in production.
 
+Milestone 6 — LLM — is complete on the `m6-llm` branch and deployed/verified in
+production. Final merge to `main` remains gated on explicit authorization.
+
+The production M6 architecture adds dedicated first-level `nyra-llm` behind the
+Router trust boundary. `SEMANTIC` and buffered `REASONING` are operational;
+provider/model routing and technical fallback remain private to `nyra-llm`.
+Router owns bounded conversation history, reasoning budgets, clarification,
+read-only capability policy, and all side-effect mediation. LLM-proposed actions
+must pass through Skills validation/materialization before a Router-owned
+capability can execute.
+
 The production M5 implementation uses a dedicated deterministic `nyra-skills`
 service behind the Router trust boundary. Skills receives trusted context and
 correlation from Router, never Home Assistant credentials. Router owns Home
@@ -159,6 +170,60 @@ non-destructive because production remained healthy; no restore was performed.
 The Home Assistant adapter backup created for the coordinated deployment also
 remains the rollback reference for the M5 Home Assistant capability change.
 
+### Milestone 6 production verification
+
+M6 production verification completed on 2026-09-27. The production-validated
+branch revision is `431bd00a0857f6c6c37e641c59cb31727f3bf7da`; the preceding
+Router semantic-lifecycle hardening revision
+`313d46ce4229067948d5f1bc455a7797dffeda46` was deployed to CT108 and verified
+before the final Admin-only column-order change.
+
+`nyra-llm` runs in dedicated CT `103` at `192.168.0.11:8090`, with application
+code under `/opt/nyra-llm`, protected operator configuration under
+`/etc/nyra/llm.env`, and `nyra-llm.service`. Router/Admin remain on CT108.
+Production health/readiness checks passed without readiness-triggered provider
+inference.
+
+Real production traces verified the semantic bridge:
+deterministic Skills CHECK `MISS` -> `PROCESSING_GLOBAL` -> LLM `SEMANTIC` ->
+semantic Skills CHECK -> Skills execution -> Router Home Assistant capability.
+A real `Accendi le luci soggiorno` request produced `LLM_PROVIDER_REQUEST` and
+`LLM_PROVIDER_RESPONSE` correlation for `SEMANTIC`, a semantic Skills `HIT`,
+and no `LLM_REASONING_STARTED`; the authorized Home Assistant action completed.
+A physical speaker request for `Perché il cielo è blu?` also produced a spoken
+global LLM response.
+
+Production gates also verified buffered Skills-CHECK-MISS reasoning, Router
+policy enforcement for `SEARCH_MEMORY`, `READ_STATE`, `READ_ATTRIBUTE`, and
+`DISCOVER_RESOURCES`, the proposed-action -> Skills -> Router-capability gate,
+forbidden capability rejection, and controlled technical fallback. Provider
+fallback remains disabled in the normal production route unless explicitly
+configured.
+
+Distributed observability is centralized through Router. Real traces contain
+Router, Skills, Memory, and LLM component records with request/trace/span
+correlation. LLM logs expose technical purpose/outcome/provider/model/latency
+metadata without persisting full prompts, conversation history, Memory payloads,
+chain-of-thought, or credentials. Memory live central logging was verified with
+correlated `CONTEXT_RESOLUTION_START`/`COMPLETED`; historical Memory spool data
+is retained rather than deleted automatically.
+
+Router now owns a configurable bounded conversation-history window and emits
+explicit semantic lifecycle/provider events, including
+`SKILLS_SEMANTIC_CHECK_STARTED`. Technical semantic unavailability is
+distinguished from a valid semantic rejection.
+
+Nyra Admin exposes Router-backed LLM diagnostics and centralized distributed
+logs. Log events can be individually selected for JSON/CSV export; Stage,
+Event, Operation, Duration, and Result precede the lower-priority Session,
+Request, Trace, and Span identifier columns.
+
+The final pre-documentation repository regression completed with 870 passed
+tests and one known non-blocking Starlette/httpx TestClient deprecation warning.
+Rollback archives were created and checksum-verified before production changes;
+the Router hardening rollback reference is
+`/opt/backups/nyra-router-pre-313d46c-20260927T123328Z.tgz`.
+
 The Speaker-ID container is a fresh Debian 12 deployment built by
 `deploy/bootstrap/speaker-id.sh`. It runs as the unprivileged
 `nyra-speaker-id` user, persists data and the ECAPA model cache under
@@ -258,11 +323,10 @@ Router and Admin remain separate applications. Installation-specific Home Assist
 
 ## Migration status
 
-Home Assistant, the Speaker-ID/voice-identity domain, Memory, and Skills are
-migrated to the Nyra v1 Router lifecycle through Milestone 5. The Router owns
-the Home Assistant capability boundary used by Skills. LLM specialist
-integration remains scheduled for Milestone 6; no LLM-proposed side effect may
-bypass the Skills validation/action gate.
+Home Assistant, Speaker-ID/voice identity, Memory, Skills, and LLM are migrated
+to the Nyra v1 Router lifecycle through Milestone 6. Router remains the central
+trust, policy, orchestration, observability, and capability boundary. No
+LLM-proposed side effect may bypass the Skills validation/materialization gate.
 
 ## Known follow-up work
 
@@ -270,14 +334,11 @@ These items do not block the completed Milestone 3:
 
 - perform an additional unknown-speaker physical identity check when another
   speaker is available
-- migrate LLM access in Milestone 6 through the existing Router -> Skills action gate
 - eliminate remaining deployment-only compatibility/manual packaging steps during productization
 - extend multi-speaker physical validation as additional speakers are provisioned
 - improve audio-reactive visuals if a reliable PCM amplitude hook becomes available
 
 ## Next step
 
-Start Milestone 6 — LLM — from the deployed M5 trust boundary: Router-managed
-reasoning, provider-independent configuration, context propagation, and
-LLM-proposed actions validated/materialized by Skills before any Router-owned
-capability executes.
+After explicit authorization, merge the production-verified M6 branch to
+`main`. Milestone 7 — Productization — is the next implementation milestone.
