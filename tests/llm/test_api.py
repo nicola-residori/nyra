@@ -28,3 +28,13 @@ def test_provider_model_override_is_rejected():
     client=TestClient(create_app(service=Service()))
     payload={"purpose":"REASONING","context":context(),"provider":"openai","model":"x"}
     assert client.post("/v1/llm/reason",json=payload).status_code==422
+
+
+def test_llm_exposes_only_privacy_safe_diagnostics():
+    app=create_app(service=Service())
+    app.state.llm_diagnostics.record(purpose="REASONING",outcome="SUCCESS",provider="openai",model="m",attempt=1,fallback=False,latency_ms=1.0,input_tokens=2,output_tokens=3,valid=True,error_code=None,cost=None)
+    with TestClient(app) as client:
+        data=client.get("/v1/llm/diagnostics").json()
+    assert data["items"][0]["cost"] is None
+    assert "prompt" not in str(data).lower()
+    assert "messages" not in str(data).lower()

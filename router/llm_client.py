@@ -11,6 +11,20 @@ class LlmClient:
         self.timeout=float(timeout)
         self.client=client
 
+    async def diagnostics(self) -> dict:
+        own=self.client is None
+        client=self.client or httpx.AsyncClient(timeout=self.timeout)
+        try:
+            response=await client.get(f"{self.base_url}/v1/llm/diagnostics")
+            response.raise_for_status()
+            payload=response.json()
+            if not isinstance(payload,dict) or not isinstance(payload.get("items"),list): raise ValueError("invalid LLM diagnostics response")
+            return payload
+        except (httpx.TimeoutException,httpx.TransportError,httpx.HTTPStatusError,ValueError) as exc:
+            raise LlmUnavailable("LLM diagnostics unavailable") from exc
+        finally:
+            if own: await client.aclose()
+
     async def reason(self, request:LlmRequest)->ReasoningResult:
         own=self.client is None
         client=self.client or httpx.AsyncClient(timeout=self.timeout)

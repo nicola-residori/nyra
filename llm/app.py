@@ -31,6 +31,10 @@ def create_app(*,service=None,settings:LlmSettings|None=None)->FastAPI:
     async def ready():
         return {"status":"ready"}
 
+    @app.get("/v1/llm/diagnostics")
+    async def diagnostics():
+        return {"items": app.state.llm_diagnostics.items()}
+
     @app.post("/v1/llm/semantic")
     async def semantic(request:LlmRequest):
         if request.purpose is not LlmPurpose.SEMANTIC:

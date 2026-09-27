@@ -1,6 +1,7 @@
 from __future__ import annotations
 from router.lifecycle.service import LifecycleDecision
 from router.llm_client import LlmUnavailable
+from router.skills_client import SkillsUnavailable,InvalidSkillsResponse
 from router.reasoning_orchestrator import ReasoningBudgetExceeded
 from shared.protocol.llm import ReasoningOutcome
 from shared.protocol.capabilities import CapabilityCorrelation
@@ -34,6 +35,8 @@ class RouterLlmPort:
                 try:
                     validated=await self.action_gate.validate_proposal(result.proposed_execution_plan,correlation=skill_correlation,trusted_context=trusted_context)
                     executed=await self.plan_executor.execute(validated,correlation=capability_correlation,trusted_context=trusted_context)
+                except (SkillsUnavailable, InvalidSkillsResponse):
+                    return LifecycleDecision.failed("SKILLS_UNAVAILABLE")
                 except ValueError as exc:
                     return LifecycleDecision.failed(str(exc))
                 if executed.status is not ExecutionStatus.COMPLETED:

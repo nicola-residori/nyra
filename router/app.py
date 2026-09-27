@@ -215,7 +215,7 @@ class _RemoteSkillPort:
 
 def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phrase_generator=None,
                wake_word_dataset=None, speaker_id_admin=None, memory_client=None,
-               skills_client=None, ha_capability=None):
+               skills_client=None, ha_capability=None, llm_client=None):
     settings = settings or RouterSettings.load()
     started = monotonic()
     store = SQLiteObservabilityStore(settings.database_path)
@@ -275,8 +275,9 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
         if memory_client is not None
         else None
     )
-    if settings.llm_url:
-        llm_client = LlmClient(settings.llm_url, timeout=settings.llm_timeout_seconds)
+    if settings.llm_url or llm_client is not None:
+        if llm_client is None:
+            llm_client = LlmClient(settings.llm_url, timeout=settings.llm_timeout_seconds)
         dispatcher = ReasoningCapabilityDispatcher(memory_port=memory_port, ha_capability=ha_capability)
         orchestrator = ReasoningOrchestrator(
             llm_client, dispatcher,
@@ -351,7 +352,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.skills_admin = skills_admin
     app.state.ha_capability = ha_capability
     app.state.observability = observability
-    app.state.llm_diagnostics = []
+    app.state.llm_client = llm_client
     app.state.events = event_broker
     app.state.lifecycle = lifecycle
     app.state.ready = False
