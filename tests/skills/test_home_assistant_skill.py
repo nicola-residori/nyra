@@ -98,6 +98,7 @@ def test_match_is_deterministic_and_language_aware(
         "operation": operation,
         "resource_type": resource_type,
         "reference": reference,
+        "cardinality": "ONE",
     }
 
 

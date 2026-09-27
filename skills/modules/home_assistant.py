@@ -34,6 +34,7 @@ class ParsedHomeAssistantCommand:
     operation: NyraOperation
     resource_type: NyraResourceType
     reference: str
+    many: bool = False
 
 
 class RouterHomeAssistantCapabilityClient:
@@ -121,10 +122,10 @@ _ACTIONS = {
         (re.compile(r"^close (?:the )?(.+)$"), NyraOperation.CLOSE),
     ),
     "it": (
-        (re.compile(r"^accendi (?:la |il |lo |l )?(.+)$"), NyraOperation.TURN_ON),
-        (re.compile(r"^spegni (?:la |il |lo |l )?(.+)$"), NyraOperation.TURN_OFF),
-        (re.compile(r"^apri (?:la |il |lo |l )?(.+)$"), NyraOperation.OPEN),
-        (re.compile(r"^chiudi (?:la |il |lo |l )?(.+)$"), NyraOperation.CLOSE),
+        (re.compile(r"^accendi (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.TURN_ON),
+        (re.compile(r"^spegni (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.TURN_OFF),
+        (re.compile(r"^apri (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.OPEN),
+        (re.compile(r"^chiudi (?:(?:la|il|lo|l|le|i|gli) )?(.+)$"), NyraOperation.CLOSE),
     ),
 }
 
@@ -135,9 +136,9 @@ _RESOURCE_TERMS = {
         (NyraResourceType.COVER, {"blind", "cover", "shutter"}),
     ),
     "it": (
-        (NyraResourceType.LIGHT, {"luce", "lampada"}),
-        (NyraResourceType.SWITCH, {"interruttore"}),
-        (NyraResourceType.COVER, {"tenda", "tapparella"}),
+        (NyraResourceType.LIGHT, {"luce", "luci", "lampada", "lampade"}),
+        (NyraResourceType.SWITCH, {"interruttore", "interruttori"}),
+        (NyraResourceType.COVER, {"tenda", "tende", "tapparella", "tapparelle"}),
     ),
 }
 
@@ -293,10 +294,16 @@ def parse_command(text: str, language: str) -> ParsedHomeAssistantCommand | None
         elif resource_type is NyraResourceType.COVER:
             return None
 
+        plural_terms = (
+            {"luci", "lampade", "interruttori", "tende", "tapparelle"}
+            if selected_language == "it"
+            else set()
+        )
         return ParsedHomeAssistantCommand(
             operation=operation,
             resource_type=resource_type,
             reference=reference,
+            many=bool(set(_normalized(reference).split()) & plural_terms),
         )
 
     return None
@@ -323,7 +330,9 @@ class HomeAssistantActionSkill:
         self.capability = capability
 
     def matches(self, request: SkillCheckRequest) -> bool:
-        if parse_command(request.text, request.language) is not None or _semantic_command(request) is not None:
+        if request.semantic is not None:
+            return _semantic_command(request) is not None
+        if parse_command(request.text, request.language) is not None:
             return True
 
         state = _clarification_state(request.pending_state, self.name)
@@ -368,7 +377,24 @@ class HomeAssistantActionSkill:
         semantic_parsed = _semantic_command(request)
         if parsed is not None or semantic_parsed is not None:
             operation,resource_type,reference=(parsed.operation,parsed.resource_type,parsed.reference) if parsed is not None else semantic_parsed
-            return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":operation.value,"resource_type":resource_type.value,"reference":reference})
+            metadata = {
+                "operation": operation.value,
+                "resource_type": resource_type.value,
+                "reference": reference,
+            }
+            if parsed is not None:
+                metadata["cardinality"] = (
+                    ResolveCardinality.MANY.value
+                    if parsed.many
+                    else ResolveCardinality.ONE.value
+                )
+            return SkillMatch(
+                matched=True,
+                skill_name=self.name,
+                token=self.name,
+                memory_requirement=MemoryRequirement.NONE,
+                metadata=metadata,
+            )
 
         state = _clarification_state(request.pending_state, self.name)
         if state is None:
@@ -476,11 +502,32 @@ class HomeAssistantActionSkill:
                 pending_state=state,
             )
 
+        cardinality = ResolveCardinality(
+            metadata.get("cardinality", ResolveCardinality.ONE.value)
+        )
+        canonical_terms = {
+            "luci": "luce",
+            "lampade": "lampada",
+            "interruttori": "interruttore",
+            "tende": "tenda",
+            "tapparelle": "tapparella",
+        }
+        canonical_reference = " ".join(
+            canonical_terms.get(token, token)
+            for token in _normalized(reference_text).split()
+        )
+        generic_terms = {"luce", "lampada", "interruttore", "tenda", "tapparella"}
+        is_bare_generic = canonical_reference in generic_terms
+        area = trusted_context.get("area")
+        scoped_reference = canonical_reference
+        if is_bare_generic and isinstance(area, str) and area.strip():
+            scoped_reference = f"{canonical_reference} {area.strip()}"
+
         resolved = await self.capability.resolve(
             ResourceReference(
-                reference=reference_text,
+                reference=scoped_reference,
                 resource_type=resource_type,
-                cardinality=ResolveCardinality.ONE,
+                cardinality=cardinality,
             ),
             trusted_context,
             correlation=correlation,
@@ -517,25 +564,35 @@ class HomeAssistantActionSkill:
                 pending_state=pending_state,
             )
 
-        if len(resolved.candidates) != 1:
+        if cardinality is ResolveCardinality.ONE and len(resolved.candidates) != 1:
+            return SkillExecuteResponse(
+                correlation=request.correlation,
+                outcome=SkillOutcome.FAILED,
+                error=ErrorDetail(code="HA_INVALID_RESOLVE_RESULT"),
+            )
+        if cardinality is ResolveCardinality.MANY and not resolved.candidates:
             return SkillExecuteResponse(
                 correlation=request.correlation,
                 outcome=SkillOutcome.FAILED,
                 error=ErrorDetail(code="HA_INVALID_RESOLVE_RESULT"),
             )
 
-        target = resolved.candidates[0].resource
-        executed = await self.capability.execute(
-            ExecuteRequest(
-                correlation=correlation,
-                operation=operation,
-                resource_id=target.resource_id,
-                resource_type=target.resource_type,
-            ),
-            trusted_context,
-        )
+        targets = [candidate.resource for candidate in resolved.candidates]
+        executed = None
+        for target in targets:
+            executed = await self.capability.execute(
+                ExecuteRequest(
+                    correlation=correlation,
+                    operation=operation,
+                    resource_id=target.resource_id,
+                    resource_type=target.resource_type,
+                ),
+                trusted_context,
+            )
+            if executed.outcome is not CommonOutcome.SUCCESS:
+                break
 
-        if executed.outcome is not CommonOutcome.SUCCESS:
+        if executed is None or executed.outcome is not CommonOutcome.SUCCESS:
             return SkillExecuteResponse(
                 correlation=request.correlation,
                 outcome=SkillOutcome.FAILED,

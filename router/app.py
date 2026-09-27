@@ -95,7 +95,15 @@ class _RemoteSkillPort:
             correlation=self._correlation(request, context),
             text=request.input.text,
             language=request.language,
-            context=context.data,
+            context={
+                **context.data,
+                **({"source_id": request.source.id} if request.source else {}),
+                **(
+                    {"area": request.source.area}
+                    if request.source and request.source.area
+                    else {}
+                ),
+            },
             pending_state=pending_state,
         )
         try:
@@ -174,7 +182,15 @@ class _RemoteSkillPort:
             match=protocol_match,
             text=request.input.text,
             language=request.language,
-            context=context.data,
+            context={
+                **context.data,
+                **({"source_id": request.source.id} if request.source else {}),
+                **(
+                    {"area": request.source.area}
+                    if request.source and request.source.area
+                    else {}
+                ),
+            },
             memory=memory,
             pending_state=pending_state,
         )
