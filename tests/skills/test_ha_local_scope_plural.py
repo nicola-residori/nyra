@@ -98,7 +98,7 @@ async def test_implicit_area_scopes_singular_to_speaker_area():
     )
 
     ref, _ = cap.resolve_calls[0]
-    assert ref.reference == "luce cucina"
+    assert ref.reference == "luce"
     assert ref.cardinality.value == "ONE"
     assert out.outcome is SkillOutcome.HANDLED
     assert len(cap.execute_calls) == 1
@@ -160,7 +160,7 @@ async def test_plural_executes_all_matches_in_speaker_area():
     )
 
     ref, _ = cap.resolve_calls[0]
-    assert ref.reference == "luce cucina"
+    assert ref.reference == "luce"
     assert ref.cardinality.value == "MANY"
     assert [x[0].resource_id for x in cap.execute_calls] == [
         "light.kitchen_main",

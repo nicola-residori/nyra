@@ -516,16 +516,9 @@ class HomeAssistantActionSkill:
             canonical_terms.get(token, token)
             for token in _normalized(reference_text).split()
         )
-        generic_terms = {"luce", "lampada", "interruttore", "tenda", "tapparella"}
-        is_bare_generic = canonical_reference in generic_terms
-        area = trusted_context.get("area")
-        scoped_reference = canonical_reference
-        if is_bare_generic and isinstance(area, str) and area.strip():
-            scoped_reference = f"{canonical_reference} {area.strip()}"
-
         resolved = await self.capability.resolve(
             ResourceReference(
-                reference=scoped_reference,
+                reference=canonical_reference,
                 resource_type=resource_type,
                 cardinality=cardinality,
             ),
