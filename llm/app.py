@@ -3,10 +3,11 @@ from fastapi import FastAPI,HTTPException
 from shared.protocol.llm import LlmPurpose,LlmRequest
 from llm.config import LlmSettings
 from llm.provider_service import ProviderService
+from llm.observability import LlmDiagnostics
 from llm.providers.litellm_adapter import LiteLlmAdapter
 from llm.service import LlmService
 
-def build_service(settings:LlmSettings|None=None)->LlmService:
+def build_service(settings:LlmSettings|None=None,diagnostics:LlmDiagnostics|None=None)->LlmService:
     settings=settings or LlmSettings.load()
     return LlmService(ProviderService(
             LiteLlmAdapter(),settings.primary,settings.fallback,
@@ -14,11 +15,13 @@ def build_service(settings:LlmSettings|None=None)->LlmService:
                 LlmPurpose.SEMANTIC.value: settings.semantic,
                 LlmPurpose.REASONING.value: settings.reasoning,
             },
+            diagnostics=diagnostics,
         ))
 
 def create_app(*,service=None,settings:LlmSettings|None=None)->FastAPI:
     app=FastAPI(title="Nyra LLM")
-    app.state.service=service if service is not None else build_service(settings)
+    app.state.llm_diagnostics=LlmDiagnostics()
+    app.state.service=service if service is not None else build_service(settings,app.state.llm_diagnostics)
 
     @app.get("/health")
     async def health():
