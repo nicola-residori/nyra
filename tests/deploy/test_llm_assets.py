@@ -7,7 +7,8 @@ def test_llm_deployment_assets_exist_and_are_strict():
     for p in paths[1:5]: assert "set -euo pipefail" in read(p)
 def test_llm_unit_and_bootstrap_are_secret_free_defaults():
     unit=read("deploy/systemd/nyra-llm.service"); boot=read("deploy/bootstrap/llm.sh")
-    assert "llm.app:app" in unit
+    assert "llm.app:create_app" in unit
+    assert "--factory" in unit
     assert "/etc/nyra/llm.env" in unit
     assert "OPENAI_API_KEY=" not in boot and "ANTHROPIC_API_KEY=" not in boot
 def test_llm_guide_documents_backup_restore_and_no_paid_readiness():

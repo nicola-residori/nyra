@@ -9,7 +9,7 @@ WorkingDirectory=/opt/nyra-llm
 EnvironmentFile=-/etc/nyra/llm.env
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=/opt/nyra-llm
-ExecStart=/opt/nyra-llm/.venv/bin/uvicorn llm.app:app --host 0.0.0.0 --port 8090
+ExecStart=/opt/nyra-llm/.venv/bin/uvicorn llm.app:create_app --factory --host 0.0.0.0 --port 8090
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
