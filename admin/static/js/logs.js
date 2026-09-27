@@ -4,6 +4,7 @@ let timer=null;
 let selectedKey=null;
 let currentItems=[];
 let correlatedRecords=[];
+let selectedEvents=new Set();
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function link(k,v){return v?`<a href="/logs?${encodeURIComponent(k)}=${encodeURIComponent(v)}">${esc(v)}</a>`:'';}
@@ -39,7 +40,9 @@ function csvCell(v){const x=String(v??'');return /[",\n]/.test(x)?'"'+x.replace(
 function exportShape(x,durations){
   return {timestamp:x.timestamp,ct:x.ct,level:x.level,kind:x.kind,stage:pipelineLabel(x),event:x.event,operation:x.operation??null,duration_ms:durationMs(x,durations)===''?null:durationMs(x,durations),result:x.result??null,session_id:x.session_id??null,request_id:x.request_id??null,trace_id:x.trace_id??null,span_id:x.span_id??null,origin_request_id:x.origin_request_id??null,params:x.params??{},payload:x.payload??null};
 }
+function exportItems(items){const picked=items.filter(x=>selectedEvents.has(rowKey(x)));return picked.length?picked:items;}
 function downloadRecords(format,items,filename){
+  items=exportItems(items);
   const durations=deriveStageDurations(items),shaped=items.map(x=>exportShape(x,durations));let body,type;
   if(format==='csv'){const cols=['timestamp','ct','level','kind','stage','event','operation','duration_ms','result','session_id','request_id','trace_id','span_id','origin_request_id'];body=[cols.join(','),...shaped.map(x=>cols.map(c=>csvCell(x[c])).join(','))].join('\n');type='text/csv';}
   else{body=JSON.stringify(shaped,null,2);type='application/json';}
@@ -119,8 +122,10 @@ async function load(){
     const tr=document.createElement('tr');const elapsed=durationMs(x,durations);
     const input=extractRequestText(x);
     tr.dataset.rowKey=rowKey(x);if(tr.dataset.rowKey===selectedKey)tr.classList.add('selected');
-    tr.innerHTML=`<td>${esc(formatNyraTimestamp(x.timestamp))}</td><td><span class="badge">${esc(x.ct)}</span></td><td class="level-${esc(x.level)}">${esc(x.level)}</td><td class="kind-${esc(x.kind)}">${esc(x.kind)}</td><td class="request-input" title="${esc(input)}">${esc(clip(input))}</td><td>${link('session_id',x.session_id)}</td><td>${link('request_id',x.request_id)}</td><td>${link('trace_id',x.trace_id)}</td><td>${link('span_id',x.span_id)}</td><td>${esc(pipelineLabel(x))}</td><td>${esc(x.event)}</td><td>${esc(x.operation)}</td><td>${esc(elapsed)}${elapsed!==''?' ms':''}</td><td>${esc(x.result)}</td>`;
-    tr.onclick=e=>{if(e.target.closest('a'))return;selectedKey=rowKey(x);document.querySelectorAll('#rows tr').forEach(row=>row.classList.toggle('selected',row===tr));loadRequestDetail(x);};
+    const checked=selectedEvents.has(rowKey(x))?" checked":"";
+    tr.innerHTML=`<td><input class="event-select" type="checkbox" data-event-key="${esc(rowKey(x))}"${checked}></td><td>${esc(formatNyraTimestamp(x.timestamp))}</td><td><span class="badge">${esc(x.ct)}</span></td><td class="level-${esc(x.level)}">${esc(x.level)}</td><td class="kind-${esc(x.kind)}">${esc(x.kind)}</td><td class="request-input" title="${esc(input)}">${esc(clip(input))}</td><td>${link('session_id',x.session_id)}</td><td>${link('request_id',x.request_id)}</td><td>${link('trace_id',x.trace_id)}</td><td>${link('span_id',x.span_id)}</td><td>${esc(pipelineLabel(x))}</td><td>${esc(x.event)}</td><td>${esc(x.operation)}</td><td>${esc(elapsed)}${elapsed!==''?' ms':''}</td><td>${esc(x.result)}</td>`;
+    const cb=tr.querySelector('.event-select');cb.onchange=()=>{if(cb.checked)selectedEvents.add(rowKey(x));else selectedEvents.delete(rowKey(x));};
+    tr.onclick=e=>{if(e.target.closest('a')||e.target.closest('.event-select'))return;selectedKey=rowKey(x);document.querySelectorAll('#rows tr').forEach(row=>row.classList.toggle('selected',row===tr));loadRequestDetail(x);};
     tb.appendChild(tr);
   }
 }
@@ -159,6 +164,8 @@ async function loadRequestDetail(selected){
 
 function syncFromUrl(){const p=new URLSearchParams(location.search);fields.forEach(k=>{const e=document.getElementById(k);if(e&&p.has(k))e.value=p.get(k)})}
 document.getElementById('apply').onclick=load;
+document.getElementById('select-all-events').onchange=e=>{document.querySelectorAll('.event-select').forEach(cb=>{cb.checked=e.target.checked;const k=cb.dataset.eventKey;if(e.target.checked)selectedEvents.add(k);else selectedEvents.delete(k);});};
+document.getElementById('select-none-events').onclick=()=>{selectedEvents.clear();document.querySelectorAll('.event-select').forEach(cb=>cb.checked=false);document.getElementById('select-all-events').checked=false;};
 document.getElementById('export-json').onclick=()=>downloadRecords('json',currentItems,'nyra-logs.json');
 document.getElementById('export-csv').onclick=()=>downloadRecords('csv',currentItems,'nyra-logs.csv');
 document.getElementById('live').onchange=e=>{if(timer)clearInterval(timer);timer=e.target.checked?setInterval(load,2000):null};

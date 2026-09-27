@@ -26,6 +26,7 @@ class LlmSettings:
     api_keys:dict[str,str]
     semantic:ModelTarget
     reasoning:ModelTarget
+    router_url:str|None=None
     @classmethod
     def load(cls):
         primary=ModelTarget(os.getenv("NYRA_LLM_PRIMARY_PROVIDER",""),os.getenv("NYRA_LLM_PRIMARY_MODEL",""))
@@ -33,4 +34,4 @@ class LlmSettings:
         semantic=_optional_target("NYRA_LLM_SEMANTIC") or primary
         reasoning=_optional_target("NYRA_LLM_REASONING") or primary
         keys={k:v for k,v in {"openai":os.getenv("NYRA_LLM_OPENAI_API_KEY"),"anthropic":os.getenv("NYRA_LLM_ANTHROPIC_API_KEY")}.items() if v}
-        return cls(os.getenv("NYRA_LLM_HOST","0.0.0.0"),int(os.getenv("NYRA_LLM_PORT","8090")),primary,fallback,keys,semantic,reasoning)
+        return cls(os.getenv("NYRA_LLM_HOST","0.0.0.0"),int(os.getenv("NYRA_LLM_PORT","8090")),primary,fallback,keys,semantic,reasoning,os.getenv("NYRA_ROUTER_URL") or None)

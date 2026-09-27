@@ -13,6 +13,10 @@ def build_reasoning_context(request, context, pending_state=None)->ReasoningCont
     operational={k:data[k] for k in _ALLOWED_OPERATIONAL if k in data}
     if context.trace_id:
         operational["trace_id"]=context.trace_id
+    request_id=getattr(request,"request_id",None)
+    if request_id:
+        operational["request_id"]=request_id
+        operational["origin_request_id"]=getattr(request,"origin_request_id",None) or request_id
     clarification=None
     if isinstance(pending_state,dict):
         item=pending_state.get("llm_clarification")
