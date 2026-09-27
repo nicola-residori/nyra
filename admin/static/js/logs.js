@@ -2,11 +2,49 @@ const fields=['q','ct','level','kind','event','result','session_id','request_id'
 const RANGE_MS={"15m":15*60*1000,"1h":60*60*1000,"6h":6*60*60*1000,"24h":24*60*60*1000};
 let timer=null;
 let selectedKey=null;
+let currentItems=[];
+let correlatedRecords=[];
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function link(k,v){return v?`<a href="/logs?${encodeURIComponent(k)}=${encodeURIComponent(v)}">${esc(v)}</a>`:'';}
 function clip(value){return String(value??'').length>120?String(value).slice(0,117)+'…':String(value??'');}
 function rowKey(x){return [x.timestamp,x.ct,x.span_id,x.event].join('|');}
+function stageName(event){
+  const e=String(event||'');
+  if(e.endsWith('_STARTED'))return e.slice(0,-8);
+  if(e.endsWith('_COMPLETED'))return e.slice(0,-10);
+  return '';
+}
+function parseTs(x){const n=Date.parse(x?.timestamp||'');return Number.isFinite(n)?n:null;}
+function deriveStageDurations(items){
+  const ordered=[...items].sort((a,b)=>(parseTs(a)||0)-(parseTs(b)||0));
+  const open=new Map(),durations=new Map();
+  for(const x of ordered){
+    const stage=stageName(x.event);if(!stage)continue;
+    const key=[x.request_id||'',x.trace_id||'',stage].join('|');
+    if(String(x.event).endsWith('_STARTED'))open.set(key,x);
+    else if(String(x.event).endsWith('_COMPLETED')&&open.has(key)){
+      const a=open.get(key),start=parseTs(a),end=parseTs(x);
+      if(start!==null&&end!==null&&end>=start){const ms=end-start;durations.set(rowKey(a),ms);durations.set(rowKey(x),ms);}
+      open.delete(key);
+    }
+  }
+  return durations;
+}
+function durationMs(x,durations){
+  const explicit=x.span_elapsed_ms??x.trace_elapsed_ms??x.request_elapsed_ms??x.session_elapsed_ms;
+  return explicit??durations.get(rowKey(x))??'';
+}
+function csvCell(v){const x=String(v??'');return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;}
+function exportShape(x,durations){
+  return {timestamp:x.timestamp,ct:x.ct,level:x.level,kind:x.kind,stage:pipelineLabel(x),event:x.event,operation:x.operation??null,duration_ms:durationMs(x,durations)===''?null:durationMs(x,durations),result:x.result??null,session_id:x.session_id??null,request_id:x.request_id??null,trace_id:x.trace_id??null,span_id:x.span_id??null,origin_request_id:x.origin_request_id??null,params:x.params??{},payload:x.payload??null};
+}
+function downloadRecords(format,items,filename){
+  const durations=deriveStageDurations(items),shaped=items.map(x=>exportShape(x,durations));let body,type;
+  if(format==='csv'){const cols=['timestamp','ct','level','kind','stage','event','operation','duration_ms','result','session_id','request_id','trace_id','span_id','origin_request_id'];body=[cols.join(','),...shaped.map(x=>cols.map(c=>csvCell(x[c])).join(','))].join('\n');type='text/csv';}
+  else{body=JSON.stringify(shaped,null,2);type='application/json';}
+  const blob=new Blob([body],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
 function pipelineLabel(x){
   const e=String(x.event||'');
   if(e.startsWith('identity.')||['IDENTIFIED','CONFIRMED','CHANGED','CONTINUITY','GUEST'].includes(e))return 'Identity';
@@ -75,11 +113,13 @@ async function load(){
   const r=await fetch('/admin-api/logs?'+p);const d=await r.json();
   document.getElementById('error').textContent=d.error||'';
   const tb=document.getElementById('rows');tb.innerHTML='';
-  for(const x of d.items){
-    const tr=document.createElement('tr');const elapsed=x.span_elapsed_ms??x.trace_elapsed_ms??x.request_elapsed_ms??x.session_elapsed_ms??'';
+  currentItems=d.items||[];
+  const durations=deriveStageDurations(currentItems);
+  for(const x of currentItems){
+    const tr=document.createElement('tr');const elapsed=durationMs(x,durations);
     const input=extractRequestText(x);
     tr.dataset.rowKey=rowKey(x);if(tr.dataset.rowKey===selectedKey)tr.classList.add('selected');
-    tr.innerHTML=`<td>${esc(formatNyraTimestamp(x.timestamp))}</td><td><span class="badge">${esc(x.ct)}</span></td><td class="level-${esc(x.level)}">${esc(x.level)}</td><td class="kind-${esc(x.kind)}">${esc(x.kind)}</td><td class="request-input" title="${esc(input)}">${esc(clip(input))}</td><td>${link('session_id',x.session_id)}</td><td>${link('request_id',x.request_id)}</td><td>${link('trace_id',x.trace_id)}</td><td>${link('span_id',x.span_id)}</td><td title="${esc(pipelineLabel(x))}">${esc(x.event)}</td><td>${esc(x.operation)}</td><td>${esc(elapsed)}${elapsed!==''?' ms':''}</td><td>${esc(x.result)}</td>`;
+    tr.innerHTML=`<td>${esc(formatNyraTimestamp(x.timestamp))}</td><td><span class="badge">${esc(x.ct)}</span></td><td class="level-${esc(x.level)}">${esc(x.level)}</td><td class="kind-${esc(x.kind)}">${esc(x.kind)}</td><td class="request-input" title="${esc(input)}">${esc(clip(input))}</td><td>${link('session_id',x.session_id)}</td><td>${link('request_id',x.request_id)}</td><td>${link('trace_id',x.trace_id)}</td><td>${link('span_id',x.span_id)}</td><td>${esc(pipelineLabel(x))}</td><td>${esc(x.event)}</td><td>${esc(x.operation)}</td><td>${esc(elapsed)}${elapsed!==''?' ms':''}</td><td>${esc(x.result)}</td>`;
     tr.onclick=e=>{if(e.target.closest('a'))return;selectedKey=rowKey(x);document.querySelectorAll('#rows tr').forEach(row=>row.classList.toggle('selected',row===tr));loadRequestDetail(x);};
     tb.appendChild(tr);
   }
@@ -97,6 +137,7 @@ async function loadRequestDetail(selected){
     const r=await fetch('/admin-api/logs?'+p);const d=await r.json();items=d.items||items;error=d.error||'';
   }
   items=[...items].sort((a,b)=>String(a.timestamp||'').localeCompare(String(b.timestamp||'')));
+  correlatedRecords=items;
   const requestRecord=items.find(x=>extractRequestText(x))||selected;
   const input=extractRequestText(requestRecord);
   const responseRecord=[...items].reverse().find(x=>extractResponseText(x));
@@ -104,7 +145,7 @@ async function loadRequestDetail(selected){
   const outcome=[...items].reverse().find(x=>x.result||String(x.event||'').includes('FAILED')||String(x.event||'').includes('COMPLETED'));
   const raw=JSON.stringify(selected,null,2);
   detail.innerHTML=`
-    <div class="detail-head"><div><span class="eyebrow">Correlated request</span><h3>${esc(selected.request_id||selected.event||'Structured record')}</h3></div><div class="detail-actions">${copyButton('request',selected.request_id)}${copyButton('JSON',raw)}</div></div>
+    <div class="detail-head"><div><span class="eyebrow">Correlated request</span><h3>${esc(selected.request_id||selected.event||'Structured record')}</h3></div><div class="detail-actions">${copyButton('request',selected.request_id)}${copyButton('JSON',raw)}<button type="button" id="export-request-json">Export request JSON</button></div></div>
     ${error?`<div class="detail-error">${esc(error)}</div>`:''}
     <section class="detail-section"><h4>Input</h4><div class="detail-value">${input?esc(input):'<span class="muted">No request text on correlated records.</span>'}</div></section>
     <section class="detail-section"><h4>Outcome</h4><div class="detail-value">${outcome?esc(outcome.result||outcome.event):'<span class="muted">No terminal outcome yet.</span>'}</div></section>
@@ -112,10 +153,14 @@ async function loadRequestDetail(selected){
     <section class="detail-section"><h4>Timeline</h4>${renderTimeline(items)}</section>
     <section class="detail-section"><div class="section-title-row"><h4>Selected record</h4></div><pre class="json">${esc(raw)}</pre></section>`;
   bindCopyButtons(detail);
+  const exportRequest=document.getElementById('export-request-json');
+  if(exportRequest)exportRequest.onclick=()=>downloadRecords('json',correlatedRecords,`nyra-request-${selected.request_id||'records'}.json`);
 }
 
 function syncFromUrl(){const p=new URLSearchParams(location.search);fields.forEach(k=>{const e=document.getElementById(k);if(e&&p.has(k))e.value=p.get(k)})}
 document.getElementById('apply').onclick=load;
+document.getElementById('export-json').onclick=()=>downloadRecords('json',currentItems,'nyra-logs.json');
+document.getElementById('export-csv').onclick=()=>downloadRecords('csv',currentItems,'nyra-logs.csv');
 document.getElementById('live').onchange=e=>{if(timer)clearInterval(timer);timer=e.target.checked?setInterval(load,2000):null};
 document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>applyRange(b.dataset.range));
 syncFromUrl();defaultRange();bindCopyButtons();load();
