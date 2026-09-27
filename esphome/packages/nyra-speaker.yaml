@@ -38,6 +38,31 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  # Exact ring state visible immediately before Nyra acquires it.
+  - id: nyra_ring_restore_state
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_ring_restore_effect
+    type: std::string
+    restore_value: no
+    initial_value: '"None"'
+  - id: nyra_ring_restore_red
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_green
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_blue
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_brightness
+    type: float
+    restore_value: no
+    initial_value: '1.0'
 
 # Router/HA owns semantic pipeline state. Firmware owns rendering only.
 # These public effect names are the contract consumed by the Nyra HA adapter.
@@ -47,7 +72,19 @@ globals:
 # component that knows the actual playback lifetime.
 voice_assistant:
   on_listening:
-    - lambda: id(nyra_ring_owned) = true;
+    - lambda: |-
+        // Snapshot only on the ownership transition. Nyra's later visual
+        // phases must never overwrite the external/background state.
+        if (!id(nyra_ring_owned)) {
+          const auto &values = id(status_ring).remote_values;
+          id(nyra_ring_restore_state) = values.is_on();
+          id(nyra_ring_restore_effect) = values.get_effect();
+          id(nyra_ring_restore_red) = values.get_red();
+          id(nyra_ring_restore_green) = values.get_green();
+          id(nyra_ring_restore_blue) = values.get_blue();
+          id(nyra_ring_restore_brightness) = values.get_brightness();
+        }
+        id(nyra_ring_owned) = true;
     - light.turn_on:
         id: status_ring
         effect: "Pulse Fast"
@@ -68,7 +105,7 @@ voice_assistant:
         effect: "nyra_listening_white_fast"
   on_end:
     - lambda: id(nyra_ring_owned) = false;
-    - light.turn_off: status_ring
+    - script.execute: nyra_ring_restore
 
 media_player:
   - id: !extend external_media_player
@@ -260,6 +297,27 @@ audio_file:
     file: ${nyra_assets_dir}/nyra_close.wav
 
 script:
+  # Restore the exact state that was visible before Nyra temporarily acquired
+  # the ring. External HA uses (alarm/battery/etc.) therefore survive a session.
+  - id: nyra_ring_restore
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(nyra_ring_restore_state);'
+          then:
+            - lambda: |-
+                auto call = id(status_ring).turn_on();
+                call.set_rgb(id(nyra_ring_restore_red),
+                             id(nyra_ring_restore_green),
+                             id(nyra_ring_restore_blue));
+                call.set_brightness(id(nyra_ring_restore_brightness));
+                const std::string effect = id(nyra_ring_restore_effect);
+                call.set_effect(effect.empty() ? "None" : effect);
+                call.perform();
+          else:
+            - light.turn_off: status_ring
+
   # Replace only the upstream final LED dispatcher. control_leds and the rest of
   # the Waveshare voice state machine stay intact; phase-driven writes are simply
   # ignored while Nyra owns the semantic ring.

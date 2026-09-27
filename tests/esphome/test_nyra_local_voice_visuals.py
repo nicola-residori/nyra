@@ -54,7 +54,8 @@ def test_voice_assistant_end_releases_nyra_ring_ownership():
     assert "on_end:" in voice
     end = voice.split("on_end:", 1)[1]
     assert "id(nyra_ring_owned) = false" in end
-    assert "- light.turn_off: status_ring" in end
+    assert "script.execute: nyra_ring_restore" in end
+    assert "- light.turn_off: status_ring" not in end
 
 
 def test_nyra_ownership_gates_waveshare_phase_led_controller():
@@ -161,3 +162,22 @@ def test_rainbow_comet_keeps_local_color_wheel_cases():
         assert f"case {region}:" in rainbow
 
     assert "${voice_assist_" not in rainbow
+
+
+def test_nyra_snapshots_and_restores_external_ring_state():
+    text = _speaker_yaml()
+    voice = text.split("voice_assistant:", 1)[1].split("light:", 1)[0]
+    listening = voice.split("on_listening:", 1)[1].split("on_stt_vad_start:", 1)[0]
+
+    for token in (
+        "nyra_ring_restore_state",
+        "nyra_ring_restore_effect",
+        "nyra_ring_restore_red",
+        "nyra_ring_restore_green",
+        "nyra_ring_restore_blue",
+        "nyra_ring_restore_brightness",
+    ):
+        assert token in text
+    assert "remote_values" in listening
+    assert "if (!id(nyra_ring_owned))" in listening
+    assert "id: nyra_ring_restore" in text
