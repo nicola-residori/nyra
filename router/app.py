@@ -19,6 +19,8 @@ from router.wake_word_capture import (
     WakeWordCaptureSessionStore, speaker_id_http_url,
 )
 from shared.protocol.requests import RequestStatus
+from router.alert_capability import AlertCapability
+from router.api.alerts import router as alerts_router
 from router.api.health import router as health_router
 from router.api.logs import router as logs_router
 from router.api.observability import router as obs_router
@@ -377,6 +379,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.state.skills_client = skills_client
     app.state.skills_admin = skills_admin
     app.state.ha_capability = ha_capability
+    app.state.alert_capability = AlertCapability(settings.home_assistant_url, settings.home_assistant_token)
     app.state.observability = observability
     app.state.llm_client = llm_client
     app.state.events = event_broker
@@ -396,6 +399,7 @@ def create_app(settings: RouterSettings | None = None, *, audio_sink=None, phras
     app.include_router(users_router)
     app.include_router(memory_admin_router)
     app.include_router(skills_admin_router)
+    app.include_router(alerts_router)
     app.include_router(capabilities_router)
     app.include_router(llm_diagnostics_router)
     return app

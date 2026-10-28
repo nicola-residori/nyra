@@ -52,11 +52,14 @@ def _default_service(settings: SkillsSettings) -> SkillsService:
         capability,
         poll_interval_seconds=settings.job_poll_interval_seconds,
         observability=observability,
+        offline_grace_seconds=settings.alert_offline_grace_seconds,
     )
     register_builtin_skills(
         registry,
         home_assistant_capability=capability,
         job_scheduler=scheduler,
+        alert_timezone=settings.alert_timezone,
+        alert_max_seconds=settings.alert_max_seconds,
     )
     return SkillsService(
         registry=registry,

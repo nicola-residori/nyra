@@ -16,7 +16,23 @@ def register_builtin_skills(
     *,
     home_assistant_capability: RouterHomeAssistantCapabilityClient | None = None,
     job_scheduler=None,
+    alert_timezone="Europe/Rome",
+    alert_max_seconds=60,
 ) -> None:
+    if job_scheduler is not None:
+        from skills.modules.voice_alerts import VoiceAlertsSkill
+
+        alerts = VoiceAlertsSkill(
+            job_scheduler, timezone_name=alert_timezone, max_seconds=alert_max_seconds
+        )
+        registry.register(
+            SkillDefinition(
+                name=alerts.name,
+                priority=alerts.priority,
+                matcher=alerts.matches,
+                executor=alerts.execute,
+            )
+        )
     memory_management = MemoryManagementSkill()
     registry.register(
         SkillDefinition(

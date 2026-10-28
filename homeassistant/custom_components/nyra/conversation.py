@@ -50,6 +50,7 @@ class AdapterResult:
     conversation_key: str
     continue_conversation: bool
     response: NyraRequestResponse | None = None
+    interrupted: bool = False
 
 
 _ADAPTER_MESSAGES = {
@@ -138,11 +139,16 @@ def build_request(data: AdapterInput, sessions: SessionManager) -> NyraRequest:
     )
 
 
-async def process_adapter_input(data: AdapterInput, sessions: SessionManager, client) -> AdapterResult:
+async def process_adapter_input(data: AdapterInput, sessions: SessionManager, client, *, alerts=None) -> AdapterResult:
+    generation = alerts.generation(data.source_id) if alerts is not None and data.is_speaker else None
     request = build_request(data, sessions)
     try:
         response = await client.async_execute(request)
     except NyraRouterError:
+        if generation is not None and (alerts.generation(data.source_id) != generation or alerts.active(data.source_id)):
+            sessions.complete_request(data.conversation_key)
+            sessions.close_session(data.conversation_key)
+            return AdapterResult("", data.conversation_key, False, interrupted=True)
         sessions.complete_request(data.conversation_key)
         if data.is_speaker:
             sessions.close_session(data.conversation_key)
@@ -151,6 +157,11 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
             data.conversation_key,
             False,
         )
+
+    if generation is not None and (alerts.generation(data.source_id) != generation or alerts.active(data.source_id)):
+        sessions.complete_request(data.conversation_key)
+        sessions.close_session(data.conversation_key)
+        return AdapterResult("", data.conversation_key, False, response, interrupted=True)
 
     continuing = response.status is RequestStatus.NEEDS_CLARIFICATION
     if continuing:
@@ -167,10 +178,10 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
 
 
 def needs_home_assistant_fallback(result: AdapterResult) -> bool:
-    return result.response is None or result.response.status in {
+    return not result.interrupted and (result.response is None or result.response.status in {
         RequestStatus.FAILED,
         RequestStatus.EXPIRED,
-    }
+    })
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
@@ -257,7 +268,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                     user_reference.display_name if user_reference is not None else None
                 ),
             )
-            result = await process_adapter_input(data, runtime.sessions, runtime.client)
+            result = await process_adapter_input(data, runtime.sessions, runtime.client, alerts=runtime.alerts)
             if needs_home_assistant_fallback(result):
                 default_agent = conversation.async_get_agent(
                     self.hass, conversation.HOME_ASSISTANT_AGENT

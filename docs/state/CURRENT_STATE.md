@@ -342,3 +342,14 @@ These items do not block the completed Milestone 3:
 
 After explicit authorization, merge the production-verified M6 branch to
 `main`. Milestone 7 — Productization — is the next implementation milestone.
+
+## Voice alerts feature branch (2026-10-28)
+
+`feat/persistent-voice-alerts` extends main with persistent alarms, timers and
+personal TTS calls. Skills owns jobs; Router mediates typed audio through HA to
+source-addressed ESPHome playback. Alarm/timer playback is locally capped at 60s,
+wake word has absolute audio priority, and personal names require current biometric
+identification. HA maintains durable delivery/deduplication state and reconciles
+firmware state after restart. See `docs/voice-alerts.md` for settings, rollout,
+rollback and the mandatory physical acceptance matrix. Production deployment and
+physical verification are pending; no main merge is authorized by this work.

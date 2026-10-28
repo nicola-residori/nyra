@@ -3,6 +3,7 @@
 # Room/device identity belongs only in esphome/devices/*.yaml.
 packages:
   waveshare_audio_va: !include ../vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.yaml
+  nyra_alerts: !include nyra-alerts.yaml
   nyra_identification: !include nyra-identification.yaml
 
 # Optional battery gauge value exposed natively to Home Assistant.
@@ -116,8 +117,12 @@ voice_assistant:
         id: status_ring
         effect: "nyra_listening_white_fast"
   on_end:
-    - lambda: id(nyra_ring_owned) = false;
-    - script.execute: nyra_ring_restore
+    - if:
+        condition:
+          lambda: 'return !id(nyra_alert).active;'
+        then:
+          - lambda: id(nyra_ring_owned) = false;
+          - script.execute: nyra_ring_restore
 
 media_player:
   - id: !extend external_media_player

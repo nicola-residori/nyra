@@ -103,3 +103,14 @@
 - Configuration examples
 - Migration documentation
 - Reproducible clean installation
+
+## Voice alerts extension
+
+**Status: Feature branch; production/physical acceptance pending**
+
+- Persistent source-scoped alarms, timers and personal calls (Italian/English)
+- Router-owned deferred audio contract, HA delivery ledger and ESPHome local stop
+- Maximum 60-second alarms/timers; wake word > alerts/notifications > conversation
+- Name snapshot gated on current Speaker-ID; no name from continuity/HA identity
+- Restart reconciliation, concurrent jobs, explicit offline/unknown outcomes
+- Rollout/rollback and physical acceptance: `docs/voice-alerts.md`

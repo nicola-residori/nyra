@@ -45,6 +45,9 @@ class NyraRuntime:
     enrollment_panel_registered: bool = False
 
     speaking_restore_unsubscribe: object | None = None
+    alerts: object | None = None
+    alert_unsubscribes: tuple = ()
+    alert_view: object | None = None
 
 
 
@@ -138,6 +141,12 @@ async def async_setup_entry(hass, entry) -> bool:
             source_states,
         )
 
+    async def announce_notification(source, message, language):
+        from uuid import uuid4
+        from shared.protocol.alerts import AlertRequest
+        return await alerts.handle(AlertRequest(action="START", job_id="job_" + str(uuid4()),
+            source_id=source, alert_kind="notification", message=message, language=language))
+
     targets = await resolve_speaker_targets()
     output = EspHomeSpeakerOutput(
         targets,
@@ -148,8 +157,40 @@ async def async_setup_entry(hass, entry) -> bool:
             blocking=False,
         ),
         resolve_targets=resolve_speaker_targets,
+        announcer=announce_notification,
     )
     speaker = SpeakerStateMachine(output)
+    from homeassistant.helpers.storage import Store
+    from .alerts import AlertCoordinator
+    from .alert_backend import HomeAssistantAlertBackend
+    from .alert_api import AlertView
+    alert_store = Store(hass, 1, "nyra_alerts_" + entry.entry_id)
+    alerts = AlertCoordinator(HomeAssistantAlertBackend(hass, resolve_speaker_targets,
+        pipeline_id=entry.options.get("alert_pipeline_id")), alert_store.async_save,
+        records=await alert_store.async_load())
+    await alerts.restore()
+    view_key = "nyra_alert_view"
+    alert_view = hass.data.get(view_key)
+    if alert_view is None:
+        alert_view = AlertView(alerts)
+        hass.http.register_view(alert_view)
+        hass.data[view_key] = alert_view
+    else:
+        alert_view.coordinator = alerts
+
+    async def alert_event(event):
+        data = event.data
+        await alerts.event(data.get("source_id"), data.get("job_id"), data.get("state"))
+
+    async def wake_event(event):
+        source = event.data.get("source_id")
+        if isinstance(source, str) and source:
+            await alerts.wake(source, epoch=event.data.get("epoch"))
+
+    alert_unsubscribes = (
+        hass.bus.async_listen("esphome.nyra_alert", alert_event),
+        hass.bus.async_listen("esphome.nyra_wake", wake_event),
+    )
     aiohttp_session = async_get_clientsession(hass)
 
     async def connect(url, headers):
@@ -176,6 +217,7 @@ async def async_setup_entry(hass, entry) -> bool:
             await output.announce(
                 source_id,
                 localized_enrollment_message(session["language"], status),
+                language=session["language"],
             )
         elif status == "TERMINATED":
             await output.close_feedback(source_id)
@@ -208,6 +250,7 @@ async def async_setup_entry(hass, entry) -> bool:
         owner_entry_id=entry.entry_id,
     )
     entry.runtime_data = NyraRuntime(
+        alerts=alerts, alert_unsubscribes=alert_unsubscribes, alert_view=alert_view,
         client=client,
         sessions=sessions,
         speaker=speaker,
@@ -233,6 +276,12 @@ async def async_unload_entry(hass, entry) -> bool:
     from homeassistant.const import Platform
 
     runtime = entry.runtime_data
+    if runtime.alert_view is not None:
+        runtime.alert_view.coordinator = None
+    for unsubscribe in runtime.alert_unsubscribes:
+        unsubscribe()
+    if runtime.alerts is not None:
+        await runtime.alerts.shutdown()
     if runtime.enrollment_panel_registered:
         async_unregister_enrollment_panel(hass)
         runtime.enrollment_panel_registered = False

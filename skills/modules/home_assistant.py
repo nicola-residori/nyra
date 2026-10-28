@@ -50,6 +50,10 @@ class RouterHomeAssistantCapabilityClient:
         self.timeout = timeout
         self.transport = transport
 
+    async def alert(self, request):
+        from skills.alert_client import RouterAlertClient
+        return await RouterAlertClient(self.base_url, timeout=self.timeout, transport=self.transport).alert(request)
+
     async def resolve(
         self,
         reference: ResourceReference,
