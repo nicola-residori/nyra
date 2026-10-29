@@ -469,3 +469,78 @@ async def test_stop_after_speaker_reboot_expires_using_stored_deadline(monkeypat
     assert not co.active("a")
     assert (await co.handle(req(job="job_after"))).state == AlertState.ACCEPTED
     await co.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "requested,preferred,supported,want",
+    [
+        ("it", "it-IT", ["it-IT", "en-US"], "it-IT"),
+        ("it_IT", "it-IT", ["it-IT"], "it-IT"),
+        ("en", "it-IT", ["it-IT", "en-GB", "en-US"], "en-US"),
+        ("en", "en-GB", ["en-GB", "en-US"], "en-GB"),
+    ],
+)
+async def test_tts_preparation_resolves_provider_locale(
+    monkeypatch, requested, preferred, supported, want
+):
+    import sys
+    from types import ModuleType, SimpleNamespace
+    from homeassistant.custom_components.nyra.alert_backend import (
+        HomeAssistantAlertBackend,
+    )
+
+    called = []
+    tts = ModuleType("homeassistant.components.tts")
+    tts.ATTR_VOICE = "voice"
+    tts.async_resolve_engine = lambda hass, engine: engine
+    tts.get_engine_instance = lambda hass, engine: SimpleNamespace(
+        supported_languages=supported
+    )
+
+    def generate(hass, message, engine, language, options):
+        if language not in supported:
+            raise ValueError("unsupported provider locale")
+        called.append((language, options))
+        return "media-source://tts/test"
+
+    tts.generate_media_source_id = generate
+    media = ModuleType("homeassistant.components.media_source")
+
+    async def resolve(hass, media_id, target):
+        return SimpleNamespace(url="/tts/ready.wav")
+
+    media.async_resolve_media = resolve
+    pipeline = ModuleType("homeassistant.components.assist_pipeline")
+    pipeline.async_get_pipeline = lambda hass, pipeline_id: SimpleNamespace(
+        tts_engine="tts.cloud", tts_language=preferred, tts_voice="preferred-voice"
+    )
+    player = ModuleType("homeassistant.components.media_player")
+    player.async_process_play_media_url = lambda hass, url: "http://ha" + url
+    components = ModuleType("homeassistant.components")
+    components.tts = tts
+    components.media_source = media
+    for name, module in [
+        ("homeassistant.components", components),
+        ("homeassistant.components.tts", tts),
+        ("homeassistant.components.media_source", media),
+        ("homeassistant.components.assist_pipeline", pipeline),
+        ("homeassistant.components.media_player", player),
+    ]:
+        monkeypatch.setitem(sys.modules, name, module)
+
+    async def targets():
+        return {}
+
+    backend = HomeAssistantAlertBackend(object(), targets)
+    request = AlertRequest(
+        action="START",
+        job_id="job_locale",
+        source_id="a",
+        alert_kind="call",
+        language=requested,
+        message="Verifica",
+    )
+    assert await backend.prepare(request) == "http://ha/tts/ready.wav"
+    assert called[0][0] == want
+    assert bool(called[0][1]) == (want == preferred)

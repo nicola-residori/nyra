@@ -92,3 +92,10 @@ application, guarded VoiceAssistant and API connection source passed syntax chec
 against 2026.10.1. Complete builds for both real device configurations passed;
 private credentials were kept outside the repository and logs exposed no secrets.
 The full suite passed again: **969 passed**, one dependency deprecation warning.
+
+The first live HA Cloud TTS probe reproduced `it` -> FAILED while `it-IT` produced
+ACCEPTED -> PLAYING -> COMPLETED. Four provider-boundary regressions failed RED for
+generic/normalized Italian and English locales, then passed GREEN after resolving
+against the engine's advertised locales. The full regression after this correction
+completed with **973 passed**, one dependency warning. This correction changes HA
+adapter code only; the verified firmware images are unchanged.

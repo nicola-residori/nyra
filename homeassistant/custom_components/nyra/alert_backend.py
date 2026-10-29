@@ -3,6 +3,33 @@
 import json
 
 
+def provider_language(requested, preferred, supported):
+    """Resolve request language to an advertised provider locale, without changing language."""
+    normalize = lambda value: (value or "").replace("_", "-").lower()
+    available = {normalize(value): value for value in supported}
+    request = normalize(requested)
+    if request in available:
+        return available[request]
+    base = request.split("-", 1)[0]
+    # An explicit region is preserved unless the provider advertises a generic language.
+    if "-" in request:
+        if base in available:
+            return available[base]
+        raise ValueError("requested TTS locale is unsupported")
+    preferred_key = normalize(preferred)
+    if preferred_key.split("-", 1)[0] == base and preferred_key in available:
+        return available[preferred_key]
+    default = {"it": "it-it", "en": "en-us"}.get(base)
+    if default in available:
+        return available[default]
+    candidates = [
+        value for key, value in available.items() if key.split("-", 1)[0] == base
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    raise ValueError("requested TTS language is unavailable or ambiguous")
+
+
 class HomeAssistantAlertBackend:
     def __init__(self, hass, resolve_targets, *, pipeline_id=None):
         self.hass = hass
@@ -43,14 +70,25 @@ class HomeAssistantAlertBackend:
         from homeassistant.components.media_player import async_process_play_media_url
 
         pipeline = async_get_pipeline(self.hass, self.pipeline_id)
+        engine = tts.async_resolve_engine(self.hass, pipeline.tts_engine)
+        instance = tts.get_engine_instance(self.hass, engine) if engine else None
+        if instance is None:
+            raise ValueError("TTS engine unavailable")
+        language = provider_language(
+            request.language, pipeline.tts_language, instance.supported_languages
+        )
         options = {}
-        if pipeline.tts_voice and request.language == pipeline.tts_language:
+        if (
+            pipeline.tts_voice
+            and language.replace("_", "-").lower()
+            == (pipeline.tts_language or "").replace("_", "-").lower()
+        ):
             options[tts.ATTR_VOICE] = pipeline.tts_voice
         media_id = tts.generate_media_source_id(
             self.hass,
             request.message,
-            engine=pipeline.tts_engine,
-            language=request.language,
+            engine=engine,
+            language=language,
             options=options,
         )
         media = await media_source.async_resolve_media(self.hass, media_id, None)

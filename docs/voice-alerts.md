@@ -189,3 +189,12 @@ signatures without changing playback behavior. The native C++ regression exercis
 both signatures. The guarded VoiceAssistant runtime remains based on 2026.8.2;
 its generated application, runtime and API callers were also checked against
 2026.10.1 and both full firmware builds succeeded.
+
+### TTS provider locale resolution
+
+A request language such as `it` is resolved to the provider's advertised locale
+(e.g. `it-IT`), preserving the preferred pipeline locale/voice when its language
+matches. Generic English uses the preferred English locale, otherwise advertised
+`en-US`; underscore/hyphen locale spelling is normalized. Explicit regions are
+preserved, and unavailable or ambiguous provider languages fail explicitly rather
+than speaking in a different language. This also applies to notifications.
