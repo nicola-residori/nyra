@@ -99,3 +99,11 @@ generic/normalized Italian and English locales, then passed GREEN after resolvin
 against the engine's advertised locales. The full regression after this correction
 completed with **973 passed**, one dependency warning. This correction changes HA
 adapter code only; the verified firmware images are unchanged.
+
+During physical acceptance, a user reported weak wake recognition on one speaker,
+including while quiet. Live microWakeWord diagnostics showed IT cutoff 0.90 and
+EN 0.85 despite unchanged model manifests specifying 0.70. The inherited stock
+sensitivity callback was overriding the Nyra defaults. A native regression failed
+RED for the missing manifest-relative sensitivity policy, then passed GREEN; the
+full suite remained **973 passed** and the affected speaker's ESPHome 2026.10.1
+build succeeded. Physical wake acceptance must be repeated after this correction.

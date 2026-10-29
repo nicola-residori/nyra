@@ -198,3 +198,12 @@ matches. Generic English uses the preferred English locale, otherwise advertised
 `en-US`; underscore/hyphen locale spelling is normalized. Explicit regions are
 preserved, and unavailable or ambiguous provider languages fail explicitly rather
 than speaking in a different language. This also applies to notifications.
+
+### Nyra wake sensitivity
+
+The sensitivity selector now uses each Nyra model's own trained manifest cutoff.
+The default “Slightly sensitive” level preserves that cutoff (about 0.70 for the
+current models); “Moderately” and “Very” lower it by about 0.10 and 0.20, bounded
+above zero. Stock Alexa/Nabu cutoffs must not be reused after replacing their
+models with Nyra. The saved sensitivity choice and model files are preserved.
+Firmware debug logs report whether the wake detector is running at alert start.

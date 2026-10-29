@@ -14,6 +14,11 @@ def test_firmware_wake_deadline_duplicate_and_stale_epoch(tmp_path):
 #include <cassert>
 #include <string>
 int main() {
+  assert(nyra::wake_word_cutoff(178, 0) == 178);
+  assert(nyra::wake_word_cutoff(178, 1) == 152);
+  assert(nyra::wake_word_cutoff(178, 2) == 126);
+  assert(nyra::wake_word_cutoff(30, 2) == 1);
+  assert(nyra::wake_word_cutoff(178, 9) == 126);
   struct File {} file;
   struct LegacyPlayer {
     int calls{0};

@@ -149,6 +149,8 @@ script:
           }
           id(nyra_ring_owned) = true;
       - script.execute: nyra_alert_publish
+      - lambda: |-
+          ESP_LOGD("nyra_alert", "Wake detector during alert: running=%s", YESNO(id(mww).is_running()));
       - lambda: 'id(nyra_alert_ready) = true;'
       - if:
           condition:

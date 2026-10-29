@@ -6,6 +6,12 @@ namespace esphome { namespace audio { struct AudioFile; } }
 
 namespace nyra {
 using AudioFilePointer = const esphome::audio::AudioFile *;
+// Preserve the trained model's cutoff; sensitivity increases are relative to it.
+inline uint8_t wake_word_cutoff(uint8_t manifest_cutoff, uint8_t sensitivity) {
+  if (sensitivity > 2) sensitivity = 2;
+  const uint16_t reduction = 26u * sensitivity;
+  return manifest_cutoff > reduction ? static_cast<uint8_t>(manifest_cutoff - reduction) : 1u;
+}
 // ESPHome 2026.8 accepts AudioFile*, 2026.10 accepts const AudioFile*.
 // The legacy runtime only reads this descriptor; modern constness is preserved
 // at the callee boundary by its const-pointer signature.
