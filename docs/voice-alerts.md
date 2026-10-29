@@ -118,7 +118,7 @@ storage as personal data; no new automatic retention pruning is included.
    Restart HA and run its configuration check. Future jobs still belong to Skills.
 3. Install the complete ESPHome packages/vendor, `components/nyra_alerts/`, the pinned `components/voice_assistant/` override,
    `assets/nyra_alarm.wav`, `assets/nyra_timer.wav`, and existing assets/models.
-   Build with ESPHome 2026.8.2 or a separately validated version. Existing installation
+   Build with ESPHome 2026.8.2 or 2026.10.1 (both validated). Existing installation
    `/config/esphome` paths and private device entrypoints remain operator-managed.
    Upload only an installation-specific, reviewed build to the intended source.
    Enable HA action/event permissions for the ESPHome device, as required by existing
@@ -178,3 +178,14 @@ Contract references: [HA Assist Satellite](https://www.home-assistant.io/integra
 [HA TTS media source API](https://github.com/home-assistant/core/blob/2026.8.3/homeassistant/components/tts/media_source.py),
 [ESPHome template text](https://esphome.io/components/text/template/), and
 [ESPHome speaker media player](https://esphome.io/components/media_player/speaker/).
+
+### ESPHome 2026.10.1 compatibility
+
+The deployment preflight also compiled the real device configurations with
+ESPHome 2026.10.1. That version makes embedded AudioFile descriptors const.
+`nyra::AudioFilePointer` keeps the script parameter schema valid and
+`nyra::play_asset` adapts the old mutable-pointer and new const-pointer playback
+signatures without changing playback behavior. The native C++ regression exercises
+both signatures. The guarded VoiceAssistant runtime remains based on 2026.8.2;
+its generated application, runtime and API callers were also checked against
+2026.10.1 and both full firmware builds succeeded.

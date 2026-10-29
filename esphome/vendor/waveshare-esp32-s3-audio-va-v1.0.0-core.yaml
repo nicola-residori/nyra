@@ -956,7 +956,7 @@ script:
   - id: play_sound
     parameters:
       priority: bool
-      sound_file: "audio::AudioFile*"
+      sound_file: "nyra::AudioFilePointer"
     then:
       - lambda: |-
           if (priority) {
@@ -967,7 +967,7 @@ script:
               .perform();
           }
           if ((id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING) || priority) {
-            id(external_media_player)->play_file(sound_file, true, false);
+            nyra::play_asset(id(external_media_player), sound_file);
           }
 
   - id: fetch_first_active_timer

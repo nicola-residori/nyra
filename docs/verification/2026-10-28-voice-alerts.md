@@ -81,3 +81,14 @@ flash 2204611 / 8126464 bytes (27.1%). These figures describe the test configura
 not a flashed production device. Bash syntax checks for both verifier and macOS
 runner passed. All four Important review findings have covering green regressions;
 no deferred review findings remain.
+
+## Deployment preflight — 2026-10-29
+
+Production uses ESPHome Device Builder 2026.10.1. Compiling its generated C++
+first reproduced a const AudioFile pointer incompatibility before any upload.
+A native executable regression failed RED for the absent compatibility adapter,
+then passed GREEN with both legacy and modern playback signatures. The generated
+application, guarded VoiceAssistant and API connection source passed syntax checks
+against 2026.10.1. Complete builds for both real device configurations passed;
+private credentials were kept outside the repository and logs exposed no secrets.
+The full suite passed again: **969 passed**, one dependency deprecation warning.

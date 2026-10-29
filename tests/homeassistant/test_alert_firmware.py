@@ -14,6 +14,18 @@ def test_firmware_wake_deadline_duplicate_and_stale_epoch(tmp_path):
 #include <cassert>
 #include <string>
 int main() {
+  struct File {} file;
+  struct LegacyPlayer {
+    int calls{0};
+    void play_file(File *, bool announcement, bool enqueue) { assert(announcement && !enqueue); ++calls; }
+  } legacy;
+  struct ModernPlayer {
+    int calls{0};
+    void play_file(const File *, bool announcement, bool enqueue) { assert(announcement && !enqueue); ++calls; }
+  } modern;
+  nyra::play_asset(&legacy, &file);
+  nyra::play_asset(&modern, &file);
+  assert(legacy.calls == 1 && modern.calls == 1);
   nyra::ConversationOutputGate gate;
   int audible = 0;
   assert(!gate.begin()); // A late RUN_START cannot rearm an invalidated request.

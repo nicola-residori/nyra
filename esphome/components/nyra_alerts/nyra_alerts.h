@@ -2,7 +2,17 @@
 #include <cstdint>
 #include <string>
 
+namespace esphome { namespace audio { struct AudioFile; } }
+
 namespace nyra {
+using AudioFilePointer = const esphome::audio::AudioFile *;
+// ESPHome 2026.8 accepts AudioFile*, 2026.10 accepts const AudioFile*.
+// The legacy runtime only reads this descriptor; modern constness is preserved
+// at the callee boundary by its const-pointer signature.
+template<typename Player, typename File> void play_asset(Player *player, const File *file) {
+  player->play_file(const_cast<File *>(file), true, false);
+}
+
 // Native conversation audio is uncorrelated at the media-player boundary.
 // Capture a token when a VA event arrives and recheck when its deferred work runs.
 class ConversationOutputGate {
