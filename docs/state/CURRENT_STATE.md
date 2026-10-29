@@ -351,5 +351,36 @@ source-addressed ESPHome playback. Alarm/timer playback is locally capped at 60s
 wake word has absolute audio priority, and personal names require current biometric
 identification. HA maintains durable delivery/deduplication state and reconciles
 firmware state after restart. See `docs/voice-alerts.md` for settings, rollout,
-rollback and the mandatory physical acceptance matrix. Production deployment and
-physical verification are pending; no main merge is authorized by this work.
+rollback and the mandatory physical acceptance matrix. Software deployment completed on 2026-10-29; physical voice acceptance remains
+pending. No main merge is authorized by this work.
+
+### Voice alerts deployment verification (2026-10-29)
+
+The production Router/Skills and HA adapter run code `fd0028b2294663114690af03adc6db7f89bdf92b`.
+Both production Nyra speakers were updated using full ESPHome 2026.10.1 builds,
+reconnected through encrypted API, and passed a 65-second boot stability guard.
+Scoped code/configuration backups and a consistent Skills SQLite backup were
+verified before changes. Existing credentials, device identities and persistent
+data were preserved.
+
+Production probes verified concurrent two-speaker alarm/timer playback, confirmed
+safe stop, Italian/English one-shot TTS, a complete Router -> Skills -> Router ->
+HA -> speaker scheduled call, future-job persistence across a controlled Skills
+restart and cancellation. An unregistered-source offline probe expired with
+`SPEAKER_OFFLINE_EXPIRED` while a real speaker completed another call. No test jobs
+remained active after cleanup and SQLite integrity was `ok`.
+
+Deployment found and corrected two compatibility issues with permanent RED/GREEN
+coverage: ESPHome 2026.10 const embedded audio descriptors (`1b71579`) and provider
+TTS locale resolution (`fd0028b`). The final regression is 973 passed with one
+non-blocking dependency warning. See `docs/verification/2026-10-29-voice-alerts-deployment.md`.
+Real acoustic wake interruption and known/unknown Speaker-ID speech checks remain
+physical acceptance items. Main has not been merged.
+
+Physical acceptance then exposed weak wake recognition on one speaker. Live logs
+showed inherited stock thresholds (IT 0.90 / EN 0.85) overriding unchanged Nyra
+manifests (0.70). Firmware commit `38d6a25` replaced that stock table with
+manifest-relative sensitivity; both speakers were rebuilt/uploaded and passed
+65-second boot stability checks. The affected device reports IT/EN 0.70 at runtime.
+The user must repeat the acoustic wake test before physical acceptance is marked
+complete. No full physical-acceptance claim is made from software or telemetry.

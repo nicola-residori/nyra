@@ -106,7 +106,7 @@
 
 ## Voice alerts extension
 
-**Status: Feature branch; production/physical acceptance pending**
+**Status: Software deployed 2026-10-29; physical voice acceptance pending; main merge not authorized**
 
 - Persistent source-scoped alarms, timers and personal calls (Italian/English)
 - Router-owned deferred audio contract, HA delivery ledger and ESPHome local stop
