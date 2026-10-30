@@ -24,7 +24,10 @@ def _tokens(value):
     return tokens
 
 
-def discover_resources(states, query, allowed_ids=None, limit=20):
+def discover_resources(states, query, allowed_ids=None, limit=20, *, focus=""):
+    focus_tokens = _tokens(focus) if isinstance(focus, str) else set()
+    # User-named domains constrain model-added generic measurement hints.
+    focus_domains = [group for group in _TOPIC_GROUPS[:2] if focus_tokens.intersection(group)]
     query_tokens = _tokens(query) - _FILLERS
     groups = {frozenset(next((group for group in _TOPIC_GROUPS if token in group), {token})) for token in query_tokens}
     matches = []
@@ -35,6 +38,8 @@ def discover_resources(states, query, allowed_ids=None, limit=20):
         attrs = native.get("attributes") or {}
         name = attrs.get("friendly_name")
         tokens = _tokens(f"{entity} {name or ''}")
+        if focus_domains and not any(tokens.intersection(group) for group in focus_domains):
+            continue
         matched_groups = sum(bool(tokens.intersection(group)) for group in groups)
         if groups and not matched_groups:
             continue

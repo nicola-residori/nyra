@@ -328,7 +328,7 @@ class HomeAssistantCapabilityPort:
         allowed = trusted_context.get("allowed_resource_ids")
         allowed_ids = {item for item in allowed if isinstance(item, str)} if isinstance(allowed, list) else None
         from router.resource_discovery import discover_resources
-        return discover_resources(await self.client.states(), query, allowed_ids)
+        return discover_resources(await self.client.states(), query, allowed_ids, focus=trusted_context.get("discovery_focus"))
 
     async def _native_behavior_config(
         self,
