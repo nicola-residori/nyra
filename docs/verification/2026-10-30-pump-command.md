@@ -45,7 +45,8 @@ remained off through the stability window.
 
 A separate provider test with synthetic on-state data returned a PROPOSED SWITCH /
 TURN_OFF plan. It did not execute an action. The real pump was never turned on for
-testing. HA-reported off is confirmed; physical motor confirmation awaits the user.
+testing. HA-reported off is confirmed. The user subsequently confirmed that the physical
+motor stopped, completing physical acceptance of the pump-off operation.
 A read-only solar-report regression probe was also run after the action-prompt change.
 
 ## Deployment and rollback

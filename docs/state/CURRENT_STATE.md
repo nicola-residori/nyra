@@ -432,6 +432,5 @@ resolved IDs cannot bypass fresh resolution. Review regressions were fixed RED/G
 
 Suite: 1015 passed, one existing dependency warning. Live direct command changed the
 verified target from on to off and ended listening; polite already-off conditional
-also ends listening. Off persisted in repeated HA reads. Physical motor confirmation
-is pending. Deployed a6e898c/8d15210 in Skills/Router/LLM; no firmware change or main
+also ends listening. Off persisted in repeated HA reads. The user confirmed that the physical motor stopped; pump-off acceptance passes. Deployed a6e898c/8d15210 in Skills/Router/LLM; no firmware change or main
 merge. See docs/verification/2026-10-30-pump-command.md.
