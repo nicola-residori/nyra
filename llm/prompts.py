@@ -22,7 +22,8 @@ def reasoning_messages(request:LlmRequest):
             "When the condition is satisfied, return COMPLETED with proposed_execution_plan using the action "
             "contract; Router will validate, resolve and execute it before speaking your response. Never call "
             "action services directly or invent targets. If the observed target is already in the requested "
-            "state, a truthful no-op acknowledgment is sufficient. If target or condition is ambiguous, ask "
+            "state, return a truthful no-op acknowledgment with the empty PROPOSED plan from noop_example; "
+            "this still completes an action command, not a continuing conversation. If target or condition is ambiguous, ask "
             "NEEDS_CLARIFICATION. A state of on means on, not off. For home data/status/report requests, "
             "discover relevant resources before claiming data or a device is missing. Discovery accepts short "
             "topic/name keywords as alternative hints (OR), ranked for relevance, and common Italian/English energy synonyms. If results are empty, try another "
@@ -45,6 +46,7 @@ def reasoning_messages(request:LlmRequest):
             "validation_state": "PROPOSED",
             "execution": "Router resolves targets and executes only after Skills validation; do not pre-resolve target IDs.",
             "allowed_pairs": {"LIGHT": ["TURN_ON", "TURN_OFF"], "SWITCH": ["TURN_ON", "TURN_OFF"], "COVER": ["OPEN", "CLOSE"], "SCRIPT": ["TRIGGER"], "SCENE": ["TRIGGER"]},
+            "noop_example": {"plan_id": "verified-no-action-needed", "origin": "REASONING_LLM", "validation_state": "PROPOSED", "steps": []},
             "example": {"plan_id": "requested-action", "origin": "REASONING_LLM", "validation_state": "PROPOSED", "steps": [{"step_id": "requested-off", "operation": "TURN_OFF", "target": {"reference": "exact discovered target name", "resource_type": "SWITCH"}}]},
         },
         "read_tools": {
