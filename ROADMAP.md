@@ -130,3 +130,8 @@
 - 2026-10-30: protected local intrusion siren implemented for both opted-in
   speakers; disarm/60-second cutoff, wake immunity, one start per armed episode.
   Combined suite 1020 passed; audible physical acceptance remains pending.
+
+- 2026-10-30: Apple Music / phone AirPlay configured for both Nyra speakers;
+  natural typed music control, source default, bounded clarification and shared
+  mixer priority deployed. Suite 1053 passed; physical audio acceptance pending.
+  Synchronized multiroom remains gated on transport support and physical validation.

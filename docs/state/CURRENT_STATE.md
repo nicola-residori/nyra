@@ -452,3 +452,14 @@ It preempts other Nyra audio; wake and API conversation start are ignored until
 explicit disarm or the local 60-second limit. The episode latch resets only on
 explicit disarm. Full combined suite 1020 passed; see
 docs/verification/2026-10-30-intrusion-siren.md for deployment and physical limits.
+
+### Apple Music and AirPlay (2026-10-30)
+
+MA stable 2.10.9 and Apple authorization are configured. Both Nyra physical music
+players are exposed as separate AirPlay receivers. Typed musical semantics and
+Skills → Router → authenticated HA execution provide source-default playback,
+catalog clarification and live queue controls. A single local mixer attenuation
+owner preserves voice/alert priority without player-volume snapshots or auto-resume.
+Suite 1053 passed, also in a clean committed clone. No main merge; physical audio/
+iPhone/wake acceptance pending; synchronized grouping is not enabled. See docs/music.md
+and docs/verification/2026-10-30-music-airplay.md. Existing wake assets remain intact.

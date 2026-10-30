@@ -28,43 +28,48 @@ Ducking ownership must survive overlap and avoid resuming/stale-volume writes.
 Files: shared/protocol/music.py, semantic.py, router/semantic_skill_bridge.py,
 llm/prompts.py, skills/modules/music.py, skills/modules/__init__.py,
 skills/modules/home_assistant.py; mirrored HA shared protocol.
-- [ ] RED typed command validation and separate semantic routing; contextual/natural
+- [x] RED typed command validation and separate semantic routing; contextual/natural
   examples, confidence and mixed generic actions rejected.
-- [ ] GREEN MusicCommand actions PLAY/PAUSE/RESUME/STOP/NEXT/PREVIOUS/VOLUME/TRANSFER/GROUP,
+- [x] GREEN MusicCommand actions PLAY/PAUSE/RESUME/STOP/NEXT/PREVIOUS/VOLUME/TRANSFER/GROUP,
   optional area names and free query/type; no raw URL/entity/service fields.
-- [ ] RED/GREEN skill precedence, pending choice/expiry/source binding, localized replies,
+- [x] RED/GREEN skill precedence, pending choice/expiry/source binding, localized replies,
   and generic scene negative cases. Metadata carries typed command only.
 
 ### Task 2: Trusted music execution
 
 Files: router/music_capability.py, router/api/music.py, router/app.py;
 HA music_api.py/music.py and initialization/discovery.
-- [ ] RED source-to-player fresh registry join and contextual live state tests.
-- [ ] GREEN authenticated Router-to-HA endpoint, source stable ID to physical media
+- [x] RED source-to-player fresh registry join and contextual live state tests.
+- [x] GREEN authenticated Router-to-HA endpoint, source stable ID to physical media
   player to MA entity; registry unique IDs must match upstream hass-player mapping.
-- [ ] RED/GREEN Apple-only bounded search and server-owned opaque candidate tokens,
+- [x] RED/GREEN Apple-only bounded search and server-owned opaque candidate tokens,
   120-second/source/session binding and fresh revalidation before play. No arbitrary URI.
-- [ ] RED/GREEN real MA service dispatch; no-match/ambiguity/offline/auth errors truthful.
+- [x] RED/GREEN real MA service dispatch; no-match/ambiguity/offline/auth errors truthful.
   Transfer/group only when supported; never silently play independently as synchronized.
 
 ### Task 3: Server, AirPlay and priorities
 
-- [ ] Install stable MA HA app with persistent data; add HA integration/provider.
+- [x] Install stable MA HA app with persistent data; add HA integration/provider.
   Expose only the two discovered Nyra players as separately named AirPlay receivers.
-- [ ] Inspect existing local media ducking during listening/TTS/alerts. RED/GREEN
+- [x] Inspect existing local media ducking during listening/TTS/alerts. RED/GREEN
   ownership regression before any needed firmware change; preserve live music and
   do not restore stored player volume or auto-resume stopped playback.
-- [ ] Prepare Apple provider login UI for user; continue independent work while pending.
+- [x] Prepare Apple provider login UI for user; continue independent work while pending.
 
 ### Task 4: Verification/release
 
-- [ ] Targeted/full suite and diff check. Fresh review; reproduce/fix material findings.
-- [ ] Back up and deploy Router/Skills/HA; config/build/OTA only if needed, preserving
+- [x] Targeted/full suite and diff check. Fresh review; reproduce/fix material findings.
+- [x] Back up and deploy Router/Skills/HA; config/build/OTA only if needed, preserving
   deployed wake models. Authenticated live non-audible readiness/discovery tests.
-- [ ] Commit/push green, draft PR, docs/current state/runner. Keep physical music,
+- [x] Commit/push green, draft PR, docs/current state/runner. Keep physical music,
   AirPlay, over-music wake recognition and multiroom synchronization clearly pending
   until user acceptance; no real intrusion trigger.
 
 Ruling: user authorized the described MA approach and said proceed including AirPlay;
 no new preference or repeated approval gate is needed. Builder review settled separate
 music semantics, trusted registry join, bounded choices and concurrent audio ownership.
+
+Execution evidence: docs/verification/2026-10-30-music-airplay.md. Independent review
+returned and tests fixed two material findings; completion was limited by reviewer
+environment quota. Full suite/clean-commit verification 1053 passed. Physical sound
+and synchronization remain explicit acceptance items, not software-test claims.
