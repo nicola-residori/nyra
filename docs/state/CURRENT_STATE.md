@@ -422,3 +422,16 @@ for an identifier and keeps listening. Services deployed (f85e390/684e7c7/e6ea95
 no new firmware upload. The user confirmed a useful photovoltaic report in the physical voice check.
 No main merge.
 Evidence and boundaries: docs/verification/2026-10-30-resource-discovery.md.
+
+### Pump action execution (2026-10-30)
+
+Fixed commands that discovered the pump but only described its state. Generic pump
+nouns now route through typed SWITCH execution; reasoning action/no-op proposals
+are distinct from reports. Named targets retain lexical matching and LLM-supplied
+resolved IDs cannot bypass fresh resolution. Review regressions were fixed RED/GREEN.
+
+Suite: 1015 passed, one existing dependency warning. Live direct command changed the
+verified target from on to off and ended listening; polite already-off conditional
+also ends listening. Off persisted in repeated HA reads. Physical motor confirmation
+is pending. Deployed a6e898c/8d15210 in Skills/Router/LLM; no firmware change or main
+merge. See docs/verification/2026-10-30-pump-command.md.

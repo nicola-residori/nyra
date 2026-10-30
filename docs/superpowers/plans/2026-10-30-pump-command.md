@@ -13,3 +13,10 @@ conditional action must use observed state; reporting it is not action completio
 Run targeted/full tests and independent review; commit/push only green. Back up and
 deploy Skills/LLM only, then test the user's requested OFF through Router and verify
 HA state afterward. Never turn the pump on for testing. Main remains unmerged.
+
+Execution ruling: Router needed a small area-resolution fix to prevent a pump noun
+from taking an unrelated one-token generic switch shortcut. Grammar cleanup keeps
+identifying words and area suffixes intact. Live provider output supplied a resolved
+ID despite instructions, so Router now resolves every LLM-origin target afresh.
+Verified no-ops use an empty validated plan, distinguishing completed commands from
+continuing information responses. Evidence: docs/verification/2026-10-30-pump-command.md.
