@@ -101,6 +101,7 @@ class NyraResponseBody(BaseModel):
 
 
 class NyraRequestResponse(BaseModel):
+    continue_conversation: bool = False
     status: RequestStatus
     session_id: str | None = None
     request_id: str | None = None

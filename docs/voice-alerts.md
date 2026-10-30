@@ -49,9 +49,9 @@ Alarm and timer WAV tones are distinct, embedded, procedurally generated assets.
 
 Priority is wake word > alerts/notifications > conversation. A wake word stops all
 active announcement/alert paths locally, disables repeat, and advances an audio
-epoch so late TTS cannot start. It leaves future scheduled jobs intact. Existing
-silence-first behavior is retained: while audio/conversation is active, the first
-wake silences it; a subsequent wake starts a fresh request. Software microphone mute
+epoch so late TTS cannot start. It leaves future scheduled jobs intact. A single wake silences the active audio and starts a fresh listening request after
+the prior pipeline and announcement have stopped. The handoff remains pending
+while cancellation settles; a newer wake restarts it, and mute or an alert cancels it. Software microphone mute
 still disables wake detection. No system can detect a wake word while its mic is muted.
 
 Alerts stop the active voice-assistant pipeline. The HA adapter suppresses late
@@ -207,3 +207,25 @@ current models); “Moderately” and “Very” lower it by about 0.10 and 0.20
 above zero. Stock Alexa/Nabu cutoffs must not be reused after replacing their
 models with Nyra. The saved sensitivity choice and model files are preserved.
 Firmware debug logs report whether the wake detector is running at alert start.
+
+## Conversational listening (2026-10-30)
+
+Router explicitly returns `continue_conversation`, independently of request completion.
+Skills commands and executed LLM action plans finish without reopening the mic unless
+clarification is needed. General conversational responses reopen after playback, even
+without a question. A completed conversational turn gets a new request in the same
+session; clarification keeps the request ID. Bounded history includes both sides and
+intermediate clarification answers. SQLite adds nullable response/history columns
+without replacing existing request records.
+
+Exact whole utterances `grazie`, `chiudi`, `ok grazie`, `ok` close deterministically
+(case/punctuation insensitive). English equivalents include `thanks`, `thank you`,
+`close`, `okay`, `okay thanks`, `ok thanks`. A longer command such as “ok accendi la
+luce grazie” still executes. Microphone capture follows the native Assist silence
+limit; there is no unconditional continuous microphone loop. A later wake starts a
+fresh session and stale/cancelled responses cannot delete it.
+
+Physical acceptance must verify single-wake stop **and** listening, a two-turn general
+conversation without a question, a clarification/answer round, a command that does
+not reopen, and an explicit closing phrase. Wake detection/VAD sensitivity remains
+separate from handoff correctness; the previous physical test needed repeated wakes.

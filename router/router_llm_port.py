@@ -21,7 +21,15 @@ class RouterLlmPort:
         if self.history_store is None or request.session_id is None:
             return []
         states=self.history_store.list_recent_for_session(request.session_id,self.history_limit)
-        return [{"role":"user","content":state.original_input} for state in states if state.request_id != request.request_id]
+        history = []
+        for state in states:
+            if state.conversation_turns:
+                history.extend(state.conversation_turns)
+                continue
+            history.append({"role": "user", "content": state.original_input})
+            if state.response_text:
+                history.append({"role": "assistant", "content": state.response_text})
+        return history
 
     async def semantic(self,request,context,pending_state):
         semantic_context=build_reasoning_context(request,context,pending_state)
@@ -72,7 +80,7 @@ class RouterLlmPort:
                     return LifecycleDecision.failed(str(exc))
                 if executed.status is not ExecutionStatus.COMPLETED:
                     return LifecycleDecision.failed("LLM_ACTION_EXECUTION_FAILED")
-            return LifecycleDecision.completed(result.response_text)
+            return LifecycleDecision.completed(result.response_text, continue_conversation=result.proposed_execution_plan is None)
         if result.outcome is ReasoningOutcome.NEEDS_CLARIFICATION:
             return LifecycleDecision.needs_clarification(
                 result.clarification.question,

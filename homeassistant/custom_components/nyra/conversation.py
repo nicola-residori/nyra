@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, replace
 
 
@@ -141,13 +142,23 @@ def build_request(data: AdapterInput, sessions: SessionManager) -> NyraRequest:
 
 async def process_adapter_input(data: AdapterInput, sessions: SessionManager, client, *, alerts=None) -> AdapterResult:
     generation = alerts.generation(data.source_id) if alerts is not None and data.is_speaker else None
+    if generation is not None:
+        sessions.synchronize_audio_generation(data.conversation_key, generation)
     request = build_request(data, sessions)
-    try:
-        response = await client.async_execute(request)
-    except NyraRouterError:
-        if generation is not None and (alerts.generation(data.source_id) != generation or alerts.active(data.source_id)):
+
+    def close_owned_request():
+        if sessions.owns_request(data.conversation_key, request.session_id, request.request_id):
             sessions.complete_request(data.conversation_key)
             sessions.close_session(data.conversation_key)
+
+    try:
+        response = await client.async_execute(request)
+    except asyncio.CancelledError:
+        close_owned_request()
+        raise
+    except NyraRouterError:
+        if generation is not None and (alerts.generation(data.source_id) != generation or alerts.active(data.source_id)):
+            close_owned_request()
             return AdapterResult("", data.conversation_key, False, interrupted=True)
         sessions.complete_request(data.conversation_key)
         if data.is_speaker:
@@ -159,16 +170,15 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
         )
 
     if generation is not None and (alerts.generation(data.source_id) != generation or alerts.active(data.source_id)):
-        sessions.complete_request(data.conversation_key)
-        sessions.close_session(data.conversation_key)
+        close_owned_request()
         return AdapterResult("", data.conversation_key, False, response, interrupted=True)
 
-    continuing = response.status is RequestStatus.NEEDS_CLARIFICATION
-    if continuing:
+    continuing = response.status is RequestStatus.NEEDS_CLARIFICATION or (response.status is RequestStatus.COMPLETED and response.continue_conversation)
+    if response.status is RequestStatus.NEEDS_CLARIFICATION:
         sessions.preserve_request(data.conversation_key)
     else:
         sessions.complete_request(data.conversation_key)
-        if data.is_speaker or response.status is RequestStatus.CLOSED:
+        if (data.is_speaker and not continuing) or response.status is RequestStatus.CLOSED:
             sessions.close_session(data.conversation_key)
 
     text = response.response.text if response.response is not None else ""

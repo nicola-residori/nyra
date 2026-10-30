@@ -19,10 +19,6 @@ esphome:
 json:
 
 globals:
-  - id: nyra_wake_stop_only
-    type: bool
-    restore_value: no
-    initial_value: 'false'
   - id: nyra_alert
     type: nyra::AlertState
     restore_value: no
@@ -126,6 +122,7 @@ script:
   - id: nyra_alert_begin
     mode: single
     then:
+      - script.stop: nyra_wake_listen
       - voice_assistant.stop:
       - switch.turn_off: timer_ringing
       - script.execute: disable_repeat
