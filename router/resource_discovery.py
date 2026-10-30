@@ -10,7 +10,7 @@ _TOPIC_GROUPS = (
     {"production", "produzione", "generated", "generata"},
 )
 _FILLERS = {"sensor", "sensors", "sensore", "sensori", "device", "dispositivo", "dispositivi", "impianto", "report", "resoconto", "stato", "status", "del", "della", "di", "the", "of", "my"}
-_MEASUREMENT_ATTRIBUTES = ("unit_of_measurement", "device_class", "state_class")
+_MEASUREMENT_ATTRIBUTES = ("unit_of_measurement", "device_class", "state_class", "last_reset")
 
 
 def _tokens(value):

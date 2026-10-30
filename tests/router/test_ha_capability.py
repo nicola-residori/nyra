@@ -506,3 +506,12 @@ async def test_discovery_treats_topic_keywords_as_alternative_hints_not_one_enti
     cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
     result = await cap.reasoning_discover_resources("fotovoltaico energia solare inverter produzione solare impianto fotovoltaico", {}, correlation=correlation())
     assert [x["entity_id"] for x in result["items"]] == ["sensor.plant_solar_power"]
+
+
+@pytest.mark.asyncio
+async def test_discovery_preserves_counter_reset_evidence_instead_of_guessing_daily_energy():
+    async def handler(request):
+        return httpx.Response(200, json=[{"entity_id": "sensor.solar_generated", "state": "12", "attributes": {"friendly_name": "Solar generated", "device_class": "energy", "state_class": "total", "unit_of_measurement": "kWh", "last_reset": "2026-10-30T00:00:00+01:00"}}])
+    cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
+    result = await cap.reasoning_discover_resources("solar", {}, correlation=correlation())
+    assert result["items"][0]["attributes"]["last_reset"] == "2026-10-30T00:00:00+01:00"
