@@ -108,7 +108,13 @@ acceptance remains pending another test.
 
 Final corrective suite: **1065 passed**, one existing warning, 24.98 seconds. Both
 headroom builds passed ESPHome 2026.10.1: 2026-10-30 21:26:43 +0100, Soggiorno
-`0x4d355ca5`, Mansarda `0x479e9b82`. Rollout/stability is recorded after installation.
+`0x4d355ca5`, Mansarda `0x479e9b82`. Both encrypted OTA uploads succeeded. Both passed another 65-second API stability
+check, retained both enabled run002 wake models, and showed the idle gauge. The
+latest alarm mirror was `armed_night`; no siren started and no alarm-control action
+was issued. HA core check/restart succeeded and the music endpoint is available.
+A clean clone of `e88d5b6` independently passed **1065 tests**, one existing warning,
+25.50 seconds. Skills includes spoken-choice fix `2a6d6e0`; HA/firmware corrective
+source is `e88d5b6`. Physical retest of startup, distortion and wake remains pending.
 Direct external diagnostics cannot authenticate using the internal MA token; no
 security setting was weakened to change that. The implementation uses the HA
 integration's existing internal MA client; its top-tracks contract was verified

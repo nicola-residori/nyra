@@ -460,6 +460,13 @@ players are exposed as separate AirPlay receivers. Typed musical semantics and
 Skills → Router → authenticated HA execution provide source-default playback,
 catalog clarification and live queue controls. A single local mixer attenuation
 owner preserves voice/alert priority without player-volume snapshots or auto-resume.
-Suite 1053 passed, also in a clean committed clone. No main merge; physical audio/
+Suite 1065 passed, also in a clean committed clone. No main merge; physical audio/
 iPhone/wake acceptance pending; synchronized grouping is not enabled. See docs/music.md
 and docs/verification/2026-10-30-music-airplay.md. Existing wake assets remain intact.
+
+Physical follow-up: AirPlay reception/playback confirmed by the user, with distortion
+and weak wake recognition reported at 77% volume. Spoken “La uno” selection is now
+handled (`2a6d6e0`). A real artist start took 38s after a false timeout; corrective
+`e88d5b6` prepares ten top tracks before dispatch, distinguishes accepted PENDING
+mutations from bounded reads, and adds 9dB music-only headroom. Both devices passed
+fresh OTA/stability checks; audible quality/wake/startup retest remains pending.

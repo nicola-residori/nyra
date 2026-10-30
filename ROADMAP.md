@@ -135,3 +135,8 @@
   natural typed music control, source default, bounded clarification and shared
   mixer priority deployed. Suite 1053 passed; physical audio acceptance pending.
   Synchronized multiroom remains gated on transport support and physical validation.
+
+- 2026-10-30 corrective music pass: spoken numeric choices, top-track preparation,
+  truthful pending mutation acknowledgements and configurable 9dB music headroom.
+  Suite/clean clone 1065 passed. AirPlay physical playback confirmed; acoustic
+  quality, over-music wake recognition and corrected startup acceptance pending.
