@@ -6,8 +6,9 @@ namespace esphome { namespace audio { struct AudioFile; } }
 
 namespace nyra {
 // Pure mixer attenuation: no player volume snapshot or automatic resume.
-inline int music_duck_db(bool voice, bool announcement, bool alert, bool native_timer) {
-  return alert || native_timer ? 60 : voice ? 30 : announcement ? 20 : 0;
+inline int music_duck_db(bool voice, bool announcement, bool alert, bool native_timer, int baseline_db = 9) {
+  const int baseline = baseline_db < 0 ? 0 : baseline_db > 20 ? 20 : baseline_db;
+  return alert || native_timer ? 60 : voice ? 30 : announcement ? 20 : baseline;
 }
 
 using AudioFilePointer = const esphome::audio::AudioFile *;

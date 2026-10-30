@@ -80,3 +80,36 @@ current wake models; OTA and repeat stability checks. MA's account/provider data
 persists separately; do not delete it to roll back Nyra voice code. Disable only
 its two receiver selections if reception itself needs rollback. Never export private
 firmware binaries or auth-containing backups in the verification ZIP.
+
+## Physical feedback and corrective pass
+
+The user confirmed both receivers appear and phone audio plays. Quality was reported
+distorted, and wake recognition over music weak; raw Soggiorno volume was 77%.
+The user’s first catalog selection was transcribed as “La uno.”, missed the ordinal
+matcher and fell into generic reasoning (“Ok”). Parser/real-registry regressions now
+cover spoken cardinals and natural ordinals; source fix `2a6d6e0` was deployed.
+
+A subsequent selection reached the real queue operation, but the coordinator timed
+out and falsely reported unavailable. MA logs show the accepted artist operation
+then enumerated all tracks and started about 38 seconds later. The unexpected audio
+was explicitly stopped; both MA and physical Soggiorno were confirmed idle afterwards.
+
+New RED/GREEN regressions separate bounded read-only preparation from accepted remote
+mutations. Artists now prepare at most ten top tracks via the pinned MA 2.10.9 API.
+Read preparation/lock waits share an eight-second deadline; an acknowledgement still
+pending after two seconds produces a truthful PENDING response, retains its task and
+is idempotent. STOP reaches the physical music channel before the remote queue.
+No assertion is made that cancelling an HTTP wait cancels MA's accepted work.
+
+A configurable 9dB music-only baseline attenuation was added for clipping/microphone
+headroom. Voice/announcement/alert attenuation remains 30/20/60dB; no microphone gain,
+wake threshold or model was changed. This is not AEC. Physical quality/recognition
+acceptance remains pending another test.
+
+Final corrective suite: **1065 passed**, one existing warning, 24.98 seconds. Both
+headroom builds passed ESPHome 2026.10.1: 2026-10-30 21:26:43 +0100, Soggiorno
+`0x4d355ca5`, Mansarda `0x479e9b82`. Rollout/stability is recorded after installation.
+Direct external diagnostics cannot authenticate using the internal MA token; no
+security setting was weakened to change that. The implementation uses the HA
+integration's existing internal MA client; its top-tracks contract was verified
+against the exact server source and backend tests.

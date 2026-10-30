@@ -299,3 +299,110 @@ async def test_slow_catalog_search_is_cancelled_without_late_playback():
     ] == "ERROR"
     await asyncio.sleep(0.02)
     assert not b.calls
+
+
+@pytest.mark.asyncio
+async def test_mutation_ack_delay_is_pending_not_false_failure_or_duplicate_play():
+    import asyncio
+    from homeassistant.custom_components.nyra.music import MusicCoordinator
+
+    class AcceptedBackend(Backend):
+        async def play(self, player, item):
+            self.calls.append(("accepted", item["uri"]))
+            await asyncio.sleep(0.02)
+            return False
+
+    b = AcceptedBackend()
+    c = MusicCoordinator(b, timeout_seconds=0.01)
+    r = request({"action": "PLAY", "query": "One"})
+    response = await c.handle(r)
+    assert response["status"] == "PENDING" and "prepar" in response["text"]
+    assert (await c.handle(r)) == response and len(b.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_artist_top_tracks_are_prepared_readonly_before_queue_dispatch():
+    from types import SimpleNamespace
+    from homeassistant.custom_components.nyra.music import HomeAssistantMusicBackend
+
+    class Client:
+        async def send_command(self, command, **kwargs):
+            assert command == "music/artists/top_tracks"
+            assert kwargs == {
+                "item_id": "queen",
+                "provider_instance_id_or_domain": "apple_music",
+            }
+            return [
+                {"uri": "apple_music://track/one"},
+                {"uri": "apple_music://track/two"},
+                {"uri": "untrusted://track/bad"},
+            ]
+
+    entry = SimpleNamespace(runtime_data=SimpleNamespace(mass=Client()))
+    hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_get_entry=lambda _: entry)
+    )
+    prepared = await HomeAssistantMusicBackend(hass).prepare(
+        {"config_entry_id": "ma"},
+        {"uri": "apple_music://artist/queen", "name": "Queen", "media_type": "artist"},
+    )
+    assert prepared["media_ids"] == [
+        "apple_music://track/one",
+        "apple_music://track/two",
+    ]
+    assert prepared["media_type"] == "track" and prepared["name"] == "Queen"
+
+
+@pytest.mark.asyncio
+async def test_service_ack_task_survives_pending_response_and_stop_reaches_physical_player():
+    import asyncio
+    from types import SimpleNamespace
+    from shared.protocol.music import MusicCommand
+    from homeassistant.custom_components.nyra.music import HomeAssistantMusicBackend
+
+    calls = []
+
+    class Services:
+        async def async_call(self, domain, service, data, **kwargs):
+            calls.append((service, data["entity_id"]))
+            if service == "play_media":
+                await asyncio.sleep(0.03)
+
+    backend = HomeAssistantMusicBackend(
+        SimpleNamespace(services=Services()), ack_timeout=0.005
+    )
+    player = {"entity_id": "media_player.ma", "physical_entity_id": "media_player.raw"}
+    assert (
+        await backend.play(
+            player, {"uri": "apple_music://track/one", "media_type": "track"}
+        )
+        is False
+    )
+    await asyncio.sleep(0.04)
+    assert not backend.pending
+    await backend.control(player, MusicCommand(action="STOP"))
+    assert calls[-2:] == [
+        ("media_stop", "media_player.raw"),
+        ("media_stop", "media_player.ma"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_waiting_for_another_music_command_cannot_execute_after_its_deadline():
+    import asyncio
+    from homeassistant.custom_components.nyra.music import MusicCoordinator
+
+    class BusyBackend(Backend):
+        async def play(self, player, item):
+            self.calls.append(("accepted", item["uri"]))
+            await asyncio.sleep(0.04)
+            return False
+
+    b = BusyBackend()
+    c = MusicCoordinator(b, timeout_seconds=0.01)
+    first = asyncio.create_task(c.handle(request({"action": "PLAY", "query": "One"})))
+    await asyncio.sleep(0.002)
+    second = await c.handle(request({"action": "PLAY", "query": "One"}))
+    assert second["status"] == "ERROR"
+    await first
+    assert len(b.calls) == 1

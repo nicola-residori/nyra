@@ -1,3 +1,6 @@
+substitutions:
+  nyra_music_baseline_attenuation_db: "9"
+
 external_components:
   - source:
       type: local
@@ -119,13 +122,13 @@ script:
       - if:
           condition:
             lambda: |-
-              const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state);
+              const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state, ${nyra_music_baseline_attenuation_db});
               return desired != id(nyra_music_duck_level);
           then:
             - mixer_speaker.apply_ducking:
                 id: media_mixing_input
                 decibel_reduction: !lambda |-
-                  const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state);
+                  const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state, ${nyra_music_baseline_attenuation_db});
                   id(nyra_music_duck_level) = desired;
                   return desired;
                 duration: 0s

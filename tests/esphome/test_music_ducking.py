@@ -10,7 +10,9 @@ def test_music_ducking_recomputes_from_current_owners_without_volume_restore(tmp
 #include "esphome/components/nyra_alerts/nyra_alerts.h"
 #include <cassert>
 int main(){
- assert(nyra::music_duck_db(false,false,false,false)==0);
+ assert(nyra::music_duck_db(false,false,false,false)==9);
+ assert(nyra::music_duck_db(false,false,false,false,6)==6);
+ assert(nyra::music_duck_db(false,false,false,false,200)==20);
  assert(nyra::music_duck_db(true,false,false,false)==30);
  assert(nyra::music_duck_db(false,true,false,false)==20);
  assert(nyra::music_duck_db(false,false,true,false)==60);
@@ -20,7 +22,7 @@ int main(){
  // between repeated tones cannot release active alert ownership either.
  assert(nyra::music_duck_db(false,false,true,false)==60);
  assert(nyra::music_duck_db(false,true,false,false)==20);
- assert(nyra::music_duck_db(false,false,false,false)==0);
+ assert(nyra::music_duck_db(false,false,false,false)==9);
 }
 """)
     binary = tmp_path / "duck"

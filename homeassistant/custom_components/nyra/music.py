@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import secrets
 import time
 from collections.abc import Mapping
@@ -84,7 +85,7 @@ def discover_music_players(devices, entities, states, areas):
 
 
 class MusicCoordinator:
-    def __init__(self, backend, *, clock=time.monotonic, timeout_seconds=10):
+    def __init__(self, backend, *, clock=time.monotonic, timeout_seconds=8):
         self.backend = backend
         self.timeout_seconds = timeout_seconds
         self.clock = clock
@@ -93,7 +94,16 @@ class MusicCoordinator:
         self.lock = asyncio.Lock()
 
     async def handle(self, request):
-        async with self.lock:
+        deadline = asyncio.get_running_loop().time() + self.timeout_seconds
+        try:
+            await asyncio.wait_for(self.lock.acquire(), timeout=self.timeout_seconds)
+        except TimeoutError:
+            return self.error(
+                request,
+                "Un altro comando musicale è ancora in elaborazione: riprova.",
+                "Another music command is still being processed; try again.",
+            )
+        try:
             self.choices = {
                 k: v
                 for k, v in self.choices.items()
@@ -116,21 +126,26 @@ class MusicCoordinator:
                         "The music request changed; repeat it.",
                     )
                 return cached[2]
+            self._read_deadline = deadline
             try:
-                result = await asyncio.wait_for(
-                    self._handle(request), timeout=self.timeout_seconds
-                )
+                result = await self._handle(request)
             except Exception:
                 return self.error(
                     request,
                     "Il servizio musicale non è disponibile.",
                     "The music service is unavailable.",
                 )
-            if result["status"] in ("OK", "CLARIFY"):
+            if result["status"] in ("OK", "CLARIFY", "PENDING"):
                 if len(self.results) >= 512:
                     self.results.pop(next(iter(self.results)))
                 self.results[key] = (self.clock(), fingerprint, result)
             return result
+        finally:
+            self.lock.release()
+
+    async def _read(self, operation):
+        remaining = max(0, self._read_deadline - asyncio.get_running_loop().time())
+        return await asyncio.wait_for(operation, timeout=remaining)
 
     @staticmethod
     def error(request, it, en):
@@ -140,7 +155,7 @@ class MusicCoordinator:
         }
 
     async def _handle(self, r):
-        players = await self.backend.inventory()
+        players = await self._read(self.backend.inventory())
         source = [p for p in players if p["source_id"] == r.source_id]
         if len(source) != 1:
             return self.error(
@@ -206,7 +221,7 @@ class MusicCoordinator:
                 "La sirena antifurto ha la priorità sulla musica.",
                 "The intrusion siren has priority over music.",
             )
-        state = await self.backend.state(player)
+        state = await self._read(self.backend.state(player))
         if state.get("state") in ("unavailable", "unknown"):
             return self.error(
                 r,
@@ -214,7 +229,9 @@ class MusicCoordinator:
                 "The music speaker is unavailable.",
             )
         if command.action == "PLAY":
-            items = await self.backend.search(player, command.query, command.media_type)
+            items = await self._read(
+                self.backend.search(player, command.query, command.media_type)
+            )
             unique = {item["uri"]: item for item in items if item.get("uri")}
             items = list(unique.values())[:3]
             if selection:
@@ -270,7 +287,26 @@ class MusicCoordinator:
                     "Non trovo risultati su Apple Music. Se non è collegato, autorizza prima il tuo account in Music Assistant.",
                     "No Apple Music results. If disconnected, authorize your account in Music Assistant first.",
                 )
-            await self.backend.play(player, item)
+            if hasattr(self.backend, "prepare"):
+                item = await self._read(self.backend.prepare(player, item))
+            if asyncio.get_running_loop().time() >= self._read_deadline:
+                raise TimeoutError("music preparation deadline")
+            accepted = await self.backend.play(player, item)
+            if accepted is False:
+                return {
+                    "status": "PENDING",
+                    "text": (
+                        "Sto preparando "
+                        if r.language.startswith("it")
+                        else "Preparing "
+                    )
+                    + item.get("name", command.query)
+                    + (
+                        ". La riproduzione è stata richiesta e può richiedere qualche secondo."
+                        if r.language.startswith("it")
+                        else ". Playback was requested and may take a few seconds."
+                    ),
+                }
             return {
                 "status": "OK",
                 "text": ("Riproduco " if r.language.startswith("it") else "Playing ")
@@ -278,7 +314,7 @@ class MusicCoordinator:
                 + ".",
             }
         if command.action == "TRANSFER":
-            current = await self.backend.state(origin)
+            current = await self._read(self.backend.state(origin))
             if not current.get("active_queue") or current.get("state") not in (
                 "playing",
                 "paused",
@@ -288,7 +324,7 @@ class MusicCoordinator:
                     "Non c’è una coda musicale da trasferire su questo speaker.",
                     "There is no music queue to transfer from this speaker.",
                 )
-            await self.backend.transfer(origin, player)
+            accepted = await self.backend.transfer(origin, player)
         else:
             if command.action in ("NEXT", "PREVIOUS") and not state.get("active_queue"):
                 return self.error(
@@ -306,7 +342,16 @@ class MusicCoordinator:
                     "Non c’è una riproduzione musicale da controllare qui.",
                     "There is no music playback to control here.",
                 )
-            await self.backend.control(player, command)
+            accepted = await self.backend.control(player, command)
+        if accepted is False:
+            return {
+                "status": "PENDING",
+                "text": (
+                    "Sto eseguendo il comando musicale."
+                    if r.language.startswith("it")
+                    else "The music command is being processed."
+                ),
+            }
         return {
             "status": "OK",
             "text": "Fatto." if r.language.startswith("it") else "Done.",
@@ -314,8 +359,59 @@ class MusicCoordinator:
 
 
 class HomeAssistantMusicBackend:
-    def __init__(self, hass):
+    def __init__(self, hass, *, ack_timeout=2, artist_track_limit=10):
         self.hass = hass
+        self.ack_timeout = ack_timeout
+        self.artist_track_limit = max(1, min(20, artist_track_limit))
+        self.pending = set()
+
+    async def _dispatch(self, operation):
+        # An accepted remote queue mutation cannot be rolled back by cancelling
+        # our HTTP wait. Keep its task alive and report PENDING, never false ERROR.
+        task = asyncio.create_task(operation)
+        self.pending.add(task)
+
+        def done(completed):
+            self.pending.discard(completed)
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            if error is not None:
+                logging.getLogger(__name__).warning(
+                    "Music queue operation failed (%s)", type(error).__name__
+                )
+
+        task.add_done_callback(done)
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=self.ack_timeout)
+            return True
+        except TimeoutError:
+            return False
+
+    async def prepare(self, player, item):
+        if item["media_type"] != "artist":
+            return item
+        provider, path = item["uri"].split("://", 1)
+        kind, item_id = path.split("/", 1)
+        if provider not in ("apple_music", "library") or kind != "artist":
+            raise ValueError("invalid artist URI")
+        entry = self.hass.config_entries.async_get_entry(player["config_entry_id"])
+        tracks = await entry.runtime_data.mass.send_command(
+            "music/artists/top_tracks",
+            item_id=item_id,
+            provider_instance_id_or_domain=provider,
+        )
+        uris = list(
+            dict.fromkeys(
+                value(track, "uri", "")
+                for track in tracks
+                if value(track, "uri", "").split("://", 1)[0]
+                in ("apple_music", "library")
+            )
+        )[: self.artist_track_limit]
+        if not uris:
+            raise ValueError("no playable artist tracks")
+        return {**item, "media_ids": uris, "media_type": "track"}
 
     async def inventory(self):
         from homeassistant.helpers import (
@@ -367,16 +463,18 @@ class HomeAssistantMusicBackend:
         return items
 
     async def play(self, player, item):
-        await self.hass.services.async_call(
-            "music_assistant",
-            "play_media",
-            {
-                "entity_id": player["entity_id"],
-                "media_id": item["uri"],
-                "media_type": item["media_type"],
-                "enqueue": "replace",
-            },
-            blocking=True,
+        return await self._dispatch(
+            self.hass.services.async_call(
+                "music_assistant",
+                "play_media",
+                {
+                    "entity_id": player["entity_id"],
+                    "media_id": item.get("media_ids") or item["uri"],
+                    "media_type": item["media_type"],
+                    "enqueue": "replace",
+                },
+                blocking=True,
+            )
         )
 
     async def control(self, player, command):
@@ -393,14 +491,28 @@ class HomeAssistantMusicBackend:
         data = {"entity_id": player["entity_id"]}
         if command.action == "VOLUME":
             data["volume_level"] = command.volume / 100
-        await self.hass.services.async_call(
-            "media_player", services[command.action], data, blocking=True
+        if command.action == "STOP" and player.get("physical_entity_id"):
+            await self.hass.services.async_call(
+                "media_player",
+                "media_stop",
+                {"entity_id": player["physical_entity_id"]},
+                blocking=True,
+            )
+        return await self._dispatch(
+            self.hass.services.async_call(
+                "media_player", services[command.action], data, blocking=True
+            )
         )
 
     async def transfer(self, source, target):
-        await self.hass.services.async_call(
-            "music_assistant",
-            "transfer_queue",
-            {"entity_id": target["entity_id"], "source_player": source["entity_id"]},
-            blocking=True,
+        return await self._dispatch(
+            self.hass.services.async_call(
+                "music_assistant",
+                "transfer_queue",
+                {
+                    "entity_id": target["entity_id"],
+                    "source_player": source["entity_id"],
+                },
+                blocking=True,
+            )
         )

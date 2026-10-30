@@ -36,7 +36,7 @@ See https://www.music-assistant.io/plugins/airplay-receiver/.
 ## Priority and context
 
 A single local mixer attenuation owner recomputes from live states: active alert
-or native timer 60dB, voice/wake handoff 30dB, other announcements 20dB, idle 0dB.
+or native timer 60dB, voice/wake handoff 30dB, other announcements 20dB, idle music 9dB (configurable 0–20 through `nyra_music_baseline_attenuation_db`).
 It never changes/restores the player's volume setting or calls resume. Thus ending
 an old conversation cannot release an active alert's attenuation, and music stopped
 or changed by the user is not resumed from a stale snapshot. The existing intrusion
@@ -50,9 +50,19 @@ per request and musical step, allowing clarification under the same Router reque
 Room clarification expires and remains bound to its source/session. The semantic
 layer handles room answers; pending room state never captures every new utterance.
 
-The coordinator bounds work to 10 seconds. Gateway/client budgets are 12/15/18
-seconds from HA back through Skills and Router; ordinary Skills retain their
-configured default timeout. Slow search is cancelled before deferred playback.
+Read-only preparation, including waiting for the coordinator lock, has an aggregate
+8-second budget. Artist requests prepare up to ten top tracks through MA's read-only
+`music/artists/top_tracks` API instead of asking it to enumerate the full discography.
+Only then are concrete track URIs dispatched. If an accepted queue mutation takes
+longer than two seconds to acknowledge, its task remains tracked and Nyra says it is
+preparing/processing the request (`PENDING`); cancelling an HTTP wait is not treated
+as cancelling a remote command. Retries do not dispatch twice. STOP also reaches
+the physical music player immediately before the MA queue. Gateway/client budgets
+remain 12/15/18 seconds; normal Skills retain their default timeout.
+
+Music baseline attenuation reduces speaker-to-microphone leakage before a wake is
+detected, without lowering TTS volume. It is not local acoustic echo cancellation;
+no trained-model threshold or microphone gain is changed by this adjustment.
 
 ## Setup and acceptance
 
