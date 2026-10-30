@@ -15,3 +15,9 @@ User selected idle-only coexistence with battery; two opposite red LEDs chosen.
 4. Verify disarmed state and idle/interaction restoration. Armed/unknown pixel cases
    are simulated; real armed display acceptance waits for normal user alarm use.
    Main remains unmerged. Record evidence, limits and rollback including automation.
+
+Implementation evidence: native RED/GREEN plus actual YAML-lambda harness; review
+finding about native ringing and wake-handoff priority both reproduced and fixed.
+Full suite 1017 passed. Real integration builds required byte globals due ESPHome
+include ordering. HA automation adjustment preserves every unrelated automation.
+See the dated verification report for deployment and physical acceptance limits.

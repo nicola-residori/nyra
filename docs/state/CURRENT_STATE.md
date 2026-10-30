@@ -434,3 +434,13 @@ Suite: 1015 passed, one existing dependency warning. Live direct command changed
 verified target from on to off and ended listening; polite already-off conditional
 also ends listening. Off persisted in repeated HA reads. The user confirmed that the physical motor stopped; pump-off acceptance passes. Deployed a6e898c/8d15210 in Skills/Router/LLM; no firmware change or main
 merge. See docs/verification/2026-10-30-pump-command.md.
+
+### Idle alarm status (2026-10-30)
+
+Opt-in firmware composes two opposite red alarm LEDs with the existing disjoint
+battery pixels, at idle only. Unknown/arming blinks amber; disarmed is dark.
+Wake/listening, speech, native timers and all existing interaction effects retain
+priority. HA battery automation updates numbers without forcing the gauge effect.
+Full suite: 1017 passed. See docs/alarm-indicator.md and
+docs/verification/2026-10-30-alarm-indicator.md for rollout and physical limits.
+No alarm-control action or main merge authorized/performed.

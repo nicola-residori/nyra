@@ -122,3 +122,7 @@
 - 2026-10-30: report resource discovery/clarification deployed; mixed-language
   measurements, actual/forecast distinction and bounded tool use verified live.
   Final suite 1005 passed; historical-series aggregation remains outside this API.
+
+- 2026-10-30: idle-only alarm/battery LED composition implemented; armed red on
+  separate pixels, unknown amber, interaction priority and opt-in HA state mirror.
+  Suite 1017 passed; armed visual acceptance awaits normal physical alarm use.
