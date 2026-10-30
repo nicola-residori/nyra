@@ -27,6 +27,8 @@ text_sensor:
     entity_category: diagnostic
 
 esphome:
+  includes:
+    - ${nyra_assets_dir}/../components/nyra_status_ring/alarm_indicator.h
   on_boot:
     - priority: 600
       then:
@@ -37,6 +39,18 @@ esphome:
 # Nyra semantic ownership gate. While true, the pinned Waveshare phase state
 # machine may still run, but its final LED dispatcher must not paint status_ring.
 globals:
+  - id: nyra_alarm_indicator_enabled
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_alarm_indicator_state
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
+  - id: nyra_alarm_indicator_led_count
+    type: int
+    restore_value: no
+    initial_value: '2'
   - id: nyra_ring_owned
     type: bool
     restore_value: no
@@ -200,6 +214,10 @@ light:
             it[left] = color;
             if (count >= 2) it[center] = color;
             if (count >= 3) it[right] = color;
+
+            nyra::render_alarm_indicator(n, id(nyra_alarm_indicator_led_count),
+                id(nyra_alarm_indicator_enabled), static_cast<nyra::AlarmIndicatorState>(id(nyra_alarm_indicator_state)), millis(),
+                [&](int index, uint8_t r, uint8_t g, uint8_t b) { it[index] = Color(r, g, b); });
 
       - addressable_lambda:
           name: "nyra_listening_white_fast"
