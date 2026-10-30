@@ -26,7 +26,7 @@ def _tokens(value):
 
 def discover_resources(states, query, allowed_ids=None, limit=20):
     query_tokens = _tokens(query) - _FILLERS
-    groups = [next((group for group in _TOPIC_GROUPS if token in group), {token}) for token in query_tokens]
+    groups = {frozenset(next((group for group in _TOPIC_GROUPS if token in group), {token})) for token in query_tokens}
     matches = []
     for native in states:
         entity = native.get("entity_id")
@@ -35,7 +35,8 @@ def discover_resources(states, query, allowed_ids=None, limit=20):
         attrs = native.get("attributes") or {}
         name = attrs.get("friendly_name")
         tokens = _tokens(f"{entity} {name or ''}")
-        if groups and not all(tokens.intersection(group) for group in groups):
+        matched_groups = sum(bool(tokens.intersection(group)) for group in groups)
+        if groups and not matched_groups:
             continue
         item = {"entity_id": entity, "name": name, "state": native.get("state")}
         metadata = {key: attrs[key] for key in _MEASUREMENT_ATTRIBUTES if key in attrs}
@@ -49,6 +50,7 @@ def discover_resources(states, query, allowed_ids=None, limit=20):
             native.get("state") in {"unavailable", "unknown"},
             not (entity.startswith("sensor.") and attrs.get("device_class") in {"power", "energy"}),
             bool(tokens.intersection({"forecast", "estimated", "stimata", "stimato", "previsione"})),
+            -matched_groups,
         )
         matches.append((rank, item))
     matches.sort(key=lambda pair: pair[0])

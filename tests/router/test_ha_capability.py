@@ -494,3 +494,15 @@ async def test_discovery_finds_numbered_pv_inputs(query):
     cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
     result = await cap.reasoning_discover_resources(query, {}, correlation=correlation())
     assert [x["entity_id"] for x in result["items"]] == ["sensor.inverter_pv1_power"]
+
+
+@pytest.mark.asyncio
+async def test_discovery_treats_topic_keywords_as_alternative_hints_not_one_entity_name():
+    async def handler(request):
+        return httpx.Response(200, json=[
+            {"entity_id": "sensor.battery", "state": "50", "attributes": {"friendly_name": "Battery level"}},
+            {"entity_id": "sensor.plant_solar_power", "state": "1.2", "attributes": {"friendly_name": "Solar power", "unit_of_measurement": "kW", "device_class": "power"}},
+        ])
+    cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
+    result = await cap.reasoning_discover_resources("fotovoltaico energia solare inverter produzione solare impianto fotovoltaico", {}, correlation=correlation())
+    assert [x["entity_id"] for x in result["items"]] == ["sensor.plant_solar_power"]

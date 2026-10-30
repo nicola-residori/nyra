@@ -39,3 +39,12 @@ async def test_later_reasoning_keeps_discovery_and_subsequent_measurement_result
     ])
     await ReasoningOrchestrator(llm, Data()).reason(request=request(kind="ha_assist"), context=ContextResult(data={}, trace_id="trace"), pending_state=None, identity_user_id=None)
     assert [item.capability_call_id for item in llm.calls[2].capability_results] == ["discover", "read"]
+
+
+@pytest.mark.asyncio
+async def test_provider_knows_when_it_must_answer_or_clarify_without_more_tools():
+    tool = ReasoningResult(outcome=ReasoningOutcome.NEEDS_CAPABILITY, reasoning_id="r", capability_request=CapabilityRequest(capability=ReasoningCapability.DISCOVER_RESOURCES, parameters={"query": "missing"}))
+    from shared.protocol.llm import ClarificationRequest
+    llm = LLM([tool, tool, ReasoningResult(outcome=ReasoningOutcome.NEEDS_CLARIFICATION, reasoning_id="r", clarification=ClarificationRequest(question="Quale impianto?"))])
+    await ReasoningOrchestrator(llm, Dispatcher(), max_rounds=3).reason(request=request(kind="ha_assist"), context=ContextResult(data={}, trace_id="trace"), pending_state=None, identity_user_id=None)
+    assert [call.context.operational["remaining_capability_calls"] for call in llm.calls] == [2, 1, 0]

@@ -18,8 +18,11 @@ def reasoning_messages(request:LlmRequest):
         "instructions": (
             "Return only ReasoningResult JSON in the user's language. For home data/status/report requests, "
             "discover relevant resources before claiming data or a device is missing. Discovery accepts short "
-            "topic/name keywords and common Italian/English energy synonyms. If results are empty, try another "
-            "relevant name/topic rather than inventing entity IDs. Use discovered states and measurement units; "
+            "topic/name keywords as alternative hints (OR), ranked for relevance, and common Italian/English energy synonyms. If results are empty, try another "
+            "relevant name/topic rather than inventing entity IDs. When operational.remaining_capability_calls is zero, "
+            "return a supported answer or NEEDS_CLARIFICATION, never another tool request. Do not repeat near-identical "
+            "failed searches. Use the states and measurement units already returned by discovery without re-reading "
+            "every entity unless genuinely needed; "
             "distinguish actual measurements, configuration thresholds and forecasts/estimates. Never infer a "
             "historical period or a daily reset from a cumulative energy counter without evidence. The available "
             "read tools expose current state/attributes, not arbitrary historical series. Report the supported "
