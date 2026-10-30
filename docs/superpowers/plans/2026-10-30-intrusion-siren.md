@@ -29,18 +29,21 @@ packages/nyra-alarm-status.yaml, vendor/waveshare-esp32-s3-audio-va-v1.0.0-core.
 assets/nyra_intrusion.wav; tests/esphome/test_nyra_intrusion_siren.py.
 Paths above are relative to esphome/ except tests/.
 
-- [ ] RED native state tests for episode latch, protected wake, preemption,
+- [x] RED native state tests for episode latch, protected wake, preemption,
   duplicate rejection, disarm, timeout/wrap and rearm after disarmed.
-- [ ] GREEN `IntrusionEpisode.observe(state)` and `AlertState.start_intrusion(now)` /
+- [x] GREEN `IntrusionEpisode.observe(state)` and `AlertState.start_intrusion(now)` /
   `protected_audio()`; keep all ordinary alert semantics unchanged.
-- [ ] RED integration tests of actual YAML callbacks for trigger/disarm/preemption
+- [x] RED integration tests of actual YAML callbacks for trigger/disarm/preemption
   and wake/native-timer/sound guards. GREEN state subscriber and protected routing.
-- [ ] Generate distinct embedded alternating siren, register and select locally.
-- [ ] Targeted tests then full suite; real merged configs and both full builds.
-- [ ] Fresh reviewer checks change; reproduce/fix material findings RED/GREEN.
-- [ ] Diff check, commit/push green, back up source, OTA both, encrypted state and
+- [x] Generate distinct embedded alternating siren, register and select locally.
+- [x] Targeted tests then full suite; real merged configs and both full builds.
+- [x] Fresh reviewer checks change; reproduce/fix material findings RED/GREEN.
+- [x] Diff check, commit/push green, back up source, OTA both, encrypted state and
   stability checks without playing siren or manipulating the real alarm.
-- [ ] Record evidence, physical test limits, rollback and update draft PR/runner.
+- [x] Record evidence, physical test limits, rollback and update draft PR/runner.
 
 Ruling: continue inline on the existing feature branch because the user explicitly
 said proceed; no additional execution-method or design approval round is needed.
+
+Review finding: API start_va guarded after RED reproduction. Combined suite 1020
+passed; build/deployment preserves concurrent Ehi Nira/Nira update.

@@ -126,3 +126,7 @@
 - 2026-10-30: idle-only alarm/battery LED composition implemented; armed red on
   separate pixels, unknown amber, interaction priority and opt-in HA state mirror.
   Suite 1017 passed; armed visual acceptance awaits normal physical alarm use.
+
+- 2026-10-30: protected local intrusion siren implemented for both opted-in
+  speakers; disarm/60-second cutoff, wake immunity, one start per armed episode.
+  Combined suite 1020 passed; audible physical acceptance remains pending.

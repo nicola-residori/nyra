@@ -444,3 +444,11 @@ priority. HA battery automation updates numbers without forcing the gauge effect
 Full suite: 1017 passed. See docs/alarm-indicator.md and
 docs/verification/2026-10-30-alarm-indicator.md for rollout and physical limits.
 No alarm-control action or main merge authorized/performed.
+
+### Protected intrusion siren (2026-10-30)
+
+The optional HA alarm-status package starts a distinct local siren on `triggered`.
+It preempts other Nyra audio; wake and API conversation start are ignored until
+explicit disarm or the local 60-second limit. The episode latch resets only on
+explicit disarm. Full combined suite 1020 passed; see
+docs/verification/2026-10-30-intrusion-siren.md for deployment and physical limits.
