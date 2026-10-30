@@ -23,3 +23,19 @@ async def test_round_budget_is_router_owned():
     item=ReasoningResult(outcome=ReasoningOutcome.NEEDS_CAPABILITY,reasoning_id="r1",capability_request=CapabilityRequest(capability=ReasoningCapability.READ_STATE,parameters={"entity_id":"light.x"}))
     with pytest.raises(ReasoningBudgetExceeded):
       await ReasoningOrchestrator(LLM([item,item,item]),Dispatcher(),max_rounds=3).reason(request=request(kind="ha_assist"),context=ContextResult(data={},trace_id="trc"),pending_state=None,identity_user_id="u")
+
+
+@pytest.mark.asyncio
+async def test_later_reasoning_keeps_discovery_and_subsequent_measurement_results():
+    discovery = CapabilityResult(capability_call_id="discover", capability=ReasoningCapability.DISCOVER_RESOURCES, status=CapabilityStatus.COMPLETED, data={"items": [{"entity_id": "sensor.solar", "state": "1.2", "unit_of_measurement": "kW"}]})
+    reading = CapabilityResult(capability_call_id="read", capability=ReasoningCapability.READ_STATE, status=CapabilityStatus.COMPLETED, data={"entity_id": "sensor.solar", "state": "1.3"})
+    class Data:
+        async def execute(self, cap, **kwargs):
+            return discovery if cap.capability is ReasoningCapability.DISCOVER_RESOURCES else reading
+    llm = LLM([
+        ReasoningResult(outcome=ReasoningOutcome.NEEDS_CAPABILITY, reasoning_id="r", capability_request=CapabilityRequest(capability=ReasoningCapability.DISCOVER_RESOURCES, parameters={"query": "solar"})),
+        ReasoningResult(outcome=ReasoningOutcome.NEEDS_CAPABILITY, reasoning_id="r", capability_request=CapabilityRequest(capability=ReasoningCapability.READ_STATE, parameters={"entity_id": "sensor.solar"})),
+        ReasoningResult(outcome=ReasoningOutcome.COMPLETED, reasoning_id="r", response_text="1.3 kW"),
+    ])
+    await ReasoningOrchestrator(llm, Data()).reason(request=request(kind="ha_assist"), context=ContextResult(data={}, trace_id="trace"), pending_state=None, identity_user_id=None)
+    assert [item.capability_call_id for item in llm.calls[2].capability_results] == ["discover", "read"]

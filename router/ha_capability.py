@@ -327,16 +327,8 @@ class HomeAssistantCapabilityPort:
         self._observe("ha.reasoning.discover_resources", correlation)
         allowed = trusted_context.get("allowed_resource_ids")
         allowed_ids = {item for item in allowed if isinstance(item, str)} if isinstance(allowed, list) else None
-        query = query.casefold(); items = []
-        for item in await self.client.states():
-            entity = item.get("entity_id")
-            if not isinstance(entity, str): continue
-            if allowed_ids is not None and entity not in allowed_ids: continue
-            name = (item.get("attributes") or {}).get("friendly_name")
-            if query and query not in f"{entity} {name or ''}".casefold(): continue
-            items.append({"entity_id": entity, "name": name, "state": item.get("state")})
-            if len(items) >= 20: break
-        return {"items": items}
+        from router.resource_discovery import discover_resources
+        return discover_resources(await self.client.states(), query, allowed_ids)
 
     async def _native_behavior_config(
         self,

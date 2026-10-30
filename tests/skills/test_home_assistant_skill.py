@@ -160,3 +160,43 @@ async def test_unrelated_question_is_miss_not_failed():
     assert capability.resolve_calls[0][0].resource_type is None
     assert capability.resolve_calls[0][0].cardinality is ResolveCardinality.MANY
     assert capability.execute_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language,text", [("it", "accendi la luce sconosciuta"), ("en", "turn on the unknown light")])
+async def test_missing_target_asks_for_details_without_executing(language, text):
+    class Missing(FakeCapability):
+        async def resolve(self, reference, trusted_context, *, correlation):
+            return ResolveResponse(correlation=correlation, status=ResolveStatus.NOT_FOUND, reference=reference)
+    capability = Missing()
+    skill = HomeAssistantActionSkill(capability)
+    check = skill_request(text, language)
+    response = await skill.execute(SkillExecuteRequest(correlation=check.correlation, match=skill.match(check), text=text, language=language, context=check.context))
+    assert response.outcome is SkillOutcome.NEEDS_CLARIFICATION
+    assert response.text and "?" in response.text
+    assert response.pending_state["llm_clarification"]["operation"] == "TURN_ON"
+    assert response.pending_state["llm_clarification"]["reference"]
+    assert capability.execute_calls == []
+
+
+@pytest.mark.asyncio
+async def test_missing_light_followup_preserves_operation_and_cannot_trigger_same_named_scene():
+    class Collision(FakeCapability):
+        async def resolve(self, reference, trusted_context, *, correlation):
+            self.resolve_calls.append((reference, trusted_context, correlation))
+            resources = []
+            if reference.reference.casefold() == "kitchen":
+                resources = [("light.kitchen", NyraResourceType.LIGHT)] if reference.resource_type is NyraResourceType.LIGHT else [("scene.kitchen", NyraResourceType.SCENE)]
+            return ResolveResponse(correlation=correlation, status=ResolveStatus.RESOLVED if resources else ResolveStatus.NOT_FOUND, reference=reference, candidates=[ResolveCandidate(resource=ResolvedResource(resource_id=entity, resource_type=kind, name="Kitchen")) for entity, kind in resources])
+    capability = Collision()
+    skill = HomeAssistantActionSkill(capability)
+    first = skill_request("turn off the unknown light")
+    result = await skill.execute(SkillExecuteRequest(correlation=first.correlation, match=skill.match(first), text=first.text, language="en", context=first.context))
+    reply = skill_request("Kitchen").model_copy(update={"pending_state": result.pending_state})
+    if skill.matches(reply):
+        match = skill.match(reply)
+    else:
+        match = await skill.fast_path_match(reply)
+    await skill.execute(SkillExecuteRequest(correlation=reply.correlation, match=match, text=reply.text, language="en", context=reply.context, pending_state=result.pending_state))
+    assert capability.execute_calls[0][0].resource_id == "light.kitchen"
+    assert capability.execute_calls[0][0].operation is NyraOperation.TURN_OFF

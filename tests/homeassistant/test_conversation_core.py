@@ -342,3 +342,13 @@ async def test_new_wake_owns_new_ids_and_old_completion_cannot_delete_it(old_res
     assert client.requests[0].session_id != client.requests[1].session_id
     assert client.requests[2].session_id == client.requests[1].session_id
     await coordinator.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_llm_outage_is_not_reinterpreted_as_an_unknown_home_assistant_device():
+    class Outage:
+        async def async_execute(self, request):
+            return NyraRequestResponse(status=RequestStatus.FAILED, session_id=request.session_id, request_id=request.request_id, trace_id=new_trace_id(), error={"code": "LLM_UNAVAILABLE"})
+    result = await process_adapter_input(AdapterInput("resoconto fotovoltaico", "it-IT", "diagnostic"), SessionManager(), Outage())
+    assert not needs_home_assistant_fallback(result)
+    assert result.text == "Non sono disponibile in questo momento."

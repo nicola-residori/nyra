@@ -467,3 +467,30 @@ async def test_manual_automation_cannot_be_updated_or_deleted():
     )
     assert update.outcome is CommonOutcome.DENIED
     assert delete.outcome is CommonOutcome.DENIED
+
+
+@pytest.mark.asyncio
+async def test_reasoning_discovery_finds_translated_solar_sensors_with_units_and_policy():
+    states = [
+        {"entity_id": "number.solar_threshold", "state": "1000", "attributes": {"friendly_name": "Soglia solare", "unit_of_measurement": "W"}},
+        {"entity_id": "sensor.inverter_solar_power", "state": "1.2", "attributes": {"friendly_name": "Solar power", "unit_of_measurement": "kW", "device_class": "power", "state_class": "measurement"}},
+        {"entity_id": "sensor.forecast_solar", "state": "20", "attributes": {"friendly_name": "Produzione solare stimata", "unit_of_measurement": "kWh", "device_class": "energy"}},
+        {"entity_id": "sensor.private_solar", "state": "999", "attributes": {"friendly_name": "Solar private"}},
+    ]
+    async def handler(request):
+        return httpx.Response(200, json=states)
+    cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
+    result = await cap.reasoning_discover_resources("fotovoltaico", {"allowed_resource_ids": [s["entity_id"] for s in states[:3]]}, correlation=correlation())
+    assert [x["entity_id"] for x in result["items"]][:2] == ["sensor.inverter_solar_power", "sensor.forecast_solar"]
+    assert result["items"][0]["attributes"] == {"unit_of_measurement": "kW", "device_class": "power", "state_class": "measurement"}
+    assert all(x["entity_id"] != "sensor.private_solar" for x in result["items"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("query", ["pv", "fotovoltaico"])
+async def test_discovery_finds_numbered_pv_inputs(query):
+    async def handler(request):
+        return httpx.Response(200, json=[{"entity_id": "sensor.inverter_pv1_power", "state": "800", "attributes": {"friendly_name": "Inverter PV1 Power", "unit_of_measurement": "W", "device_class": "power"}}])
+    cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
+    result = await cap.reasoning_discover_resources(query, {}, correlation=correlation())
+    assert [x["entity_id"] for x in result["items"]] == ["sensor.inverter_pv1_power"]

@@ -38,9 +38,9 @@ class LlmService:
         ))
         raw=json.loads(response.content)
         # Providers may put a spoken preamble in response_text alongside a valid
-        # clarification. Only the typed question is used; action payloads remain
+        # question/tool request. Only the typed outcome payload is used; actions remain
         # subject to the unchanged strict protocol validators.
-        if raw.get("outcome") == "NEEDS_CLARIFICATION" and isinstance(raw.get("response_text"), str):
+        if raw.get("outcome") in {"NEEDS_CLARIFICATION", "NEEDS_CAPABILITY"} and isinstance(raw.get("response_text"), str):
             raw.pop("response_text")
         raw["reasoning_id"]=reasoning_id
         usage=getattr(response,"usage",None)

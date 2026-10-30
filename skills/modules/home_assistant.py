@@ -187,6 +187,25 @@ def _meaningful_tokens(value: str, language: str) -> set[str]:
     }
 
 
+def _missing_target_state(pending_state, skill_name):
+    if not isinstance(pending_state, dict):
+        return None
+    state = pending_state.get("llm_clarification")
+    if not isinstance(state, dict) or state.get("reason") != "HA_TARGET_NOT_FOUND" or state.get("skill_name") != skill_name:
+        return None
+    return state
+
+
+def _target_name_reply(text):
+    words = _normalized(text).split()
+    # Questions/new topics go through reasoning, never a named-resource trigger.
+    return bool(words) and words[0] not in {
+        "che", "cosa", "come", "quando", "perche", "dimmi", "parliamo", "raccontami",
+        "fammi", "mi", "what", "why", "how", "when", "tell", "show", "give", "let",
+        "activate", "deactivate", "please", "esegui", "attiva", "disattiva", "puoi",
+    }
+
+
 def _clarification_state(
     pending_state: dict[str, Any] | None,
     skill_name: str,
@@ -348,6 +367,9 @@ class HomeAssistantActionSkill:
         self.capability = capability
 
     def matches(self, request: SkillCheckRequest) -> bool:
+        missing = _missing_target_state(request.pending_state, self.name)
+        if missing is not None and parse_command(request.text, request.language) is None:
+            return _target_name_reply(request.text)
         if request.semantic is not None:
             return _semantic_command(request) is not None
         if parse_command(request.text, request.language) is not None:
@@ -366,7 +388,7 @@ class HomeAssistantActionSkill:
         return normalized.startswith(_CONTINUATION_PREFIXES[language])
 
     async def fast_path_match(self, request: SkillCheckRequest) -> SkillMatch | None:
-        if request.semantic is not None or _clarification_state(request.pending_state, self.name) is not None:
+        if request.semantic is not None or _clarification_state(request.pending_state, self.name) is not None or _missing_target_state(request.pending_state, self.name) is not None:
             return None
         language = _language(request.language)
         reference = _normalized(request.text)
@@ -392,6 +414,18 @@ class HomeAssistantActionSkill:
 
     def match(self, request: SkillCheckRequest) -> SkillMatch:
         parsed = parse_command(request.text, request.language)
+        missing = _missing_target_state(request.pending_state, self.name)
+        if missing is not None and parsed is None:
+            return SkillMatch(
+                matched=True, skill_name=self.name, token=self.name,
+                memory_requirement=MemoryRequirement.NONE,
+                metadata={
+                    "operation": missing["operation"], "resource_type": missing["resource_type"],
+                    "reference": request.text.strip(),
+                    "cardinality": missing.get("cardinality", ResolveCardinality.ONE.value),
+                    **({"area": missing["area"]} if missing.get("area") else {}),
+                },
+            )
         semantic_parsed = _semantic_command(request)
         if parsed is not None or semantic_parsed is not None:
             operation,resource_type,reference=(parsed.operation,parsed.resource_type,parsed.reference) if parsed is not None else semantic_parsed
@@ -557,8 +591,20 @@ class HomeAssistantActionSkill:
         if resolved.status is ResolveStatus.NOT_FOUND:
             return SkillExecuteResponse(
                 correlation=request.correlation,
-                outcome=SkillOutcome.FAILED,
-                error=ErrorDetail(code="HA_TARGET_NOT_FOUND"),
+                outcome=SkillOutcome.NEEDS_CLARIFICATION,
+                text=(question := (
+                    "Non trovo una corrispondenza sicura: quale nome o stanza devo cercare?"
+                    if language == "it" else
+                    "I cannot find a clear match: which name or room should I search for?"
+                )),
+                pending_state={"llm_clarification": {
+                    "question": question, "reason": "HA_TARGET_NOT_FOUND",
+                    "skill_name": self.name,
+                    "cardinality": cardinality.value,
+                    **({"area": explicit_area} if explicit_area else {}),
+                    "operation": operation.value, "resource_type": resource_type.value,
+                    "reference": reference_text,
+                }},
             )
 
         if resolved.status is ResolveStatus.AMBIGUOUS:

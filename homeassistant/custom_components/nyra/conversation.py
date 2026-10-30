@@ -183,11 +183,14 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
 
     text = response.response.text if response.response is not None else ""
     if response.status in {RequestStatus.FAILED, RequestStatus.EXPIRED} and not text:
-        text = localized_adapter_message(data.language, "FAILED")
+        key = "UNAVAILABLE" if (response.error or {}).get("code") == "LLM_UNAVAILABLE" else "FAILED"
+        text = localized_adapter_message(data.language, key)
     return AdapterResult(text, data.conversation_key, continuing, response)
 
 
 def needs_home_assistant_fallback(result: AdapterResult) -> bool:
+    if result.response is not None and (result.response.error or {}).get("code") == "LLM_UNAVAILABLE":
+        return False
     return not result.interrupted and (result.response is None or result.response.status in {
         RequestStatus.FAILED,
         RequestStatus.EXPIRED,

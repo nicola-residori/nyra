@@ -87,3 +87,16 @@ async def test_clarification_text_normalization_never_accepts_an_action_payload(
     }]))
     with pytest.raises(ValidationError):
         await service.reason(req("trace-invalid-action"))
+
+
+@pytest.mark.asyncio
+async def test_provider_capability_preamble_does_not_abort_resource_search():
+    service = LlmService(Provider([{
+        "outcome": "NEEDS_CAPABILITY", "reasoning_id": "provider",
+        "response_text": "Cerco i dati disponibili.",
+        "capability_request": {"capability": "DISCOVER_RESOURCES", "parameters": {"query": "fotovoltaico"}},
+    }]))
+    result = await service.reason(req("trace-discovery"))
+    assert result.outcome is ReasoningOutcome.NEEDS_CAPABILITY
+    assert result.capability_request.parameters == {"query": "fotovoltaico"}
+    assert result.response_text is None

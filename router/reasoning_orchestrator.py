@@ -46,7 +46,7 @@ class ReasoningOrchestrator:
                     result.capability_request,request=request,
                     identity_user_id=identity_user_id,context=context,trace_id=context.trace_id,
                 )
-                results=[capability]
+                results.append(capability)
             raise ReasoningBudgetExceeded("reasoning round budget exhausted")
         try:
             return await asyncio.wait_for(run(),timeout=self.total_timeout_seconds)
