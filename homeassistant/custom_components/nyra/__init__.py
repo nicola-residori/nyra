@@ -241,7 +241,8 @@ async def async_setup_entry(hass, entry) -> bool:
         hass, enrollment, current_source_ids, wake_word_capture
     )
     audio_ingress = HomeAssistantAudioIngress(
-        audio_client, sessions, enrollment=enrollment, wake_word=wake_word_capture
+        audio_client, sessions, enrollment=enrollment, wake_word=wake_word_capture,
+        generation_for_source=alerts.generation
     )
     audio_ingress_view = register_audio_ingress_view(
         hass,
