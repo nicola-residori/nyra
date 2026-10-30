@@ -76,7 +76,7 @@ def test_actual_idle_loop_does_not_replace_a_ringing_alarm_in_a_playback_gap(tmp
 #define id(x) x
 namespace media_player { enum class MediaPlayerState { IDLE, MEDIA_PLAYER_STATE_ANNOUNCING }; }
 struct Connection { bool is_connected() { return true; } } wifi_id, api_id;
-struct Script { bool running=false; bool is_running(){return running;} void execute(){} } va,nyra_close_feedback_sequence,flash_ring,control_leds_volume_changed,check_if_timers_active;
+struct Script { bool running=false; bool is_running(){return running;} void execute(){} } va,nyra_close_feedback_sequence,flash_ring,control_leds_volume_changed,check_if_timers_active,nyra_wake_listen;
 struct { bool active=false; } nyra_alert;
 struct { bool state=true; } timer_ringing;
 bool nyra_alarm_indicator_enabled=true,nyra_ring_owned=false,nyra_identity_active=false,nyra_speaking_active=false,init_in_progress=false,improv_ble_in_progress=false,is_timer_active=false;
@@ -93,6 +93,7 @@ int main(){
  timer_ringing.state=false;tick();assert(writes==1);
  va.running=true;tick();assert(writes==1);
  va.running=false;flash_ring.running=true;tick();assert(writes==1);
+ flash_ring.running=false;nyra_wake_listen.running=true;tick();assert(writes==1);
 }
 ''')
     compiler = shutil.which("c++") or shutil.which("g++")

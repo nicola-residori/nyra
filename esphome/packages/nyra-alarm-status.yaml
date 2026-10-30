@@ -37,7 +37,7 @@ interval:
           const bool connected = id(wifi_id).is_connected() && id(api_id).is_connected();
           const bool idle = id(voice_assistant_phase) == ${voice_assist_idle_phase_id};
           const bool announcing = id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING || id(nyra_speaking_active);
-          const bool transient = id(init_in_progress) || id(improv_ble_in_progress) || id(nyra_close_feedback_sequence).is_running() || id(flash_ring).is_running() || id(control_leds_volume_changed).is_running();
+          const bool transient = id(nyra_wake_listen).is_running() || id(init_in_progress) || id(improv_ble_in_progress) || id(nyra_close_feedback_sequence).is_running() || id(flash_ring).is_running() || id(control_leds_volume_changed).is_running();
           id(check_if_timers_active).execute();
           if (!nyra::idle_indicator_eligible(id(nyra_alarm_indicator_enabled), connected, idle,
               id(nyra_ring_owned), id(va).is_running(), id(nyra_alert).active,
