@@ -24,3 +24,10 @@ Inline TDD tasks:
    only green, deploy Router/LLM/Skills only. Live read-only solar and missing-topic
    probes. No firmware change, no main merge. Historical aggregation is not invented
    from a current-state-only contract.
+
+Execution rulings: HA also needed a small error-adapter change so LLM_UNAVAILABLE is
+not reinterpreted as an unknown device. Live queries required OR keyword hints and
+explicit user-topic anchoring rather than conjunctive/name-only matching. The hard
+reasoning budget was preserved, with remaining-call metadata guiding the final
+answer/question. Counter reset evidence is exposed; arbitrary history was not added.
+Final evidence: docs/verification/2026-10-30-resource-discovery.md.

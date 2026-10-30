@@ -406,3 +406,18 @@ Physical feedback on 2026-10-30 confirms that general film conversation reopens
 listening and “ok grazie” closes it. The user also confirmed that ordinary commands execute and close listening
 without reopening; all three dialog checks pass. Timer interruption via wake word remains unaccepted because
 recognition was unreliable; acoustic sensitivity/training cause is not established.
+
+### Resource discovery and report clarification (2026-10-30)
+
+The original photovoltaic query had reached discovery, but provider capability
+preambles were rejected. Fixed this boundary, multilingual/topic discovery,
+measurement/reset metadata, accumulated tool results, budget guidance and noisy
+keyword/result selection. Missing actuator targets ask for details while retaining
+original operation/type/scope. Known LLM outages are no longer mislabeled by HA as
+unknown devices. Policy/action validation remains unchanged.
+
+Final suite: 1005 passed, one existing dependency warning. Live original solar
+queries return measured power/energy and separate forecasts; an unknown system asks
+for an identifier and keeps listening. Services deployed (f85e390/684e7c7/e6ea95b),
+no new firmware upload. Physical report voice check is pending. No main merge.
+Evidence and boundaries: docs/verification/2026-10-30-resource-discovery.md.

@@ -118,3 +118,7 @@
 - 2026-10-30: single-wake listening handoff and continued general conversation
   deployed; commands remain terminal unless ambiguous, closing phrases terminate.
   Full suite 991 passed; live service checks passed; acoustic acceptance pending.
+
+- 2026-10-30: report resource discovery/clarification deployed; mixed-language
+  measurements, actual/forecast distinction and bounded tool use verified live.
+  Final suite 1005 passed; historical-series aggregation remains outside this API.
