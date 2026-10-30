@@ -233,3 +233,130 @@ def test_music_bridge_never_turns_additive_playback_into_transfer():
         .music.action
         == "GROUP"
     )
+
+
+@pytest.mark.parametrize(
+    "text,index",
+    [
+        ("La uno.", 0),
+        ("il numero uno", 0),
+        ("scegli il primo risultato", 0),
+        ("la numero 2", 1),
+        ("preferisco la seconda", 1),
+        ("il terzo risultato", 2),
+        ("il quarto", 3),
+    ],
+)
+def test_spoken_catalog_selection_understands_stt_cardinals_and_natural_ordinals(
+    text, index
+):
+    from skills.modules.music import selection_index
+
+    assert selection_index(text) == index
+
+
+@pytest.mark.asyncio
+async def test_real_registry_search_then_la_uno_reuses_context_and_starts_first_item():
+    from skills.modules import register_builtin_skills
+    from skills.registry import SkillRegistry
+    from skills.service import SkillsService
+    from shared.protocol.skills import SkillCheckRequest, SkillExecuteRequest
+    from shared.protocol.music import MusicRequest
+    from homeassistant.custom_components.nyra.music import MusicCoordinator
+
+    calls = []
+
+    class Backend:
+        async def inventory(self):
+            return [
+                {
+                    "source_id": "source",
+                    "area": "Soggiorno",
+                    "entity_id": "media_player.ma",
+                    "config_entry_id": "ma",
+                    "alert_state": "none|IDLE",
+                }
+            ]
+
+        async def state(self, p):
+            return {"state": "idle", "active_queue": None}
+
+        async def search(self, *args):
+            return [
+                {
+                    "uri": "apple_music://artist/queen1",
+                    "name": "Queen",
+                    "media_type": "artist",
+                },
+                {
+                    "uri": "apple_music://artist/queen2",
+                    "name": "Queen",
+                    "media_type": "artist",
+                },
+            ]
+
+        async def play(self, p, item):
+            calls.append(item["uri"])
+
+    coordinator = MusicCoordinator(Backend())
+
+    class Capability:
+        async def resolve(self, *args, **kwargs):
+            raise AssertionError("catalog choice incorrectly routed to HA resources")
+
+        async def music(self, payload):
+            return await coordinator.handle(MusicRequest.model_validate(payload))
+
+    registry = SkillRegistry()
+    register_builtin_skills(registry, home_assistant_capability=Capability())
+    service = SkillsService(registry=registry)
+    correlation = {
+        "request_id": "req_00000000-0000-4000-8000-000000000001",
+        "origin_request_id": "req_00000000-0000-4000-8000-000000000001",
+        "trace_id": "trc_00000000-0000-4000-8000-000000000002",
+    }
+    context = {"source_id": "source", "session_id": "session"}
+    check = SkillCheckRequest(
+        correlation=correlation,
+        text="Fammi ascoltare i Queen.",
+        language="it",
+        context=context,
+        semantic={
+            "intent": "MUSIC",
+            "confidence": {"score": 1},
+            "music": {"action": "PLAY", "query": "Queen", "media_type": "artist"},
+        },
+    )
+    match = (await service.check(check)).match
+    first = await service.execute(
+        SkillExecuteRequest(
+            correlation=correlation,
+            match=match,
+            text=check.text,
+            language="it",
+            context=context,
+        )
+    )
+    assert first.pending_state["kind"] == "music" and not calls
+    answer = SkillCheckRequest(
+        correlation=correlation,
+        text="La uno.",
+        language="it",
+        context=context,
+        pending_state=first.pending_state,
+    )
+    match = (await service.check(answer)).match
+    assert match and match.skill_name == "music"
+    second = await service.execute(
+        SkillExecuteRequest(
+            correlation=correlation,
+            match=match,
+            text=answer.text,
+            language="it",
+            context=context,
+            pending_state=first.pending_state,
+        )
+    )
+    assert second.outcome.value == "HANDLED" and calls == [
+        "apple_music://artist/queen1"
+    ]

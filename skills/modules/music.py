@@ -25,6 +25,48 @@ ORDINALS = {
 }
 
 
+def selection_index(text):
+    """Read a bounded spoken result number, including common STT cardinal forms."""
+    normalized = " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+    if normalized in ORDINALS:
+        return ORDINALS[normalized]
+    numbers = {
+        "uno": 0,
+        "una": 0,
+        "un": 0,
+        "primo": 0,
+        "prima": 0,
+        "one": 0,
+        "first": 0,
+        "due": 1,
+        "secondo": 1,
+        "seconda": 1,
+        "two": 1,
+        "second": 1,
+        "tre": 2,
+        "terzo": 2,
+        "terza": 2,
+        "three": 2,
+        "third": 2,
+        "quattro": 3,
+        "quarto": 3,
+        "quarta": 3,
+        "cinque": 4,
+        "quinto": 4,
+        "quinta": 4,
+    }
+    match = re.fullmatch(
+        r"(?:(?:scegli|scelgo|seleziona|preferisco|voglio|riproduci|metti)\s+)?(?:(?:quello|quella)\s+)?(?:(?:il|la|lo|the)\s+)?(?:(?:numero|number|opzione|risultato)\s+)?("
+        + "|".join(numbers)
+        + r"|\d{1,2})(?:\s+(?:risultato|opzione|brano|artista))?",
+        normalized,
+    )
+    if not match:
+        return None
+    number = match.group(1)
+    return int(number) - 1 if number.isdecimal() else numbers[number]
+
+
 def looks_like_music(text):
     return bool(
         re.search(
@@ -47,7 +89,11 @@ class MusicSkill:
             (request.semantic and request.semantic.music)
             or (
                 (request.pending_state or {}).get("kind") == "music"
-                and request.text.strip(" .!?").lower() in ORDINALS
+                and (
+                    selection_index(request.text) is not None
+                    or request.text.strip(" .!?").lower()
+                    in {"sì", "si", "quello", "quella"}
+                )
             )
         )
 
@@ -115,8 +161,8 @@ class MusicSkill:
             )
         else:
             choices = (request.pending_state or {}).get("choices", [])
-            index = ORDINALS.get(request.text.strip(" .!?").lower(), -1)
-            if not 0 <= index < len(choices):
+            index = selection_index(request.text)
+            if index is None or not 0 <= index < len(choices):
                 return reply(
                     "Quale risultato intendi?" if it else "Which result?",
                     True,
