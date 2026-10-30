@@ -1,0 +1,75 @@
+# Optional idle status composition. The installer supplies nyra_alarm_entity.
+# This subscribes to HA state only; it exposes no alarm-control action.
+substitutions:
+  nyra_alarm_led_count: "2"
+  nyra_idle_indicator_brightness: "0.2"
+
+esphome:
+  on_boot:
+    - priority: 590
+      then:
+        - lambda: |-
+            id(nyra_alarm_indicator_enabled) = true;
+            id(nyra_alarm_indicator_led_count) = ${nyra_alarm_led_count};
+
+globals:
+  - id: nyra_intrusion_episode
+    type: nyra::IntrusionEpisode
+    restore_value: no
+
+text_sensor:
+  - platform: homeassistant
+    id: nyra_home_alarm_state
+    name: "Nyra Alarm Indicator State"
+    entity_category: diagnostic
+    entity_id: "${nyra_alarm_entity}"
+    internal: false
+    on_value:
+      then:
+        - lambda: |-
+            id(nyra_alarm_indicator_state) = static_cast<uint8_t>(nyra::alarm_indicator_state(x));
+            const int action = id(nyra_intrusion_episode).observe(x);
+            if (action == 2 && id(nyra_alert).protected_audio()) {
+              id(nyra_alert).stop();
+              id(nyra_alert_finish).execute();
+            } else if (action == 1) {
+              // Complete the displaced job before assigning intrusion ownership.
+              id(va).invalidate_output();
+              if (id(nyra_alert).active) {
+                id(nyra_alert).stop();
+                id(nyra_alert_finish).execute();
+              }
+              if (id(nyra_alert).start_intrusion(millis())) {
+                id(nyra_audio_epoch).publish_state(to_string(id(nyra_alert).epoch));
+                id(nyra_alert_kind) = "intrusion";
+                id(nyra_alert_ready) = false;
+                id(nyra_alert_url).clear();
+                id(nyra_url_job).clear();
+                id(nyra_alert_begin).execute();
+              }
+            }
+
+voice_assistant:
+  on_client_disconnected:
+    - lambda: 'id(nyra_alarm_indicator_state) = static_cast<uint8_t>(nyra::AlarmIndicatorState::UNKNOWN);'
+
+# Restore the idle effect after close/voice/identity/volume sequences, not during
+# them. HA's battery updater must update the number only, never force this effect.
+interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          const bool connected = id(wifi_id).is_connected() && id(api_id).is_connected();
+          const bool idle = id(voice_assistant_phase) == ${voice_assist_idle_phase_id};
+          const bool announcing = id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING || id(nyra_speaking_active);
+          const bool transient = id(nyra_wake_listen).is_running() || id(init_in_progress) || id(improv_ble_in_progress) || id(nyra_close_feedback_sequence).is_running() || id(flash_ring).is_running() || id(control_leds_volume_changed).is_running();
+          id(check_if_timers_active).execute();
+          if (!nyra::idle_indicator_eligible(id(nyra_alarm_indicator_enabled), connected, idle,
+              id(nyra_ring_owned), id(va).is_running(), id(nyra_alert).active,
+              id(nyra_identity_active), announcing, transient, id(is_timer_active) || id(timer_ringing).state)) return;
+          if (!id(status_ring).remote_values.is_on() || std::string(id(status_ring).get_effect_name()) != "nyra_battery_gauge") {
+            auto call = id(status_ring).turn_on();
+            call.set_effect("nyra_battery_gauge");
+            call.set_brightness(${nyra_idle_indicator_brightness});
+            call.perform();
+          }

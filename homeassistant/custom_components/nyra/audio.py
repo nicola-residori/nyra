@@ -120,12 +120,16 @@ class IdentificationAudioStart:
 def correlate_identification_start(
     value: Mapping[str, Any],
     sessions: SessionManager,
+    *,
+    generation_for_source: Callable[[str], int] | None = None,
 ) -> IdentificationAudioStart:
     source_id = value.get("source_id")
     if not isinstance(source_id, str) or not source_id.strip():
         raise InvalidAudioIngressStart("invalid source_id")
     source_id = source_id.strip()
     conversation_key = speaker_conversation_key(source_id)
+    if generation_for_source is not None:
+        sessions.synchronize_audio_generation(conversation_key, generation_for_source(source_id))
     correlated = dict(value)
     correlated["source_id"] = source_id
     correlated["session_id"] = sessions.get_or_create_session(conversation_key)
@@ -325,6 +329,7 @@ class HomeAssistantAudioIngress:
         max_active_streams: int = 32,
         enrollment=None,
         wake_word=None,
+        generation_for_source: Callable[[str], int] | None = None,
     ):
         self.client = client
         self.sessions = sessions
@@ -332,6 +337,7 @@ class HomeAssistantAudioIngress:
         self.max_active_streams = max_active_streams
         self.enrollment = enrollment
         self.wake_word = wake_word
+        self.generation_for_source = generation_for_source
         self._active: dict[Any, RouterAudioSession | None] = {}
         self._stream_ids: dict[Any, str | None] = {}
         self._tasks: set[asyncio.Task] = set()
@@ -367,7 +373,10 @@ class HomeAssistantAudioIngress:
             frame_type, data = _incoming_frame(await websocket.receive())
             if frame_type != "TEXT":
                 raise InvalidAudioIngressStart("first frame must be START JSON")
-            metadata = correlate_identification_start(_json_object(data), self.sessions)
+            metadata = correlate_identification_start(
+                _json_object(data), self.sessions,
+                generation_for_source=self.generation_for_source,
+            )
             if self.enrollment is not None:
                 metadata = self.enrollment.audio_metadata(metadata)
             if self.wake_word is not None:

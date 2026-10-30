@@ -1,0 +1,253 @@
+substitutions:
+  nyra_music_baseline_attenuation_db: "9"
+
+external_components:
+  - source:
+      type: local
+      path: ${nyra_assets_dir}/../components
+    components: [nyra_alerts, voice_assistant]
+
+nyra_alerts:
+
+# Source-addressed local audio. Wake stop and the 60s watchdog need no network.
+esphome:
+  on_boot:
+    - priority: 590
+      then:
+        - lambda: |-
+            id(nyra_alert).epoch = random_uint32();
+            id(nyra_audio_epoch).publish_state(to_string(id(nyra_alert).epoch));
+            id(nyra_alert_status).publish_state("none|IDLE");
+
+json:
+
+globals:
+  - id: nyra_music_duck_level
+    type: int
+    restore_value: no
+    initial_value: '-1'
+  - id: nyra_alert
+    type: nyra::AlertState
+    restore_value: no
+  - id: nyra_alert_kind
+    type: std::string
+    restore_value: no
+  - id: nyra_url_job
+    type: std::string
+    restore_value: no
+  - id: nyra_alert_ready
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_alert_url
+    type: std::string
+    restore_value: no
+
+text_sensor:
+  - platform: template
+    id: nyra_audio_epoch
+    name: "Nyra Audio Epoch"
+    entity_category: diagnostic
+  - platform: template
+    id: nyra_alert_status
+    name: "Nyra Alert State"
+    entity_category: diagnostic
+
+text:
+  - platform: template
+    id: nyra_alert_command
+    name: "Nyra Alert Command"
+    entity_category: config
+    mode: text
+    min_length: 0
+    max_length: 255
+    optimistic: false
+    restore_value: false
+    set_action:
+      - lambda: |-
+          json::parse_json(x, [](JsonObject root) -> bool {
+            std::string action = root["action"] | "";
+            std::string job = root["job_id"] | "";
+            if (id(nyra_alert).protected_audio()) return false;
+            if (action == "URL") {
+              if (id(nyra_alert).active) return false;
+              bool reset = root["reset"] | false;
+              std::string part = root["part"] | "";
+              if (reset) { id(nyra_alert_url).clear(); id(nyra_url_job) = job; }
+              if (id(nyra_url_job) != job || id(nyra_alert_url).size() + part.size() > 2048) return false;
+              id(nyra_alert_url) += part;
+              return true;
+            }
+            if (action == "STOP") {
+              if (job == id(nyra_alert).job && id(nyra_alert).active) {
+                id(nyra_alert).stop();
+                id(nyra_alert_finish).execute();
+              }
+              return true;
+            }
+            if (action != "START") return false;
+            std::string epoch = root["epoch"] | "";
+            std::string kind = root["kind"] | "";
+            std::string url = root["url"] | "";
+            int seconds = root["max_seconds"] | 60;
+            if (seconds < 1 || seconds > 60 || (kind != "alarm" && kind != "timer" && kind != "call" && kind != "notification")) return false;
+            if (epoch != to_string(id(nyra_alert).epoch)) {
+              // Rejected stale TTS after a wake word. Never start its audio.
+              id(nyra_alert_status).publish_state(job + "|STOPPED");
+              return true;
+            }
+            if (!id(nyra_alert).start(job, id(nyra_alert).epoch, seconds * 1000, (kind == "call" || kind == "notification"), millis())) return true;
+            id(nyra_alert_kind) = kind;
+            id(nyra_alert_ready) = false;
+            if (!url.empty()) id(nyra_alert_url) = url;
+            else if (id(nyra_url_job) != job) id(nyra_alert_url).clear();
+            id(nyra_url_job).clear();
+            id(nyra_alert_begin).execute();
+            return true;
+          });
+
+# Embedded assets are independent of HA availability and distinguish the sounds.
+audio_file:
+  - id: nyra_alarm_sound
+    file: ${nyra_assets_dir}/nyra_alarm.wav
+  - id: nyra_intrusion_sound
+    file: ${nyra_assets_dir}/nyra_intrusion.wav
+  - id: nyra_timer_sound
+    file: ${nyra_assets_dir}/nyra_timer.wav
+
+script:
+  - id: nyra_update_music_ducking
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: |-
+              const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state, ${nyra_music_baseline_attenuation_db});
+              return desired != id(nyra_music_duck_level);
+          then:
+            - mixer_speaker.apply_ducking:
+                id: media_mixing_input
+                decibel_reduction: !lambda |-
+                  const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state, ${nyra_music_baseline_attenuation_db});
+                  id(nyra_music_duck_level) = desired;
+                  return desired;
+                duration: 0s
+  - id: nyra_alert_publish
+    mode: restart
+    then:
+      - text_sensor.template.publish:
+          id: nyra_alert_status
+          state: !lambda 'return id(nyra_alert).job + "|" + id(nyra_alert).state;'
+      - homeassistant.event:
+          event: esphome.nyra_alert
+          data:
+            source_id: "${source_id}"
+            job_id: !lambda 'return id(nyra_alert).job;'
+            state: !lambda 'return id(nyra_alert).state;'
+
+  - id: nyra_alert_begin
+    mode: single
+    then:
+      - script.stop: nyra_wake_listen
+      - voice_assistant.stop:
+      - switch.turn_off: timer_ringing
+      - script.execute: disable_repeat
+      - media_player.stop:
+          id: external_media_player
+          announcement: true
+      - wait_until:
+          condition:
+            not:
+              media_player.is_announcing: external_media_player
+          timeout: 500ms
+      - lambda: |-
+          if (!id(nyra_ring_owned)) {
+            const auto &values = id(status_ring).remote_values;
+            id(nyra_ring_restore_state) = values.is_on();
+            id(nyra_ring_restore_effect) = std::string(id(status_ring).get_effect_name());
+            id(nyra_ring_restore_red) = values.get_red();
+            id(nyra_ring_restore_green) = values.get_green();
+            id(nyra_ring_restore_blue) = values.get_blue();
+            id(nyra_ring_restore_brightness) = values.get_brightness();
+          }
+          id(nyra_ring_owned) = true;
+      - script.execute: nyra_alert_publish
+      - lambda: |-
+          ESP_LOGD("nyra_alert", "Wake detector during alert: running=%s", YESNO(id(mww).is_running()));
+      - lambda: 'id(nyra_alert_ready) = true;'
+      - if:
+          condition:
+            lambda: 'return id(nyra_alert).call;'
+          then:
+            - media_player.play_media:
+                id: external_media_player
+                media_url: !lambda 'return id(nyra_alert_url);'
+                announcement: true
+          else:
+            - script.execute: nyra_alert_repeat
+
+  - id: nyra_alert_repeat
+    mode: single
+    then:
+      - while:
+          condition:
+            lambda: 'return id(nyra_alert).active;'
+          then:
+            - lambda: |-
+                auto *sound = id(nyra_alert_kind) == "intrusion" ? id(nyra_intrusion_sound) : (id(nyra_alert_kind) == "alarm" ? id(nyra_alarm_sound) : id(nyra_timer_sound));
+                id(external_media_player)->play_file(sound, true, false);
+            - wait_until:
+                condition:
+                  media_player.is_announcing: external_media_player
+                timeout: 2s
+            - wait_until:
+                condition:
+                  not:
+                    media_player.is_announcing: external_media_player
+                timeout: 3s
+            - delay: 200ms
+
+  - id: nyra_alert_finish
+    mode: restart
+    then:
+      - script.stop: nyra_alert_begin
+      - script.stop: nyra_alert_repeat
+      - lambda: 'id(nyra_alert_ready) = false;'
+      - media_player.stop:
+          id: external_media_player
+          announcement: true
+      - script.execute: disable_repeat
+      - script.execute: nyra_alert_publish
+      - lambda: 'id(nyra_speaking_active) = false;'
+      - homeassistant.event:
+          event: esphome.nyra_speaking_ended
+          data:
+            source_id: "${source_id}"
+      - lambda: 'id(nyra_ring_owned) = false;'
+      - if:
+          condition:
+            lambda: 'return !id(nyra_identity_active);'
+          then:
+            - script.execute: nyra_ring_restore
+
+interval:
+  - interval: 50ms
+    then:
+      - lambda: |-
+          if (id(nyra_alert).tick(millis())) id(nyra_alert_finish).execute();
+      - script.execute: nyra_update_music_ducking
+
+media_player:
+  - id: !extend external_media_player
+    on_state:
+      - lambda: |-
+          if (!id(nyra_alert).active || !id(nyra_alert_ready)) return;
+          if (id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING) {
+            if (!id(nyra_alert).heard) {
+              id(nyra_alert).playing();
+              id(nyra_alert_publish).execute();
+            }
+          } else if (id(nyra_alert).call && id(nyra_alert).heard) {
+            id(nyra_alert).ended();
+            id(nyra_alert_finish).execute();
+          }

@@ -103,3 +103,40 @@
 - Configuration examples
 - Migration documentation
 - Reproducible clean installation
+
+## Voice alerts extension
+
+**Status: Software deployed 2026-10-29; physical voice acceptance pending; main merge not authorized**
+
+- Persistent source-scoped alarms, timers and personal calls (Italian/English)
+- Router-owned deferred audio contract, HA delivery ledger and ESPHome local stop
+- Maximum 60-second alarms/timers; wake word > alerts/notifications > conversation
+- Name snapshot gated on current Speaker-ID; no name from continuity/HA identity
+- Restart reconciliation, concurrent jobs, explicit offline/unknown outcomes
+- Rollout/rollback and physical acceptance: `docs/voice-alerts.md`
+
+- 2026-10-30: single-wake listening handoff and continued general conversation
+  deployed; commands remain terminal unless ambiguous, closing phrases terminate.
+  Full suite 991 passed; live service checks passed; acoustic acceptance pending.
+
+- 2026-10-30: report resource discovery/clarification deployed; mixed-language
+  measurements, actual/forecast distinction and bounded tool use verified live.
+  Final suite 1005 passed; historical-series aggregation remains outside this API.
+
+- 2026-10-30: idle-only alarm/battery LED composition implemented; armed red on
+  separate pixels, unknown amber, interaction priority and opt-in HA state mirror.
+  Suite 1017 passed; armed visual acceptance awaits normal physical alarm use.
+
+- 2026-10-30: protected local intrusion siren implemented for both opted-in
+  speakers; disarm/60-second cutoff, wake immunity, one start per armed episode.
+  Combined suite 1020 passed; audible physical acceptance remains pending.
+
+- 2026-10-30: Apple Music / phone AirPlay configured for both Nyra speakers;
+  natural typed music control, source default, bounded clarification and shared
+  mixer priority deployed. Suite 1053 passed; physical audio acceptance pending.
+  Synchronized multiroom remains gated on transport support and physical validation.
+
+- 2026-10-30 corrective music pass: spoken numeric choices, top-track preparation,
+  truthful pending mutation acknowledgements and configurable 9dB music headroom.
+  Suite/clean clone 1065 passed. AirPlay physical playback confirmed; acoustic
+  quality, over-music wake recognition and corrected startup acceptance pending.

@@ -834,3 +834,38 @@ async def test_ingress_timeout_during_end_cancels_router_processing():
     assert incoming.sent[-1]["reason_code"] == "TIMEOUT"
     assert cancelled.is_set()
     assert router_session.closed
+
+
+@pytest.mark.asyncio
+async def test_wake_generation_is_applied_before_audio_identity_ids_are_allocated():
+    from homeassistant.custom_components.nyra.alerts import AlertCoordinator
+    from homeassistant.custom_components.nyra.conversation import process_adapter_input
+    from shared.protocol.ids import new_trace_id
+    from shared.protocol.requests import NyraRequestResponse, RequestStatus
+    from tests.homeassistant.test_alerts import Backend, Disk
+
+    sessions = SessionManager()
+    key = speaker_conversation_key("speaker-kitchen")
+    coordinator = AlertCoordinator(Backend(), Disk().save)
+    sessions.synchronize_audio_generation(key, coordinator.generation("speaker-kitchen"))
+    previous = sessions.get_request_id(key)
+    await coordinator.wake("speaker-kitchen")
+    metadata = audio().correlate_identification_start(
+        identification_start().to_wire(), sessions,
+        generation_for_source=coordinator.generation,
+    )
+    captured = []
+
+    class Client:
+        async def async_execute(self, request):
+            captured.append(request)
+            return NyraRequestResponse(status=RequestStatus.COMPLETED, session_id=request.session_id, request_id=request.request_id, trace_id=new_trace_id())
+
+    await process_adapter_input(
+        AdapterInput("ciao", "it-IT", key, satellite_id="assist_satellite.kitchen", nyra_source_id="speaker-kitchen"),
+        sessions, Client(), alerts=coordinator,
+    )
+    assert metadata.request_id != previous
+    assert metadata.request_id == captured[0].request_id
+    assert metadata.session_id == captured[0].session_id
+    await coordinator.shutdown()

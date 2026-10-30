@@ -52,6 +52,14 @@ The interaction vocabulary includes `IDLE`, `LISTENING`, `TRANSCRIBING`, `IDENTI
 
 Nyra speakers may use local ESPHome micro-wake-word models. Reusable model assets belong in the repository; installation-specific speaker names, addresses, credentials, and room inventory do not.
 
+Conversation lifetime is explicit: Router responses carry `continue_conversation`.
+Commands end after their result unless clarification is needed; general conversation
+reopens native Assist capture after TTS until an exact closing phrase or native
+silence/error timeout. Request completion is separate from session closure: completed
+conversational turns use new request IDs in the same session. Audio ownership changes
+invalidate older responses and their session cleanup. SQLite stores bounded user and
+assistant exchanges, including clarification answers.
+
 ## Router responsibilities
 
 Router owns request/session lifecycle, source information, identity, area context, operational context, semantic memory enrichment, routing, service registry, capability authorization, security policies, final response coordination, centralized logging, distributed tracing, observability, and the single Nyra administration UI.

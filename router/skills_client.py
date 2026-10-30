@@ -41,11 +41,12 @@ class SkillsClient:
         path: str,
         *,
         payload: dict[str, Any] | None = None,
+        timeout_seconds: float | None = None,
     ) -> httpx.Response:
         try:
             async with httpx.AsyncClient(
                 base_url=self.base_url,
-                timeout=self.timeout,
+                timeout=self.timeout if timeout_seconds is None else timeout_seconds,
                 transport=self.transport,
             ) as client:
                 return await client.request(method, path, json=payload)
@@ -81,6 +82,9 @@ class SkillsClient:
             "POST",
             "/v1/skills/execute",
             payload=request.model_dump(mode="json"),
+            timeout_seconds=(
+                max(self.timeout, 18) if request.match.skill_name == "music" else None
+            ),
         )
         if response.status_code != 200:
             raise SkillsUnavailable(
@@ -94,14 +98,22 @@ class SkillsClient:
             ) from exc
 
     async def validate_plan(self, plan, *, correlation, trusted_context):
-        request = PlanValidationRequest(correlation=correlation, plan=plan, trusted_context=trusted_context)
-        response = await self._request("POST", "/v1/plans/validate", payload=request.model_dump(mode="json"))
+        request = PlanValidationRequest(
+            correlation=correlation, plan=plan, trusted_context=trusted_context
+        )
+        response = await self._request(
+            "POST", "/v1/plans/validate", payload=request.model_dump(mode="json")
+        )
         if response.status_code != 200:
-            raise SkillsUnavailable(f"Skills plan validation returned HTTP {response.status_code}")
+            raise SkillsUnavailable(
+                f"Skills plan validation returned HTTP {response.status_code}"
+            )
         try:
             return PlanValidationResponse.model_validate(self._json(response))
         except ValidationError as exc:
-            raise InvalidSkillsResponse("Skills returned invalid plan validation response") from exc
+            raise InvalidSkillsResponse(
+                "Skills returned invalid plan validation response"
+            ) from exc
 
     async def diagnostics(self) -> dict[str, Any]:
         health_response = await self._request("GET", "/health")

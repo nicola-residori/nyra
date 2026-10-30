@@ -342,3 +342,131 @@ These items do not block the completed Milestone 3:
 
 After explicit authorization, merge the production-verified M6 branch to
 `main`. Milestone 7 — Productization — is the next implementation milestone.
+
+## Voice alerts feature branch (2026-10-28)
+
+`feat/persistent-voice-alerts` extends main with persistent alarms, timers and
+personal TTS calls. Skills owns jobs; Router mediates typed audio through HA to
+source-addressed ESPHome playback. Alarm/timer playback is locally capped at 60s,
+wake word has absolute audio priority, and personal names require current biometric
+identification. HA maintains durable delivery/deduplication state and reconciles
+firmware state after restart. See `docs/voice-alerts.md` for settings, rollout,
+rollback and the mandatory physical acceptance matrix. Software deployment completed on 2026-10-29; physical voice acceptance remains
+pending. No main merge is authorized by this work.
+
+### Voice alerts deployment verification (2026-10-29)
+
+The production Router/Skills and HA adapter run code `fd0028b2294663114690af03adc6db7f89bdf92b`.
+Both production Nyra speakers were updated using full ESPHome 2026.10.1 builds,
+reconnected through encrypted API, and passed a 65-second boot stability guard.
+Scoped code/configuration backups and a consistent Skills SQLite backup were
+verified before changes. Existing credentials, device identities and persistent
+data were preserved.
+
+Production probes verified concurrent two-speaker alarm/timer playback, confirmed
+safe stop, Italian/English one-shot TTS, a complete Router -> Skills -> Router ->
+HA -> speaker scheduled call, future-job persistence across a controlled Skills
+restart and cancellation. An unregistered-source offline probe expired with
+`SPEAKER_OFFLINE_EXPIRED` while a real speaker completed another call. No test jobs
+remained active after cleanup and SQLite integrity was `ok`.
+
+Deployment found and corrected two compatibility issues with permanent RED/GREEN
+coverage: ESPHome 2026.10 const embedded audio descriptors (`1b71579`) and provider
+TTS locale resolution (`fd0028b`). The final regression is 973 passed with one
+non-blocking dependency warning. See `docs/verification/2026-10-29-voice-alerts-deployment.md`.
+Real acoustic wake interruption and known/unknown Speaker-ID speech checks remain
+physical acceptance items. Main has not been merged.
+
+Physical acceptance then exposed weak wake recognition on one speaker. Live logs
+showed inherited stock thresholds (IT 0.90 / EN 0.85) overriding unchanged Nyra
+manifests (0.70). Firmware commit `38d6a25` replaced that stock table with
+manifest-relative sensitivity; both speakers were rebuilt/uploaded and passed
+65-second boot stability checks. The affected device reports IT/EN 0.70 at runtime.
+The user must repeat the acoustic wake test before physical acceptance is marked
+complete. No full physical-acceptance claim is made from software or telemetry.
+
+### Wake handoff and conversational listening (2026-10-30)
+
+User clarified: one wake stops audio and opens listening; commands end unless
+ambiguous, while conversation reopens after every response until exact closing
+phrases (grazie/chiudi/ok grazie/ok), native silence/error or alert interruption.
+Implemented/deployed in `7ee136a`; final HA audio correlation fix is `cccc0b0`.
+Router owns explicit continuation, completed conversational turns get fresh request
+IDs in the same session, and bounded history preserves both sides and clarification
+answers. Strict action validators are unchanged. SQLite migration is additive.
+
+Full regression: 991 passed, one existing dependency warning. Full ESPHome 2026.10.1
+builds, encrypted OTA and 65-second API stability checks passed on both speakers.
+Live Router/HA dialogue, closing and command tests passed; backups were verified.
+Acoustic acceptance remains pending, including the previously reported repeated
+wake requirement and unexplained room-light activation. See
+`docs/verification/2026-10-30-conversational-listening.md`. No main merge authorized.
+
+Physical feedback on 2026-10-30 confirms that general film conversation reopens
+listening and “ok grazie” closes it. The user also confirmed that ordinary commands execute and close listening
+without reopening; all three dialog checks pass. Timer interruption via wake word remains unaccepted because
+recognition was unreliable; acoustic sensitivity/training cause is not established.
+
+### Resource discovery and report clarification (2026-10-30)
+
+The original photovoltaic query had reached discovery, but provider capability
+preambles were rejected. Fixed this boundary, multilingual/topic discovery,
+measurement/reset metadata, accumulated tool results, budget guidance and noisy
+keyword/result selection. Missing actuator targets ask for details while retaining
+original operation/type/scope. Known LLM outages are no longer mislabeled by HA as
+unknown devices. Policy/action validation remains unchanged.
+
+Final suite: 1005 passed, one existing dependency warning. Live original solar
+queries return measured power/energy and separate forecasts; an unknown system asks
+for an identifier and keeps listening. Services deployed (f85e390/684e7c7/e6ea95b),
+no new firmware upload. The user confirmed a useful photovoltaic report in the physical voice check.
+No main merge.
+Evidence and boundaries: docs/verification/2026-10-30-resource-discovery.md.
+
+### Pump action execution (2026-10-30)
+
+Fixed commands that discovered the pump but only described its state. Generic pump
+nouns now route through typed SWITCH execution; reasoning action/no-op proposals
+are distinct from reports. Named targets retain lexical matching and LLM-supplied
+resolved IDs cannot bypass fresh resolution. Review regressions were fixed RED/GREEN.
+
+Suite: 1015 passed, one existing dependency warning. Live direct command changed the
+verified target from on to off and ended listening; polite already-off conditional
+also ends listening. Off persisted in repeated HA reads. The user confirmed that the physical motor stopped; pump-off acceptance passes. Deployed a6e898c/8d15210 in Skills/Router/LLM; no firmware change or main
+merge. See docs/verification/2026-10-30-pump-command.md.
+
+### Idle alarm status (2026-10-30)
+
+Opt-in firmware composes two opposite red alarm LEDs with the existing disjoint
+battery pixels, at idle only. Unknown/arming blinks amber; disarmed is dark.
+Wake/listening, speech, native timers and all existing interaction effects retain
+priority. HA battery automation updates numbers without forcing the gauge effect.
+Full suite: 1017 passed. See docs/alarm-indicator.md and
+docs/verification/2026-10-30-alarm-indicator.md for rollout and physical limits.
+No alarm-control action or main merge authorized/performed.
+
+### Protected intrusion siren (2026-10-30)
+
+The optional HA alarm-status package starts a distinct local siren on `triggered`.
+It preempts other Nyra audio; wake and API conversation start are ignored until
+explicit disarm or the local 60-second limit. The episode latch resets only on
+explicit disarm. Full combined suite 1020 passed; see
+docs/verification/2026-10-30-intrusion-siren.md for deployment and physical limits.
+
+### Apple Music and AirPlay (2026-10-30)
+
+MA stable 2.10.9 and Apple authorization are configured. Both Nyra physical music
+players are exposed as separate AirPlay receivers. Typed musical semantics and
+Skills → Router → authenticated HA execution provide source-default playback,
+catalog clarification and live queue controls. A single local mixer attenuation
+owner preserves voice/alert priority without player-volume snapshots or auto-resume.
+Suite 1065 passed, also in a clean committed clone. No main merge; physical audio/
+iPhone/wake acceptance pending; synchronized grouping is not enabled. See docs/music.md
+and docs/verification/2026-10-30-music-airplay.md. Existing wake assets remain intact.
+
+Physical follow-up: AirPlay reception/playback confirmed by the user, with distortion
+and weak wake recognition reported at 77% volume. Spoken “La uno” selection is now
+handled (`2a6d6e0`). A real artist start took 38s after a false timeout; corrective
+`e88d5b6` prepares ten top tracks before dispatch, distinguishes accepted PENDING
+mutations from bounded reads, and adds 9dB music-only headroom. Both devices passed
+fresh OTA/stability checks; audible quality/wake/startup retest remains pending.
