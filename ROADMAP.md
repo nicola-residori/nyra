@@ -114,3 +114,7 @@
 - Name snapshot gated on current Speaker-ID; no name from continuity/HA identity
 - Restart reconciliation, concurrent jobs, explicit offline/unknown outcomes
 - Rollout/rollback and physical acceptance: `docs/voice-alerts.md`
+
+- 2026-10-30: single-wake listening handoff and continued general conversation
+  deployed; commands remain terminal unless ambiguous, closing phrases terminate.
+  Full suite 991 passed; live service checks passed; acoustic acceptance pending.

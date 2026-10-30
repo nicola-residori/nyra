@@ -384,3 +384,20 @@ manifest-relative sensitivity; both speakers were rebuilt/uploaded and passed
 65-second boot stability checks. The affected device reports IT/EN 0.70 at runtime.
 The user must repeat the acoustic wake test before physical acceptance is marked
 complete. No full physical-acceptance claim is made from software or telemetry.
+
+### Wake handoff and conversational listening (2026-10-30)
+
+User clarified: one wake stops audio and opens listening; commands end unless
+ambiguous, while conversation reopens after every response until exact closing
+phrases (grazie/chiudi/ok grazie/ok), native silence/error or alert interruption.
+Implemented/deployed in `7ee136a`; final HA audio correlation fix is `cccc0b0`.
+Router owns explicit continuation, completed conversational turns get fresh request
+IDs in the same session, and bounded history preserves both sides and clarification
+answers. Strict action validators are unchanged. SQLite migration is additive.
+
+Full regression: 991 passed, one existing dependency warning. Full ESPHome 2026.10.1
+builds, encrypted OTA and 65-second API stability checks passed on both speakers.
+Live Router/HA dialogue, closing and command tests passed; backups were verified.
+Acoustic acceptance remains pending, including the previously reported repeated
+wake requirement and unexplained room-light activation. See
+`docs/verification/2026-10-30-conversational-listening.md`. No main merge authorized.

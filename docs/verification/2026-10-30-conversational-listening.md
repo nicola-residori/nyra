@@ -24,14 +24,42 @@ or a higher-priority alert. Main merge remains unauthorized.
   then GREEN with generation-specific IDs and ownership-scoped cleanup. A three-second
   old-pipeline cancellation simulation was RED at two seconds, then GREEN with pending
   handoff cancelled explicitly by mute/new alert. No minor findings were deferred.
-- Complete suite: **990 passed, one existing dependency warning**, 19.07s. Python
+- Complete suite: **991 passed, one existing dependency warning**, 16.50s. Python
   compilation, Bash runner syntax and `git diff --check` pass.
 
 ## Deployment and physical validation
 
 Protected code/config backups exist on Router, LLM and HA. Router's SQLite backup was
 created with SQLite backup API and integrity check returned `ok`. Installation-specific
-credentials remain outside the repository. Firmware compilation and deployment evidence
-will be added after completion. Acoustic recognition remains pending: the prior test
+credentials remain outside the repository. Router/LLM and both speaker firmware sources are `7ee136a1dcb03c55a819089f7525a3f7881ae75b`;
+HA additionally runs the audio-correlation fix `cccc0b0e260e984e89eee17a142165867aef6417`.
+The latter applies the audio generation before Speaker-ID correlation IDs are
+allocated, preventing an interrupted conversation from tagging audio with old IDs.
+Its targeted regression was RED (missing generation boundary), then GREEN; the
+complete suite is the 991-test result above.
+
+Both full ESPHome 2026.10.1 builds passed. Final configuration hashes are
+`0x0028e129` and `0xd2fa9833`, with build times 14:00:49 and 14:01:01 Europe/Rome.
+Both encrypted OTA uploads succeeded and both devices passed 65 seconds of repeated
+encrypted API round trips, retaining the new compilation timestamps and alert
+entities. Shared HA ESPHome sources match the committed firmware source; original
+entrypoints and credentials are preserved.
+
+HA configuration checks and restart succeeded. Authenticated API reports HA
+2026.10.4 RUNNING after the final update. Live safe tests verified:
+
+- clarification now returns a valid question with continuation, instead of provider
+  validation failure;
+- a completed book-conversation response without a question continues, and the next
+  turn understands which book was discussed;
+- “Ok grazie!” closes with no continuation;
+- “Elenca i timer” completes with no continuation and no audio/job side effect;
+- HA's actual conversation agent returns continuation true for general dialogue and
+  false after closing, verified again after the final HA restart.
+
+An initial synthetic probe during the planned HA restart returned
+`SKILLS_UNAVAILABLE`; gating the rerun on HA RUNNING produced the passing results.
+No user timers were cancelled; no active SCHEDULED/RUNNING jobs existed before OTA.
+Main remains unchanged and the PR remains draft. Acoustic recognition remains pending: the prior test
 needed multiple wake words, and the VAD filter rejected another detection. No VAD or
 model threshold is changed by this patch.
