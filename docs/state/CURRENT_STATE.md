@@ -403,6 +403,6 @@ wake requirement and unexplained room-light activation. See
 `docs/verification/2026-10-30-conversational-listening.md`. No main merge authorized.
 
 Physical feedback on 2026-10-30 confirms that general film conversation reopens
-listening and “ok grazie” closes it. Ordinary-command behavior awaits clarification
-of the user's wording. Timer interruption via wake word remains unaccepted because
+listening and “ok grazie” closes it. The user also confirmed that ordinary commands execute and close listening
+without reopening; all three dialog checks pass. Timer interruption via wake word remains unaccepted because
 recognition was unreliable; acoustic sensitivity/training cause is not established.

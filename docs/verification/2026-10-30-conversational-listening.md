@@ -67,9 +67,8 @@ model threshold is changed by this patch.
 ## Physical feedback — 2026-10-30
 
 The user confirmed that a general conversation about a film reopened listening and
-that “ok grazie” closed it. These two physical checks pass. The wording of the
-command test is ambiguous; confirmation that ordinary commands correctly finish
-without reopening is still pending.
+that “ok grazie” closed it. The user subsequently confirmed that ordinary commands execute and close listening
+without reopening. All three physical dialog checks pass.
 
 The user could not reliably interrupt a timer with the wake word. That physical
 check remains unaccepted. The latest timer ledger is STOPPED after approximately
