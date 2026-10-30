@@ -37,11 +37,23 @@ class ConversationOutputGate {
   bool enabled_{false};
 };
 
+// Only explicit disarm resets an intrusion episode. Connectivity loss cannot.
+struct IntrusionEpisode {
+  bool latched{false};
+  int observe(const std::string &state) {
+    if (state == "disarmed") { bool was = latched; latched = false; return was ? 2 : 0; }
+    if (state != "triggered" || latched) return 0;
+    latched = true;
+    return 1;
+  }
+};
+
 // Platform-independent ownership core, exercised as native C++ in pytest.
 struct AlertState {
   uint32_t epoch{0};
   uint32_t started{0};
   uint32_t limit{60000};
+  bool intrusion{false};
   bool active{false};
   bool heard{false};
   bool call{false};
@@ -50,6 +62,7 @@ struct AlertState {
   bool start(const std::string &id, uint32_t expected_epoch, uint32_t duration,
              bool is_call, uint32_t now) {
     if (active || id == job || expected_epoch != epoch || id.empty()) return false;
+    intrusion = false;
     job = id;
     started = now;
     limit = duration > 60000 ? 60000 : (duration < 1000 ? 1000 : duration);
@@ -68,6 +81,14 @@ struct AlertState {
     return true;
   }
   void stop() { if (active) { active = false; state = "STOPPED"; } }
-  void wake() { ++epoch; stop(); }
+  bool protected_audio() const { return active && intrusion; }
+  bool start_intrusion(uint32_t now) {
+    if (active) return false;
+    ++epoch;
+    const bool accepted = start("intrusion:" + std::to_string(epoch), epoch, 60000, false, now);
+    intrusion = accepted;
+    return accepted;
+  }
+  void wake() { if (protected_audio()) return; ++epoch; stop(); }
 };
 }

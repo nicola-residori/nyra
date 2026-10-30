@@ -61,6 +61,7 @@ text:
           json::parse_json(x, [](JsonObject root) -> bool {
             std::string action = root["action"] | "";
             std::string job = root["job_id"] | "";
+            if (id(nyra_alert).protected_audio()) return false;
             if (action == "URL") {
               if (id(nyra_alert).active) return false;
               bool reset = root["reset"] | false;
@@ -102,6 +103,8 @@ text:
 audio_file:
   - id: nyra_alarm_sound
     file: ${nyra_assets_dir}/nyra_alarm.wav
+  - id: nyra_intrusion_sound
+    file: ${nyra_assets_dir}/nyra_intrusion.wav
   - id: nyra_timer_sound
     file: ${nyra_assets_dir}/nyra_timer.wav
 
@@ -168,7 +171,7 @@ script:
             lambda: 'return id(nyra_alert).active;'
           then:
             - lambda: |-
-                auto *sound = id(nyra_alert_kind) == "alarm" ? id(nyra_alarm_sound) : id(nyra_timer_sound);
+                auto *sound = id(nyra_alert_kind) == "intrusion" ? id(nyra_intrusion_sound) : (id(nyra_alert_kind) == "alarm" ? id(nyra_alarm_sound) : id(nyra_timer_sound));
                 id(external_media_player)->play_file(sound, true, false);
             - wait_until:
                 condition:

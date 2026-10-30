@@ -229,3 +229,8 @@ Physical acceptance must verify single-wake stop **and** listening, a two-turn g
 conversation without a question, a clarification/answer round, a command that does
 not reopen, and an explicit closing phrase. Wake detection/VAD sensitivity remains
 separate from handoff correctness; the previous physical test needed repeated wakes.
+
+Intrusion exception: the opt-in HA alarm-status package uses a separate local siren
+on `triggered`. It preempts ordinary alerts and ignores wake until disarmed or the
+60-second cutoff. See docs/alarm-indicator.md. Ordinary wake-up alarms/timers/calls
+retain their existing wake interruption behavior.

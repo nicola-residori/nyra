@@ -173,7 +173,11 @@ api:
   actions:
     - action: start_va
       then:
-        - voice_assistant.start
+        - if:
+            condition:
+              lambda: 'return !id(nyra_alert).protected_audio();'
+            then:
+              - voice_assistant.start
     - action: stop_va
       then:
         - voice_assistant.stop
@@ -402,11 +406,13 @@ micro_wake_word:
   on_wake_word_detected:
     - if:
         condition:
-          switch.is_off: mic_mute_switch
+          and:
+            - switch.is_off: mic_mute_switch
+            - lambda: 'return !id(nyra_alert).protected_audio();'
         then:
           # Cancel an earlier handoff before invalidating any current audio.
           - script.stop: nyra_wake_listen
-          # Wake word is absolute priority, including simultaneous VA + alert.
+          # Wake interrupts ordinary alerts; intrusion is excluded above.
           - lambda: |-
               const bool was_alert = id(nyra_alert).active;
               id(va).invalidate_output();
@@ -548,7 +554,11 @@ voice_assistant:
     - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
     - script.execute: control_leds
   on_timer_finished:
-    - switch.turn_on: timer_ringing
+    - if:
+        condition:
+          lambda: 'return !id(nyra_alert).protected_audio();'
+        then:
+          - switch.turn_on: timer_ringing
     - lambda: |
         id(next_timer).publish_state(-1);
         id(next_timer_name).publish_state("-");
@@ -989,6 +999,7 @@ script:
       sound_file: "nyra::AudioFilePointer"
     then:
       - lambda: |-
+          if (id(nyra_alert).protected_audio()) return;
           if (priority) {
             id(external_media_player)
               ->make_call()
@@ -1039,6 +1050,7 @@ script:
     then:
       - lambda: |-
           id(publish_current_time).execute();
+          if (id(nyra_alert).protected_audio()) return;
           if (id(alarm_on).state && id(alarm_time).has_state()) {
             auto set_alarm_time = id(alarm_time).state;
             if (set_alarm_time.length() == 5 &&
@@ -1297,13 +1309,17 @@ switch:
       - delay: 60s             # all audible timers are capped locally
       - switch.turn_off: timer_ringing
     on_turn_off:
-      - script.execute: disable_repeat
       - if:
           condition:
-            media_player.is_announcing:
+            lambda: 'return !id(nyra_alert).protected_audio();'
           then:
-            media_player.stop:
-              announcement: true
+            - script.execute: disable_repeat
+            - if:
+                condition:
+                  media_player.is_announcing:
+                then:
+                  media_player.stop:
+                    announcement: true
       - mixer_speaker.apply_ducking:
           id: media_mixing_input
           decibel_reduction: 0

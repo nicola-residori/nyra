@@ -50,3 +50,25 @@ Back up shared sources, device entrypoints, keys and the battery automation befo
 rollout. Deploy both firmware images before removing the old effect action. Rollback
 must restore both the old firmware/source configuration and the automation effect
 action. Preserve unrelated automation YAML, existing credentials and entity identity.
+
+## Intrusion siren
+
+The optional alarm-status package also reacts to `triggered` on each configured
+speaker. A distinct embedded alternating siren interrupts conversation and ordinary
+Nyra alerts. Unlike wake-up alarms/timers, **wake does not stop this siren and does
+not open listening while it is active**. Explicit HA `disarmed` stops it; otherwise
+its local watchdog stops it at 60 seconds. The existing announcement volume is used;
+it is not forced to maximum.
+
+Repeated `triggered`, unknown/unavailable states and reconnect within the same boot
+do not restart/extend an episode. Only explicit `disarmed` resets the latch. After
+reboot, a received `triggered` state starts one new bounded siren. Offline speakers
+receive nothing until reconnect; loss of HA cannot disable the local cutoff, but a
+disarm cannot be received while disconnected. Both speakers subscribe independently.
+Ordinary remote alert STOP and native wake/timer/sound actions cannot cancel the
+protected siren. This does not prevent power loss or direct external media controls.
+
+The asset is procedural mono 16-bit PCM at 16kHz: 2 seconds alternating 740/1040Hz
+every 250ms, 8ms edge envelopes, peak amplitude 10500. No external sound licensing.
+Validation uses synthetic triggered/disarmed states; no real alarm-control action
+is needed. An audible physical test is separate from software/deployment validation.

@@ -12,6 +12,11 @@ esphome:
             id(nyra_alarm_indicator_enabled) = true;
             id(nyra_alarm_indicator_led_count) = ${nyra_alarm_led_count};
 
+globals:
+  - id: nyra_intrusion_episode
+    type: nyra::IntrusionEpisode
+    restore_value: no
+
 text_sensor:
   - platform: homeassistant
     id: nyra_home_alarm_state
@@ -23,6 +28,26 @@ text_sensor:
       then:
         - lambda: |-
             id(nyra_alarm_indicator_state) = static_cast<uint8_t>(nyra::alarm_indicator_state(x));
+            const int action = id(nyra_intrusion_episode).observe(x);
+            if (action == 2 && id(nyra_alert).protected_audio()) {
+              id(nyra_alert).stop();
+              id(nyra_alert_finish).execute();
+            } else if (action == 1) {
+              // Complete the displaced job before assigning intrusion ownership.
+              id(va).invalidate_output();
+              if (id(nyra_alert).active) {
+                id(nyra_alert).stop();
+                id(nyra_alert_finish).execute();
+              }
+              if (id(nyra_alert).start_intrusion(millis())) {
+                id(nyra_audio_epoch).publish_state(to_string(id(nyra_alert).epoch));
+                id(nyra_alert_kind) = "intrusion";
+                id(nyra_alert_ready) = false;
+                id(nyra_alert_url).clear();
+                id(nyra_url_job).clear();
+                id(nyra_alert_begin).execute();
+              }
+            }
 
 voice_assistant:
   on_client_disconnected:
