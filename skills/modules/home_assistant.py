@@ -137,12 +137,12 @@ _ACTIONS = {
 _RESOURCE_TERMS = {
     "en": (
         (NyraResourceType.LIGHT, {"light", "lamp"}),
-        (NyraResourceType.SWITCH, {"switch"}),
+        (NyraResourceType.SWITCH, {"switch", "pump"}),
         (NyraResourceType.COVER, {"blind", "cover", "shutter"}),
     ),
     "it": (
         (NyraResourceType.LIGHT, {"luce", "luci", "lampada", "lampade"}),
-        (NyraResourceType.SWITCH, {"interruttore", "interruttori"}),
+        (NyraResourceType.SWITCH, {"interruttore", "interruttori", "pompa"}),
         (NyraResourceType.COVER, {"tenda", "tende", "tapparella", "tapparelle"}),
     ),
 }
@@ -154,6 +154,11 @@ _STOP_WORDS = {
         "quella", "quello", "quell", "della", "dello", "del", "di",
         "la", "il", "lo", "l", "una", "uno",
     },
+}
+
+_REFERENCE_LINK_WORDS = {
+    "it": {"della", "dello", "del", "di", "dell"},
+    "en": {"of", "the"},
 }
 
 _CONTINUATION_PREFIXES = {
@@ -577,7 +582,7 @@ class HomeAssistantActionSkill:
             area_tokens = _normalized(explicit_area).split()
             if area_tokens and canonical_tokens[-len(area_tokens):] == area_tokens:
                 canonical_tokens = canonical_tokens[:-len(area_tokens)]
-        canonical_reference = " ".join(canonical_tokens)
+        canonical_reference = " ".join(token for token in canonical_tokens if token not in _REFERENCE_LINK_WORDS[language])
         resolved = await self.capability.resolve(
             ResourceReference(
                 reference=canonical_reference,

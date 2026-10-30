@@ -44,6 +44,11 @@ _RESOURCE_DOMAIN = {
     NyraResourceType.AUTOMATION: "automation",
 }
 _DOMAIN_RESOURCE = {domain: resource for resource, domain in _RESOURCE_DOMAIN.items()}
+_GENERIC_RESOURCE_WORDS = {
+    NyraResourceType.LIGHT: {"light", "lights", "luce", "luci"},
+    NyraResourceType.SWITCH: {"switch", "switches", "interruttore", "interruttori"},
+    NyraResourceType.COVER: {"cover", "covers"},
+}
 
 
 def _tokens(value: str) -> set[str]:
@@ -674,7 +679,10 @@ class HomeAssistantCapabilityPort:
                 if value
             )
             searchable_tokens = _tokens(searchable)
-            area_scoped_generic = area_ids is not None and len(query_tokens) == 1
+            area_scoped_generic = (
+                area_ids is not None and len(query_tokens) == 1
+                and query_tokens.issubset(_GENERIC_RESOURCE_WORDS.get(reference.resource_type, set()))
+            )
             if (
                 query_tokens
                 and not area_scoped_generic

@@ -515,3 +515,15 @@ async def test_discovery_preserves_counter_reset_evidence_instead_of_guessing_da
     cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
     result = await cap.reasoning_discover_resources("solar", {}, correlation=correlation())
     assert result["items"][0]["attributes"]["last_reset"] == "2026-10-30T00:00:00+01:00"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entity,name,expected", [("switch.coffee_machine", "Coffee machine", ResolveStatus.NOT_FOUND), ("switch.room_pump", "Pompa", ResolveStatus.RESOLVED)])
+async def test_named_single_token_pump_never_uses_unrelated_room_switch(entity, name, expected):
+    async def handler(req):
+        if req.url.path == "/api/template":
+            return httpx.Response(200, json=[entity])
+        return httpx.Response(200, json=[{"entity_id": entity, "state": "on", "attributes": {"friendly_name": name}}])
+    cap = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
+    result = await cap.resolve(ResourceReference(reference="pompa", resource_type=NyraResourceType.SWITCH), {"area": "kitchen"}, correlation=correlation())
+    assert result.status is expected

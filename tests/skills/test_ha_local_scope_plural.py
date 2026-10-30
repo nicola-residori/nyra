@@ -214,3 +214,17 @@ def test_parse_explicit_other_area_is_extracted():
     parsed = parse_command("spegni le luci cucina", "it-IT")
     assert parsed is not None
     assert parsed.area == "cucina"
+
+
+@pytest.mark.asyncio
+async def test_reference_grammar_normalization_preserves_explicit_multiword_area():
+    class Area(FakeCapability):
+        async def resolve(self, reference, trusted_context, *, correlation):
+            assert reference.reference == "luce"
+            assert trusted_context["area"] == "sala di sopra"
+            return await super().resolve(reference, trusted_context, correlation=correlation)
+    capability = Area([ResolvedResource(resource_id="light.upstairs", resource_type=NyraResourceType.LIGHT, name="Lampada")])
+    skill = HomeAssistantActionSkill(capability)
+    check = request("accendi le luci sala di sopra", {})
+    result = await skill.execute(SkillExecuteRequest(correlation=check.correlation, match=skill.match(check), text=check.text, language=check.language, context=check.context))
+    assert result.outcome is SkillOutcome.HANDLED

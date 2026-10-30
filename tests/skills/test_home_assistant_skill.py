@@ -200,3 +200,35 @@ async def test_missing_light_followup_preserves_operation_and_cannot_trigger_sam
     await skill.execute(SkillExecuteRequest(correlation=reply.correlation, match=match, text=reply.text, language="en", context=reply.context, pending_state=result.pending_state))
     assert capability.execute_calls[0][0].resource_id == "light.kitchen"
     assert capability.execute_calls[0][0].operation is NyraOperation.TURN_OFF
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language,text", [("it", "Spegni, pompa piscina."), ("it", "Spegni la pompa della piscina"), ("en", "Turn off the pool pump")])
+async def test_pump_commands_resolve_and_execute_off_instead_of_returning_a_state_report(language, text):
+    class Pump(FakeCapability):
+        async def resolve(self, reference, trusted_context, *, correlation):
+            self.resolve_calls.append((reference, trusted_context, correlation))
+            expected = "pompa piscina" if language == "it" else "pool pump"
+            assert reference.reference == expected
+            assert reference.resource_type is NyraResourceType.SWITCH
+            return ResolveResponse(correlation=correlation, status=ResolveStatus.RESOLVED, reference=reference, candidates=[ResolveCandidate(resource=ResolvedResource(resource_id="switch.pool_pump", resource_type=NyraResourceType.SWITCH, name="Pool pump"))])
+    capability = Pump()
+    skill = HomeAssistantActionSkill(capability)
+    check = skill_request(text, language)
+    assert skill.matches(check)
+    response = await skill.execute(SkillExecuteRequest(correlation=check.correlation, match=skill.match(check), text=text, language=language, context=check.context))
+    assert response.outcome is SkillOutcome.HANDLED
+    assert capability.execute_calls[0][0].operation is NyraOperation.TURN_OFF
+    assert capability.execute_calls[0][0].resource_id == "switch.pool_pump"
+
+
+@pytest.mark.asyncio
+async def test_reference_cleanup_preserves_numbered_device_name():
+    class Named(FakeCapability):
+        async def resolve(self, reference, trusted_context, *, correlation):
+            assert reference.reference == "light one"
+            return await super().resolve(reference, trusted_context, correlation=correlation)
+    capability = Named()
+    skill = HomeAssistantActionSkill(capability)
+    check = skill_request("turn off light one")
+    await skill.execute(SkillExecuteRequest(correlation=check.correlation, match=skill.match(check), text=check.text, language=check.language, context=check.context))
