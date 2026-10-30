@@ -280,3 +280,22 @@ async def test_clarification_reuses_router_request_id_without_replaying_side_eff
     assert (await c.handle(selected))["status"] == "OK"
     assert (await c.handle(selected))["status"] == "OK"
     assert len(b.calls) == 1 and b.calls[0][2] == "apple_music://track/two"
+
+
+@pytest.mark.asyncio
+async def test_slow_catalog_search_is_cancelled_without_late_playback():
+    import asyncio
+    from homeassistant.custom_components.nyra.music import MusicCoordinator
+
+    class SlowBackend(Backend):
+        async def search(self, *args):
+            await asyncio.sleep(1)
+            return self.items
+
+    b = SlowBackend()
+    c = MusicCoordinator(b, timeout_seconds=0.01)
+    assert (await c.handle(request({"action": "PLAY", "query": "One"})))[
+        "status"
+    ] == "ERROR"
+    await asyncio.sleep(0.02)
+    assert not b.calls

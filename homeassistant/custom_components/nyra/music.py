@@ -84,8 +84,9 @@ def discover_music_players(devices, entities, states, areas):
 
 
 class MusicCoordinator:
-    def __init__(self, backend, *, clock=time.monotonic):
+    def __init__(self, backend, *, clock=time.monotonic, timeout_seconds=10):
         self.backend = backend
+        self.timeout_seconds = timeout_seconds
         self.clock = clock
         self.choices = {}
         self.results = {}
@@ -116,7 +117,9 @@ class MusicCoordinator:
                     )
                 return cached[2]
             try:
-                result = await self._handle(request)
+                result = await asyncio.wait_for(
+                    self._handle(request), timeout=self.timeout_seconds
+                )
             except Exception:
                 return self.error(
                     request,
