@@ -5,6 +5,8 @@ class SemanticSkillBridge:
     def __init__(self,minimum_confidence:float=.80): self.minimum_confidence=float(minimum_confidence)
     def accept(self,result:SemanticResult):
         if result.confidence is None or result.confidence.score < self.minimum_confidence: return None
+        if result.music is not None:
+            return result if result.intent == "MUSIC" and not (result.actions or result.temporal or result.triggers or result.conditions) else None
         if result.temporal is not None or result.triggers or result.conditions or len(result.actions)!=1: return None
         a=result.actions[0]
         if a.parameters or a.target is None or not a.target.reference.strip(): return None

@@ -50,6 +50,12 @@ class RouterHomeAssistantCapabilityClient:
         self.timeout = timeout
         self.transport = transport
 
+    async def music(self, payload):
+        async with httpx.AsyncClient(base_url=self.base_url,timeout=max(self.timeout,15),transport=self.transport) as client:
+            response=await client.post("/v1/capabilities/music",json=payload)
+            response.raise_for_status()
+            return response.json()
+
     async def alert(self, request):
         from skills.alert_client import RouterAlertClient
         return await RouterAlertClient(self.base_url, timeout=self.timeout, transport=self.transport).alert(request)

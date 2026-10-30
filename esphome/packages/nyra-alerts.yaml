@@ -19,6 +19,10 @@ esphome:
 json:
 
 globals:
+  - id: nyra_music_duck_level
+    type: int
+    restore_value: no
+    initial_value: '-1'
   - id: nyra_alert
     type: nyra::AlertState
     restore_value: no
@@ -109,6 +113,22 @@ audio_file:
     file: ${nyra_assets_dir}/nyra_timer.wav
 
 script:
+  - id: nyra_update_music_ducking
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: |-
+              const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state);
+              return desired != id(nyra_music_duck_level);
+          then:
+            - mixer_speaker.apply_ducking:
+                id: media_mixing_input
+                decibel_reduction: !lambda |-
+                  const int desired = nyra::music_duck_db(id(va).is_running() || id(nyra_wake_listen).is_running(), id(external_media_player).state == media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING, id(nyra_alert).active, id(timer_ringing).state);
+                  id(nyra_music_duck_level) = desired;
+                  return desired;
+                duration: 0s
   - id: nyra_alert_publish
     mode: restart
     then:
@@ -212,6 +232,7 @@ interval:
     then:
       - lambda: |-
           if (id(nyra_alert).tick(millis())) id(nyra_alert_finish).execute();
+      - script.execute: nyra_update_music_ducking
 
 media_player:
   - id: !extend external_media_player

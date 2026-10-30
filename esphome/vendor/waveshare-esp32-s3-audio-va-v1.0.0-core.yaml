@@ -341,10 +341,7 @@ media_player:
       num_channels: 1           # mono hardware, one speaker
       sample_rate: 48000
     on_announcement:
-      - mixer_speaker.apply_ducking:
-          id: media_mixing_input
-          decibel_reduction: 20
-          duration: 0.0s
+      - script.execute: nyra_update_music_ducking
     on_state:
       # Amp follows playback: turn it on the instant audio starts. It stays on
       # afterwards (the speaker then holds the line at clean silence), so there
@@ -365,10 +362,7 @@ media_player:
               - not:
                   media_player.is_announcing:
           then:
-            - mixer_speaker.apply_ducking:
-                id: media_mixing_input
-                decibel_reduction: 0
-                duration: 1.0s
+            - script.execute: nyra_update_music_ducking
     on_mute:
       - delay: 100ms            # debounce
       - script.execute: control_leds_volume_changed
@@ -502,10 +496,7 @@ voice_assistant:
               priority: true
               sound_file: !lambda return id(error_cloud_expired);
   on_start:
-    - mixer_speaker.apply_ducking:
-        id: media_mixing_input
-        decibel_reduction: 30    # duck music hard while listening
-        duration: 0.0s
+    - script.execute: nyra_update_music_ducking
   on_listening:
     - lambda: id(voice_assistant_phase) = ${voice_assist_waiting_for_command_phase_id};
     - script.execute: control_leds
@@ -542,10 +533,7 @@ voice_assistant:
     - wait_until:
         not:
           voice_assistant.is_running:
-    - mixer_speaker.apply_ducking:
-        id: media_mixing_input
-        decibel_reduction: 0
-        duration: 1.0s
+    - script.execute: nyra_update_music_ducking
     - if:
         condition:
           lambda: return id(voice_assistant_phase) == ${voice_assist_error_phase_id};
@@ -1300,10 +1288,7 @@ switch:
     internal: true
     restore_mode: ALWAYS_OFF
     on_turn_on:
-      - mixer_speaker.apply_ducking:
-          id: media_mixing_input
-          decibel_reduction: 20
-          duration: 0.0s
+      - script.execute: nyra_update_music_ducking
       - script.execute: ring_timer
       - script.execute: control_leds
       - delay: 60s             # all audible timers are capped locally
@@ -1320,10 +1305,7 @@ switch:
                 then:
                   media_player.stop:
                     announcement: true
-      - mixer_speaker.apply_ducking:
-          id: media_mixing_input
-          decibel_reduction: 0
-          duration: 1.0s
+      - script.execute: nyra_update_music_ducking
       - script.execute: control_leds
 
   - platform: template

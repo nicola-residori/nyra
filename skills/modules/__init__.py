@@ -19,6 +19,10 @@ def register_builtin_skills(
     alert_timezone="Europe/Rome",
     alert_max_seconds=60,
 ) -> None:
+    if home_assistant_capability is not None:
+        from skills.modules.music import MusicSkill
+        music = MusicSkill(home_assistant_capability)
+        registry.register(SkillDefinition(name=music.name,priority=music.priority,matcher=music.matches,executor=music.execute))
     if job_scheduler is not None:
         from skills.modules.voice_alerts import VoiceAlertsSkill
 

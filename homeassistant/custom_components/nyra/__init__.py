@@ -48,6 +48,7 @@ class NyraRuntime:
     alerts: object | None = None
     alert_unsubscribes: tuple = ()
     alert_view: object | None = None
+    music_view: object | None = None
 
 
 
@@ -178,6 +179,17 @@ async def async_setup_entry(hass, entry) -> bool:
     else:
         alert_view.coordinator = alerts
 
+    from .music import MusicCoordinator, HomeAssistantMusicBackend
+    from .music_api import MusicView
+    music_view = hass.data.get("nyra_music_view")
+    music_coordinator = MusicCoordinator(HomeAssistantMusicBackend(hass))
+    if music_view is None:
+        music_view = MusicView(music_coordinator)
+        hass.http.register_view(music_view)
+        hass.data["nyra_music_view"] = music_view
+    else:
+        music_view.coordinator = music_coordinator
+
     async def alert_event(event):
         data = event.data
         await alerts.event(data.get("source_id"), data.get("job_id"), data.get("state"))
@@ -251,7 +263,7 @@ async def async_setup_entry(hass, entry) -> bool:
         owner_entry_id=entry.entry_id,
     )
     entry.runtime_data = NyraRuntime(
-        alerts=alerts, alert_unsubscribes=alert_unsubscribes, alert_view=alert_view,
+        alerts=alerts, alert_unsubscribes=alert_unsubscribes, alert_view=alert_view, music_view=music_view,
         client=client,
         sessions=sessions,
         speaker=speaker,
@@ -277,6 +289,8 @@ async def async_unload_entry(hass, entry) -> bool:
     from homeassistant.const import Platform
 
     runtime = entry.runtime_data
+    if runtime.music_view is not None:
+        runtime.music_view.coordinator = None
     if runtime.alert_view is not None:
         runtime.alert_view.coordinator = None
     for unsubscribe in runtime.alert_unsubscribes:

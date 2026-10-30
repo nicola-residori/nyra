@@ -34,7 +34,7 @@ class RouterLlmPort:
     async def semantic(self,request,context,pending_state):
         semantic_context=build_reasoning_context(request,context,pending_state)
         semantic_context=semantic_context.model_copy(
-            update={"operational":{**semantic_context.operational,"mode":"skill_routing"}}
+            update={"operational":{**semantic_context.operational,"mode":"skill_routing"},"conversation_history":self._conversation_history(request)}
         )
         observability=getattr(self.orchestrator,"observability",None)
         if observability is not None:

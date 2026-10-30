@@ -5,6 +5,11 @@
 namespace esphome { namespace audio { struct AudioFile; } }
 
 namespace nyra {
+// Pure mixer attenuation: no player volume snapshot or automatic resume.
+inline int music_duck_db(bool voice, bool announcement, bool alert, bool native_timer) {
+  return alert || native_timer ? 60 : voice ? 30 : announcement ? 20 : 0;
+}
+
 using AudioFilePointer = const esphome::audio::AudioFile *;
 // Preserve the trained model's cutoff; sensitivity increases are relative to it.
 inline uint8_t wake_word_cutoff(uint8_t manifest_cutoff, uint8_t sensitivity) {
