@@ -7,7 +7,8 @@ identified forecasts across Italian/English resource names. The original request
 “Mi dici lo stato del fotovoltaico?” and “Fammi un resoconto del fotovoltaico” now
 complete with available power/energy and forecast data. An unidentifiable system
 requests a name/identifier and continues listening. These are authenticated live
-service tests; physical voice acceptance of the report remains pending.
+service tests. The user subsequently confirmed the physical voice test: Nyra now
+provides a useful photovoltaic report. Voice acceptance for this request passes.
 
 ## Root causes and changes
 

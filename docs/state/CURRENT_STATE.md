@@ -419,5 +419,6 @@ unknown devices. Policy/action validation remains unchanged.
 Final suite: 1005 passed, one existing dependency warning. Live original solar
 queries return measured power/energy and separate forecasts; an unknown system asks
 for an identifier and keeps listening. Services deployed (f85e390/684e7c7/e6ea95b),
-no new firmware upload. Physical report voice check is pending. No main merge.
+no new firmware upload. The user confirmed a useful photovoltaic report in the physical voice check.
+No main merge.
 Evidence and boundaries: docs/verification/2026-10-30-resource-discovery.md.
