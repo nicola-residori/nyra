@@ -401,3 +401,8 @@ Live Router/HA dialogue, closing and command tests passed; backups were verified
 Acoustic acceptance remains pending, including the previously reported repeated
 wake requirement and unexplained room-light activation. See
 `docs/verification/2026-10-30-conversational-listening.md`. No main merge authorized.
+
+Physical feedback on 2026-10-30 confirms that general film conversation reopens
+listening and “ok grazie” closes it. Ordinary-command behavior awaits clarification
+of the user's wording. Timer interruption via wake word remains unaccepted because
+recognition was unreliable; acoustic sensitivity/training cause is not established.

@@ -63,3 +63,18 @@ No user timers were cancelled; no active SCHEDULED/RUNNING jobs existed before O
 Main remains unchanged and the PR remains draft. Acoustic recognition remains pending: the prior test
 needed multiple wake words, and the VAD filter rejected another detection. No VAD or
 model threshold is changed by this patch.
+
+## Physical feedback — 2026-10-30
+
+The user confirmed that a general conversation about a film reopened listening and
+that “ok grazie” closed it. These two physical checks pass. The wording of the
+command test is ambiguous; confirmation that ordinary commands correctly finish
+without reopening is still pending.
+
+The user could not reliably interrupt a timer with the wake word. That physical
+check remains unaccepted. The latest timer ledger is STOPPED after approximately
+51 seconds against a 60-second limit; this does not establish prompt wake detection
+or identify the stop cause. The bounded live diagnostic window had already ended,
+so it provides no detector trace for this particular test. No further thresholds or
+models were changed based on this feedback. Model training versus playback masking
+or VAD gating has not been isolated. Room-light activation remains unattributed.
