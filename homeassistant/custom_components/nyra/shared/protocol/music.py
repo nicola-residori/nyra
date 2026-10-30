@@ -22,7 +22,11 @@ class MusicCommand(BaseModel):
     ]
     query: str | None = Field(default=None, min_length=1, max_length=300)
     media_type: Literal["artist", "album", "track", "playlist", "radio"] | None = None
-    areas: list[str] = Field(default_factory=list, max_length=8)
+    areas: list[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Only destination areas explicitly named in the current utterance. Empty for here/default source; never copy source/area context into this field.",
+    )
     volume: int | None = Field(default=None, ge=0, le=100, strict=True)
 
     @model_validator(mode="after")

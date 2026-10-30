@@ -203,3 +203,33 @@ async def test_room_answer_expires_and_cannot_execute_old_catalog_command():
     )
     result = await skill.execute(req)
     assert not calls and "scadut" in result.text
+
+
+def test_music_bridge_keeps_default_source_and_rejects_discussion_as_playback():
+    result = SemanticResult.model_validate(
+        {
+            "intent": "MUSIC",
+            "confidence": {"score": 1},
+            "music": {"action": "PLAY", "query": "Queen", "areas": ["Soggiorno"]},
+        }
+    )
+    bridge = SemanticSkillBridge()
+    assert bridge.accept(result, text="Fammi ascoltare Queen").music.areas == []
+    assert bridge.accept(result, text="Parliamo dei Queen") is None
+    assert bridge.accept(result, text="Tell me about Queen") is None
+
+
+def test_music_bridge_never_turns_additive_playback_into_transfer():
+    result = SemanticResult.model_validate(
+        {
+            "intent": "MUSIC",
+            "confidence": {"score": 1},
+            "music": {"action": "TRANSFER", "areas": ["Mansarda"]},
+        }
+    )
+    assert (
+        SemanticSkillBridge()
+        .accept(result, text="Mettila anche in mansarda")
+        .music.action
+        == "GROUP"
+    )

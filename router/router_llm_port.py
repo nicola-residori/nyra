@@ -45,7 +45,7 @@ class RouterLlmPort:
             if observability is not None:
                 observability.trace_event("LLM_PROVIDER_RESPONSE",request_id=request.request_id,origin_request_id=request.origin_request_id or request.request_id,trace_id=context.trace_id,operation="llm.provider",result="UNAVAILABLE",params={"purpose":"SEMANTIC"})
             raise
-        accepted=self.semantic_bridge.accept(result)
+        accepted=self.semantic_bridge.accept(result,text=request.input.text)
         if observability is not None:
             observability.trace_event("LLM_PROVIDER_RESPONSE",request_id=request.request_id,origin_request_id=request.origin_request_id or request.request_id,trace_id=context.trace_id,operation="llm.provider",result="ACCEPTED" if accepted is not None else "REJECTED",params={"purpose":"SEMANTIC"})
         return accepted
