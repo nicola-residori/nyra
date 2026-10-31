@@ -119,3 +119,12 @@ Direct external diagnostics cannot authenticate using the internal MA token; no
 security setting was weakened to change that. The implementation uses the HA
 integration's existing internal MA client; its top-tracks contract was verified
 against the exact server source and backend tests.
+
+## Physical acceptance — 2026-10-31
+
+The user selected “Parte e Nira sente pausa” for the corrected Queen-selection
+and over-music pause test, and reported “È migliorato” for sound quality. This
+confirms the tested Soggiorno music startup/pause path and improved quality at the
+new baseline. AirPlay discovery/audible playback had already been confirmed.
+No claim is made for all volumes, every room/acoustic condition or synchronized
+multiroom playback; older alarm/timer acoustic acceptance remains separate.

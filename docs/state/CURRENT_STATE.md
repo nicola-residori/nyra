@@ -469,4 +469,6 @@ and weak wake recognition reported at 77% volume. Spoken “La uno” selection 
 handled (`2a6d6e0`). A real artist start took 38s after a false timeout; corrective
 `e88d5b6` prepares ten top tracks before dispatch, distinguishes accepted PENDING
 mutations from bounded reads, and adds 9dB music-only headroom. Both devices passed
-fresh OTA/stability checks; audible quality/wake/startup retest remains pending.
+fresh OTA/stability checks. On 2026-10-31 the user confirmed music starts after
+selection and “Nira, pausa” is recognized during playback; audio quality improved.
+This physical Soggiorno check passes; it does not establish every volume/room condition.
