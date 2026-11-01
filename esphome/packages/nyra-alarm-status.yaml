@@ -13,6 +13,9 @@ esphome:
             id(nyra_alarm_indicator_led_count) = ${nyra_alarm_led_count};
 
 globals:
+  - id: nyra_alarm_chime
+    type: nyra::AlarmStatusChime
+    restore_value: no
   - id: nyra_intrusion_episode
     type: nyra::IntrusionEpisode
     restore_value: no
@@ -49,8 +52,24 @@ text_sensor:
               }
             }
 
+        - lambda: |-
+            const int cue = id(nyra_alarm_chime).observe(x);
+            // Consume edges even when higher-priority playback suppresses them.
+            if (!cue || id(nyra_alert).active || id(timer_ringing).state) return;
+            id(va).invalidate_output();
+            ++id(nyra_alert).epoch;
+            if (!id(nyra_alert).start("alarm-status:" + to_string(id(nyra_alert).epoch),
+                id(nyra_alert).epoch, 2000, true, millis())) return;
+            id(nyra_audio_epoch).publish_state(to_string(id(nyra_alert).epoch));
+            id(nyra_alert_kind) = cue == 1 ? "armed" : "disarmed";
+            id(nyra_alert_ready) = false;
+            id(nyra_alert_url).clear();
+            id(nyra_url_job).clear();
+            id(nyra_alert_begin).execute();
+
 voice_assistant:
   on_client_disconnected:
+    - lambda: 'id(nyra_alarm_chime).reset();'
     - lambda: 'id(nyra_alarm_indicator_state) = static_cast<uint8_t>(nyra::AlarmIndicatorState::UNKNOWN);'
 
 # Restore the idle effect after close/voice/identity/volume sequences, not during

@@ -54,6 +54,23 @@ struct IntrusionEpisode {
   }
 };
 
+// Initial synchronization and reconnection never constitute an audible edge.
+struct AlarmStatusChime {
+  int previous{-1};
+  void reset() { previous = -1; }
+  int observe(const std::string &state) {
+    if (state == "arming" || state == "pending" || state == "disarming") return 0;
+    if (state == "triggered") { previous = 1; return 0; }
+    const bool armed = state == "armed_away" || state == "armed_home" ||
+        state == "armed_night" || state == "armed_vacation" || state == "armed_custom_bypass";
+    if (!armed && state != "disarmed") { reset(); return 0; }
+    const int next = armed ? 1 : 0;
+    const int cue = previous < 0 || previous == next ? 0 : armed ? 1 : 2;
+    previous = next;
+    return cue;
+  }
+};
+
 // Platform-independent ownership core, exercised as native C++ in pytest.
 struct AlertState {
   uint32_t epoch{0};

@@ -108,6 +108,10 @@ text:
 
 # Embedded assets are independent of HA availability and distinguish the sounds.
 audio_file:
+  - id: nyra_armed_sound
+    file: ${nyra_assets_dir}/nyra_armed.wav
+  - id: nyra_disarmed_sound
+    file: ${nyra_assets_dir}/nyra_disarmed.wav
   - id: nyra_alarm_sound
     file: ${nyra_assets_dir}/nyra_alarm.wav
   - id: nyra_intrusion_sound
@@ -179,10 +183,18 @@ script:
           condition:
             lambda: 'return id(nyra_alert).call;'
           then:
-            - media_player.play_media:
-                id: external_media_player
-                media_url: !lambda 'return id(nyra_alert_url);'
-                announcement: true
+            - if:
+                condition:
+                  lambda: 'return id(nyra_alert_kind) == "armed" || id(nyra_alert_kind) == "disarmed";'
+                then:
+                  - lambda: |-
+                      auto *sound = id(nyra_alert_kind) == "armed" ? id(nyra_armed_sound) : id(nyra_disarmed_sound);
+                      nyra::play_asset(id(external_media_player), sound);
+                else:
+                  - media_player.play_media:
+                      id: external_media_player
+                      media_url: !lambda 'return id(nyra_alert_url);'
+                      announcement: true
           else:
             - script.execute: nyra_alert_repeat
 
