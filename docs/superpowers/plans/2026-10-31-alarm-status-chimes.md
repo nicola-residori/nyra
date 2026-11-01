@@ -21,6 +21,9 @@ priority/disarm; wake cancellation and LED restore.
 - [x] Run targeted tests and observe missing-feature RED.
 - [x] Implement state reducer, local assets and alert-owner adapter.
 - [x] Run focused tests then full pytest and git diff --check.
-- [ ] Review diff, compile firmware preserving private config/current wake models.
-- [ ] Commit/push only green tested changes, deploy both and verify stability.
-- [ ] Record results and remaining physical listening check.
+- [x] Review diff, compile firmware preserving private config/current wake models.
+- [x] Commit/push only green tested changes, deploy both and verify stability.
+- [x] Record results and remaining physical listening check.
+
+Completed 2026-11-01. Evidence and remaining physical acceptance are in
+`docs/verification/2026-11-01-alarm-status-chimes.md`.

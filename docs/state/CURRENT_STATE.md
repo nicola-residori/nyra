@@ -472,3 +472,17 @@ mutations from bounded reads, and adds 9dB music-only headroom. Both devices pas
 fresh OTA/stability checks. On 2026-10-31 the user confirmed music starts after
 selection and “Nira, pausa” is recognized during playback; audio quality improved.
 This physical Soggiorno check passes; it does not establish every volume/room condition.
+
+
+### Antifurto state confirmation chimes — 2026-11-01
+
+Feature c56ac78 is deployed on Soggiorno and Mansarda: one short local beep on
+confirmed arming, two on disarming, independent of app/keypad/voice origin.
+Initial/reconnected state, duplicate updates and armed-mode changes are silent.
+The bounded single-shot alert owner provides wake cancellation, music ducking,
+conversation preemption and LED restore. Active alerts/native ringing suppress
+confirmation without replay; disarm stops the protected siren before confirmation.
+Both encrypted OTA/stability checks passed, preserving deployed v5-003 wake
+models/cutoffs. Full suite and clean-clone suite: 1068 passed each. Actual audible
+arm/disarm and reconnect acceptance remain pending the user's normal alarm use.
+See `docs/verification/2026-11-01-alarm-status-chimes.md` for evidence/limits.
