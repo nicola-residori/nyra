@@ -1,0 +1,12 @@
+{
+  "run_id": "nyra-it-v6-004-continuous",
+  "policy": "recall_priority_user_requested",
+  "original_false_positive_gate_passed": false,
+  "threshold_selection": "validation_only",
+  "human_tests_performed": false,
+  "arena_measured": false,
+  "model_hashes": {
+    "ehi_nira_it": "e66d89b9583ff5e8e6da1ea00d1b1d7caf6bf13709be2c98df1219f33f47a020",
+    "nira_it": "c652e4c330efc1db087b107e615420f2470a2299700d4b0493f37f7030bdc2d7"
+  }
+}

@@ -1,0 +1,341 @@
+{
+  "ehi_nira_it": {
+    "operating_point": {
+      "cutoff": 0.9921568627450981,
+      "window": 7,
+      "recall": 0.5205820105820106,
+      "faph": 0.46153846153846156,
+      "hard_fpr": 0.0325,
+      "validation_hours": 2.1666666666666665,
+      "feasible": false,
+      "recall_by_variant": {
+        "ei_spaced": 0.5780952380952381,
+        "hei_spaced": 0.5366666666666666,
+        "hey_spaced": 0.5266666666666666,
+        "joined_ehi": 0.4780952380952381,
+        "joined_ei": 0.5133333333333333,
+        "joined_hei": 0.4838095238095238,
+        "joined_hey": 0.48904761904761906,
+        "pause": 0.5361904761904762,
+        "spaced": 0.5433333333333333
+      },
+      "recall_by_condition": {
+        "clean__floor-45": 0.6477777777777778,
+        "clean__floor-60": 0.66,
+        "clean__floor-75": 0.4666666666666667,
+        "noise_snr10__floor-45": 0.6644444444444444,
+        "noise_snr10__floor-60": 0.5911111111111111,
+        "noise_snr10__floor-75": 0.43444444444444447,
+        "off_axis_mild__floor-45": 0.5577777777777778,
+        "off_axis_mild__floor-60": 0.5911111111111111,
+        "off_axis_mild__floor-75": 0.46111111111111114,
+        "off_axis_noise__floor-45": 0.2811111111111111,
+        "off_axis_noise__floor-60": 0.43444444444444447,
+        "off_axis_noise__floor-75": 0.29,
+        "off_axis_strong__floor-45": 0.49666666666666665,
+        "off_axis_strong__floor-60": 0.5788888888888889,
+        "off_axis_strong__floor-75": 0.45666666666666667,
+        "quiet__floor-45": 0.4222222222222222,
+        "quiet__floor-60": 0.6044444444444445,
+        "quiet__floor-75": 0.47444444444444445,
+        "reflections__floor-45": 0.65,
+        "reflections__floor-60": 0.6744444444444444,
+        "reflections__floor-75": 0.49444444444444446
+      },
+      "model_hash": "e66d89b9583ff5e8e6da1ea00d1b1d7caf6bf13709be2c98df1219f33f47a020",
+      "validation_fingerprint": "5b75ba3f39b4c4e233c74cfc12e6c13910354b1a746d3f597d7735183ff35735"
+    },
+    "recall_by_phrase": {
+      "ehi_nira_it": 0.5148809523809523,
+      "nira_it": 0.0002777777777777778
+    },
+    "recall_by_condition": {
+      "clean__floor-75": {
+        "ehi_nira_it": 0.475,
+        "nira_it": 0.0
+      },
+      "clean__floor-60": {
+        "ehi_nira_it": 0.6483333333333333,
+        "nira_it": 0.0
+      },
+      "clean__floor-45": {
+        "ehi_nira_it": 0.6508333333333334,
+        "nira_it": 0.0016666666666666668
+      },
+      "quiet__floor-75": {
+        "ehi_nira_it": 0.44416666666666665,
+        "nira_it": 0.0
+      },
+      "quiet__floor-60": {
+        "ehi_nira_it": 0.5875,
+        "nira_it": 0.0008333333333333334
+      },
+      "quiet__floor-45": {
+        "ehi_nira_it": 0.39666666666666667,
+        "nira_it": 0.0008333333333333334
+      },
+      "off_axis_mild__floor-75": {
+        "ehi_nira_it": 0.4525,
+        "nira_it": 0.0
+      },
+      "off_axis_mild__floor-60": {
+        "ehi_nira_it": 0.5891666666666666,
+        "nira_it": 0.0
+      },
+      "off_axis_mild__floor-45": {
+        "ehi_nira_it": 0.5416666666666666,
+        "nira_it": 0.0008333333333333334
+      },
+      "off_axis_strong__floor-75": {
+        "ehi_nira_it": 0.465,
+        "nira_it": 0.0
+      },
+      "off_axis_strong__floor-60": {
+        "ehi_nira_it": 0.58,
+        "nira_it": 0.0008333333333333334
+      },
+      "off_axis_strong__floor-45": {
+        "ehi_nira_it": 0.49083333333333334,
+        "nira_it": 0.0
+      },
+      "reflections__floor-75": {
+        "ehi_nira_it": 0.4725,
+        "nira_it": 0.0
+      },
+      "reflections__floor-60": {
+        "ehi_nira_it": 0.6658333333333334,
+        "nira_it": 0.0
+      },
+      "reflections__floor-45": {
+        "ehi_nira_it": 0.6525,
+        "nira_it": 0.0008333333333333334
+      },
+      "noise_snr10__floor-75": {
+        "ehi_nira_it": 0.4558333333333333,
+        "nira_it": 0.0
+      },
+      "noise_snr10__floor-60": {
+        "ehi_nira_it": 0.6108333333333333,
+        "nira_it": 0.0
+      },
+      "noise_snr10__floor-45": {
+        "ehi_nira_it": 0.6616666666666666,
+        "nira_it": 0.0
+      },
+      "off_axis_noise__floor-75": {
+        "ehi_nira_it": 0.2708333333333333,
+        "nira_it": 0.0
+      },
+      "off_axis_noise__floor-60": {
+        "ehi_nira_it": 0.4116666666666667,
+        "nira_it": 0.0
+      },
+      "off_axis_noise__floor-45": {
+        "ehi_nira_it": 0.2891666666666667,
+        "nira_it": 0.0
+      }
+    },
+    "hard_false_clip_fraction": 0.021666666666666667,
+    "speech_false_clip_fraction": 0.0,
+    "ambient_events": 0,
+    "ambient_hours": 4.333333333333333,
+    "synthetic_faph": 0.0,
+    "poisson_upper95_faph": 0.691322832358613,
+    "model_bytes": 61352,
+    "recall_by_variant": {
+      "ei_spaced": 0.5678749111584932,
+      "hei_spaced": 0.5501066098081023,
+      "hey_spaced": 0.5429992892679459,
+      "joined_ehi": 0.4715359828141783,
+      "joined_ei": 0.5134264232008593,
+      "joined_hei": 0.49982098102398853,
+      "joined_hey": 0.5084138918725385,
+      "pause": 0.48693161475116364,
+      "spaced": 0.49194414607948445
+    },
+    "recall_by_voice": {
+      "kokoro_nicola": 0.24730550656476583,
+      "kokoro_sara": 0.6347246717617088,
+      "paola": 0.6419753086419753,
+      "riccardo": 0.5430139133842837,
+      "serena": 0.5068922305764411
+    }
+  },
+  "nira_it": {
+    "operating_point": {
+      "cutoff": 0.9607843137254902,
+      "window": 3,
+      "recall": 0.9912169312169312,
+      "faph": 0.46153846153846156,
+      "hard_fpr": 0.115,
+      "validation_hours": 2.1666666666666665,
+      "feasible": true,
+      "recall_by_variant": {
+        "calling": 0.996031746031746,
+        "question": 0.9873015873015873,
+        "solo": 0.9903174603174603
+      },
+      "recall_by_condition": {
+        "clean__floor-45": 0.9944444444444445,
+        "clean__floor-60": 0.9933333333333333,
+        "clean__floor-75": 0.9833333333333333,
+        "noise_snr10__floor-45": 0.9977777777777778,
+        "noise_snr10__floor-60": 0.9988888888888889,
+        "noise_snr10__floor-75": 0.9966666666666667,
+        "off_axis_mild__floor-45": 0.9911111111111112,
+        "off_axis_mild__floor-60": 0.99,
+        "off_axis_mild__floor-75": 0.9855555555555555,
+        "off_axis_noise__floor-45": 0.9944444444444445,
+        "off_axis_noise__floor-60": 0.9977777777777778,
+        "off_axis_noise__floor-75": 0.9977777777777778,
+        "off_axis_strong__floor-45": 0.9888888888888889,
+        "off_axis_strong__floor-60": 0.99,
+        "off_axis_strong__floor-75": 0.9888888888888889,
+        "quiet__floor-45": 0.9833333333333333,
+        "quiet__floor-60": 0.9877777777777778,
+        "quiet__floor-75": 0.9833333333333333,
+        "reflections__floor-45": 0.9922222222222222,
+        "reflections__floor-60": 0.9933333333333333,
+        "reflections__floor-75": 0.9866666666666667
+      },
+      "model_hash": "c652e4c330efc1db087b107e615420f2470a2299700d4b0493f37f7030bdc2d7",
+      "validation_fingerprint": "c39e079d121630eb06f95a9a63c2347cc3269fd01bb159cf475cafd65cfd28a0"
+    },
+    "recall_by_phrase": {
+      "ehi_nira_it": 0.035555555555555556,
+      "nira_it": 0.9925793650793651
+    },
+    "recall_by_condition": {
+      "clean__floor-75": {
+        "ehi_nira_it": 0.0,
+        "nira_it": 0.9925
+      },
+      "clean__floor-60": {
+        "ehi_nira_it": 0.0025,
+        "nira_it": 0.9916666666666667
+      },
+      "clean__floor-45": {
+        "ehi_nira_it": 0.0025,
+        "nira_it": 0.995
+      },
+      "quiet__floor-75": {
+        "ehi_nira_it": 0.0008333333333333334,
+        "nira_it": 0.9858333333333333
+      },
+      "quiet__floor-60": {
+        "ehi_nira_it": 0.0008333333333333334,
+        "nira_it": 0.99
+      },
+      "quiet__floor-45": {
+        "ehi_nira_it": 0.0008333333333333334,
+        "nira_it": 0.9891666666666666
+      },
+      "off_axis_mild__floor-75": {
+        "ehi_nira_it": 0.0008333333333333334,
+        "nira_it": 0.99
+      },
+      "off_axis_mild__floor-60": {
+        "ehi_nira_it": 0.0025,
+        "nira_it": 0.9908333333333333
+      },
+      "off_axis_mild__floor-45": {
+        "ehi_nira_it": 0.0,
+        "nira_it": 0.99
+      },
+      "off_axis_strong__floor-75": {
+        "ehi_nira_it": 0.0008333333333333334,
+        "nira_it": 0.9866666666666667
+      },
+      "off_axis_strong__floor-60": {
+        "ehi_nira_it": 0.0,
+        "nira_it": 0.9933333333333333
+      },
+      "off_axis_strong__floor-45": {
+        "ehi_nira_it": 0.0008333333333333334,
+        "nira_it": 0.99
+      },
+      "reflections__floor-75": {
+        "ehi_nira_it": 0.0,
+        "nira_it": 0.9916666666666667
+      },
+      "reflections__floor-60": {
+        "ehi_nira_it": 0.0016666666666666668,
+        "nira_it": 0.9925
+      },
+      "reflections__floor-45": {
+        "ehi_nira_it": 0.0,
+        "nira_it": 0.9908333333333333
+      },
+      "noise_snr10__floor-75": {
+        "ehi_nira_it": 0.06583333333333333,
+        "nira_it": 1.0
+      },
+      "noise_snr10__floor-60": {
+        "ehi_nira_it": 0.07583333333333334,
+        "nira_it": 0.9991666666666666
+      },
+      "noise_snr10__floor-45": {
+        "ehi_nira_it": 0.06583333333333333,
+        "nira_it": 0.9983333333333333
+      },
+      "off_axis_noise__floor-75": {
+        "ehi_nira_it": 0.23,
+        "nira_it": 0.9983333333333333
+      },
+      "off_axis_noise__floor-60": {
+        "ehi_nira_it": 0.19916666666666666,
+        "nira_it": 0.9983333333333333
+      },
+      "off_axis_noise__floor-45": {
+        "ehi_nira_it": 0.09583333333333334,
+        "nira_it": 0.99
+      }
+    },
+    "hard_false_clip_fraction": 0.11166666666666666,
+    "speech_false_clip_fraction": 0.0,
+    "ambient_events": 9,
+    "ambient_hours": 4.333333333333333,
+    "synthetic_faph": 2.076923076923077,
+    "poisson_upper95_faph": 3.6242807127958754,
+    "model_bytes": 61352,
+    "recall_by_variant": {
+      "calling": 0.9941666666666666,
+      "question": 0.991547619047619,
+      "solo": 0.9920238095238095
+    },
+    "recall_by_voice": {
+      "kokoro_nicola": 0.9992161473642955,
+      "kokoro_sara": 0.9996080736821478,
+      "paola": 0.9976484420928865,
+      "riccardo": 0.9674502712477396,
+      "serena": 0.9985754985754985
+    }
+  },
+  "union": {
+    "synthetic_faph": 2.0769230769230687,
+    "events": 9,
+    "hours": 4.333333333333351,
+    "poisson_upper95_faph": 3.6242807127958607,
+    "recall_by_phrase": {
+      "ehi_nira_it": 0.5447222222222222,
+      "nira_it": 0.9925793650793651
+    },
+    "hard_false_clip_fraction": 0.13333333333333333
+  },
+  "operating_points_hash": "81cbb34b8cabbeeccbad2f0f5b60c22a93670fe9b954022425a126a096287cc1",
+  "model_hashes": {
+    "ehi_nira_it": "e66d89b9583ff5e8e6da1ea00d1b1d7caf6bf13709be2c98df1219f33f47a020",
+    "nira_it": "c652e4c330efc1db087b107e615420f2470a2299700d4b0493f37f7030bdc2d7"
+  },
+  "limitations": [
+    "Cinque voci TTS italiane da due motori; nessun test su parlanti umani indipendenti.",
+    "Gli split separano waveform, seed e template di frasi; non separano il modello TTS né tutti i fonemi.",
+    "FP/h sintetici: non rappresentano la distribuzione domestica; limite Poisson solo descrittivo e sotto ipotesi di eventi indipendenti.",
+    "Eventi offline: media mobile e refractory 2 s, warm-up 3.2 s; non replica esattamente cool-off ESPHome, VAD, stop/restart e scheduling.",
+    "Nira dentro Ehi Nira può attivare il modello corto: risposta positiva prevista, non falso positivo.",
+    "Il riconoscitore lungo può imparare il suffisso Nira: recall incrociata riportata, nessuna promessa di isolamento lessicale.",
+    "Arena TFLM, RAM complessiva e latenza sul Waveshare ESP32-S3 richiedono compilazione e test sul dispositivo.",
+    "Fuori asse/distanza sono filtri digitali approssimati: non angoli o metri calibrati, nessuna misura RIR della stanza."
+  ],
+  "test_passed_descriptively": false
+}
