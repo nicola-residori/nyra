@@ -16,6 +16,7 @@ class _Session:
     session_id: str
     active_request_id: str | None
     last_activity: float
+    audio_generation: int | None = None
 
 
 class SessionManager:
@@ -37,6 +38,17 @@ class SessionManager:
             session = _Session(new_session_id(), None, self._clock())
             self._sessions[conversation_key] = session
         return session.session_id
+
+    def synchronize_audio_generation(self, conversation_key: str, generation: int) -> None:
+        session = self._get_live(conversation_key)
+        if session is not None and session.audio_generation not in (None, generation):
+            self.close_session(conversation_key)
+        self.get_or_create_session(conversation_key)
+        self._sessions[conversation_key].audio_generation = generation
+
+    def owns_request(self, conversation_key: str, session_id: str, request_id: str) -> bool:
+        session = self._get_live(conversation_key)
+        return session is not None and session.session_id == session_id and session.active_request_id == request_id
 
     def get_request_id(self, conversation_key: str) -> str:
         session = self._get_live(conversation_key)

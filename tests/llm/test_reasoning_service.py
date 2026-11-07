@@ -62,3 +62,41 @@ async def test_memory_extraction_is_not_operational():
     request=LlmRequest(purpose=LlmPurpose.MEMORY_EXTRACTION,context=ReasoningContext(language="en",current_user_input="x"))
     with pytest.raises(ValueError):
         await service.reason(request)
+
+
+@pytest.mark.asyncio
+async def test_provider_question_with_spoken_preamble_is_canonical_clarification():
+    service = LlmService(Provider([{
+        "outcome": "NEEDS_CLARIFICATION", "reasoning_id": "provider",
+        "response_text": "Certo! Che genere preferisci?",
+        "clarification": {"question": "Che genere preferisci?", "reason": "gusti"},
+    }]))
+    result = await service.reason(req("trace-question"))
+    assert result.outcome is ReasoningOutcome.NEEDS_CLARIFICATION
+    assert result.clarification.question == "Che genere preferisci?"
+    assert result.response_text is None
+
+
+@pytest.mark.asyncio
+async def test_clarification_text_normalization_never_accepts_an_action_payload():
+    from pydantic import ValidationError
+    service = LlmService(Provider([{
+        "outcome": "NEEDS_CLARIFICATION", "reasoning_id": "provider",
+        "response_text": "Quale luce?", "clarification": {"question": "Quale luce?"},
+        "proposed_execution_plan": {"plan_id": "untrusted"},
+    }]))
+    with pytest.raises(ValidationError):
+        await service.reason(req("trace-invalid-action"))
+
+
+@pytest.mark.asyncio
+async def test_provider_capability_preamble_does_not_abort_resource_search():
+    service = LlmService(Provider([{
+        "outcome": "NEEDS_CAPABILITY", "reasoning_id": "provider",
+        "response_text": "Cerco i dati disponibili.",
+        "capability_request": {"capability": "DISCOVER_RESOURCES", "parameters": {"query": "fotovoltaico"}},
+    }]))
+    result = await service.reason(req("trace-discovery"))
+    assert result.outcome is ReasoningOutcome.NEEDS_CAPABILITY
+    assert result.capability_request.parameters == {"query": "fotovoltaico"}
+    assert result.response_text is None

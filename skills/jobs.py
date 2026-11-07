@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from shared.protocol.skills import JobStatus
 
 from skills.job_store import JobRecord, JobStore
+from skills.alerts import AlertJobs
 
 
 class UnsupportedJobStop(RuntimeError):
@@ -28,17 +29,24 @@ class JobScheduler:
         *,
         poll_interval_seconds: float = 0.25,
         observability: Any = None,
+        offline_grace_seconds: float = 60,
     ) -> None:
         self.store = store
         self.capability = capability
         self.poll_interval_seconds = poll_interval_seconds
         self.observability = observability
         self._worker: asyncio.Task | None = None
+        self.alerts = AlertJobs(
+            store, capability, offline_grace_seconds=offline_grace_seconds
+        )
+        self._due_lock = asyncio.Lock()
 
     def is_ready(self) -> bool:
         return self.store.is_ready()
 
-    def _job_span(self, operation: str, job: JobRecord, trace_id: str, *, parent_span_id=None):
+    def _job_span(
+        self, operation: str, job: JobRecord, trace_id: str, *, parent_span_id=None
+    ):
         if self.observability is None:
             return None
         correlation = SimpleNamespace(
@@ -143,9 +151,7 @@ class JobScheduler:
                     else "UNKNOWN_OUTCOME"
                 ),
             )
-        self._job_span(
-            "skills.job.fail", job, trace_id, parent_span_id=start_span_id
-        )
+        self._job_span("skills.job.fail", job, trace_id, parent_span_id=start_span_id)
         return self.store.set_terminal(
             job.job_id,
             JobStatus.FAILED,
@@ -156,19 +162,50 @@ class JobScheduler:
             ),
         )
 
-    async def run_due(
-        self,
-        *,
-        now: datetime | None = None,
-    ) -> list[JobRecord]:
-        current = now or datetime.now(timezone.utc)
-        results: list[JobRecord] = []
-        for pending in self.store.list_due(current):
-            claimed = self.store.claim_due(pending.job_id, now=current)
-            if claimed is None:
-                continue
-            results.append(await self._execute_claimed(claimed))
-        return results
+    def schedule_alert(
+        self, *, execute_at, origin_request_id, created_trace_id, payload
+    ):
+        job = self.store.create_scheduled(
+            execute_at=execute_at,
+            origin_request_id=origin_request_id,
+            created_trace_id=created_trace_id,
+            payload=payload,
+        )
+        self._job_span("skills.job.schedule", job, created_trace_id)
+        return job
+
+    async def run_due(self, *, now: datetime | None = None) -> list[JobRecord]:
+        async with self._due_lock:
+            current = now or datetime.now(timezone.utc)
+            results = []
+            running = [
+                j
+                for j in self.store.list()
+                if j.status is JobStatus.RUNNING
+                and j.payload.get("kind") == "voice_alert"
+            ]
+            busy = {
+                j.payload["source_id"]
+                for j in self.store.list()
+                if j.status is JobStatus.RUNNING
+                and j.payload.get("kind") == "voice_alert"
+            }
+            work = [self.alerts.tick(j, current) for j in running]
+            for pending in self.store.list_due(current):
+                alert = pending.payload.get("kind") == "voice_alert"
+                if alert and pending.payload["source_id"] in busy:
+                    continue
+                claimed = self.store.claim_due(pending.job_id, now=current)
+                if claimed is None:
+                    continue
+                if alert:
+                    busy.add(claimed.payload["source_id"])
+                    work.append(self.alerts.tick(claimed, current, fresh=True))
+                else:
+                    work.append(self._execute_claimed(claimed))
+            if work:
+                results.extend(await asyncio.gather(*work))
+            return results
 
     async def cancel_job(self, job_id: str) -> JobRecord | None:
         job = self.store.cancel(job_id)
@@ -184,6 +221,14 @@ class JobScheduler:
             raise UnsupportedJobStop(
                 "STOP is supported only for a RUNNING job with an explicit safe stop"
             )
+        if job.payload.get("kind") == "voice_alert":
+            async with self._due_lock:
+                current = self.store.get(job_id)
+                if current.status is not JobStatus.RUNNING:
+                    return current
+                result = await self.alerts.stop(current)
+                self._job_span("skills.job.stop", result, new_trace_id())
+                return result
         if not isinstance(job.payload.get("safe_stop"), dict):
             raise UnsupportedJobStop("job has no explicit safe stop operation")
         raise UnsupportedJobStop(

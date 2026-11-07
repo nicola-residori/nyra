@@ -70,6 +70,9 @@ def resolve_nyra_source_id(
 @dataclass(frozen=True)
 class SpeakerTarget:
     light_entity: str
+    alert_command_entity: str | None = None
+    audio_epoch_entity: str | None = None
+    alert_state_entity: str | None = None
     close_feedback_button: str | None = None
     identity_recognized_button: str | None = None
     identity_not_recognized_button: str | None = None
@@ -117,7 +120,13 @@ def discover_speaker_targets(
         if not original_name or not entity_id:
             continue
 
-        if original_name == SOURCE_ID_NAME:
+        if original_name == "Nyra Alert Command":
+            by_device.setdefault(device_id, {})["alert_command"] = entity_id
+        elif original_name == "Nyra Audio Epoch":
+            by_device.setdefault(device_id, {})["audio_epoch"] = entity_id
+        elif original_name == "Nyra Alert State":
+            by_device.setdefault(device_id, {})["alert_state"] = entity_id
+        elif original_name == SOURCE_ID_NAME:
             by_device.setdefault(device_id, {})["source"] = entity_id
         elif entity_id.startswith("assist_satellite."):
             by_device.setdefault(device_id, {})["assist_satellite"] = entity_id
@@ -152,6 +161,9 @@ def discover_speaker_targets(
             continue
 
         targets[source_id] = SpeakerTarget(
+            alert_command_entity=parts.get("alert_command"),
+            audio_epoch_entity=parts.get("audio_epoch"),
+            alert_state_entity=parts.get("alert_state"),
             light_entity=ring_entity,
             close_feedback_button=parts.get("close"),
             identity_recognized_button=parts.get("identity_recognized"),
@@ -179,7 +191,9 @@ class EspHomeSpeakerOutput:
         resolve_targets: Callable[
             [], Awaitable[dict[str, SpeakerTarget]]
         ] | None = None,
+        announcer=None,
     ):
+        self._announcer = announcer
         self._targets = targets
         self._call_service = call_service
         self._resolve_targets = resolve_targets
@@ -279,7 +293,13 @@ class EspHomeSpeakerOutput:
             "button", "press", {"entity_id": target.wake_word_capture_button}
         )
 
-    async def announce(self, source_id: str, message: str) -> None:
+    async def announce(self, source_id: str, message: str, *, language: str = "it") -> None:
+        if self._announcer is not None:
+            from shared.protocol.alerts import AlertState
+            response = await self._announcer(source_id, message, language)
+            if response.state not in (AlertState.ACCEPTED, AlertState.PLAYING, AlertState.COMPLETED):
+                raise SpeakerUnavailable("notification audio unavailable: " + response.state.value)
+            return
         target = await self._target(source_id)
         if target and target.assist_satellite_entity:
             await self._call_service(

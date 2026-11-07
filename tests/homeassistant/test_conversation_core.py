@@ -275,3 +275,80 @@ async def test_failed_response_is_localized_and_does_not_hardcode_assistant_name
 
     assert result.text == expected
     assert "nyra" not in result.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_completed_conversation_reopens_with_new_request_in_same_session():
+    class ConversationalClient(Client):
+        async def async_execute(self, request):
+            response = await super().async_execute(request)
+            return NyraRequestResponse.model_validate({
+                **response.model_dump(), "continue_conversation": True,
+            })
+
+    sessions = SessionManager()
+    client = ConversationalClient(RequestStatus.COMPLETED)
+    data = AdapterInput("parliamo", "it-IT", "speaker:room", satellite_id="assist_satellite.room")
+    first = await process_adapter_input(data, sessions, client)
+    assert first.continue_conversation
+    await process_adapter_input(data, sessions, client)
+    assert client.requests[0].session_id == client.requests[1].session_id
+    assert client.requests[0].request_id != client.requests[1].request_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("old_result", ["response", "unavailable", "cancelled"])
+async def test_new_wake_owns_new_ids_and_old_completion_cannot_delete_it(old_result):
+    import asyncio
+    from homeassistant.custom_components.nyra.alerts import AlertCoordinator
+    from tests.homeassistant.test_alerts import Backend, Disk
+
+    sessions = SessionManager()
+    coordinator = AlertCoordinator(Backend(), Disk().save)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class OverlappingClient:
+        def __init__(self):
+            self.requests = []
+
+        async def async_execute(self, request):
+            index = len(self.requests)
+            self.requests.append(request)
+            if index == 0:
+                started.set()
+                await release.wait()
+                if old_result == "unavailable":
+                    raise NyraRouterUnavailable("old request failed")
+            return NyraRequestResponse(status=RequestStatus.COMPLETED, session_id=request.session_id, request_id=request.request_id, trace_id=new_trace_id(), response=NyraResponseBody(text="Parliamo"), continue_conversation=True)
+
+    data = AdapterInput("parliamo", "it-IT", "speaker:room", satellite_id="assist_satellite.room", nyra_source_id="room")
+    client = OverlappingClient()
+    first = asyncio.create_task(process_adapter_input(data, sessions, client, alerts=coordinator))
+    await started.wait()
+    await coordinator.wake("room")
+    second = await process_adapter_input(data, sessions, client, alerts=coordinator)
+    if old_result == "cancelled":
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+    else:
+        release.set()
+        stale = await first
+        assert stale.interrupted
+    await process_adapter_input(data, sessions, client, alerts=coordinator)
+    assert second.continue_conversation
+    assert client.requests[0].request_id != client.requests[1].request_id
+    assert client.requests[0].session_id != client.requests[1].session_id
+    assert client.requests[2].session_id == client.requests[1].session_id
+    await coordinator.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_llm_outage_is_not_reinterpreted_as_an_unknown_home_assistant_device():
+    class Outage:
+        async def async_execute(self, request):
+            return NyraRequestResponse(status=RequestStatus.FAILED, session_id=request.session_id, request_id=request.request_id, trace_id=new_trace_id(), error={"code": "LLM_UNAVAILABLE"})
+    result = await process_adapter_input(AdapterInput("resoconto fotovoltaico", "it-IT", "diagnostic"), SessionManager(), Outage())
+    assert not needs_home_assistant_fallback(result)
+    assert result.text == "Non sono disponibile in questo momento."

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, replace
 
 
@@ -50,6 +51,7 @@ class AdapterResult:
     conversation_key: str
     continue_conversation: bool
     response: NyraRequestResponse | None = None
+    interrupted: bool = False
 
 
 _ADAPTER_MESSAGES = {
@@ -138,11 +140,26 @@ def build_request(data: AdapterInput, sessions: SessionManager) -> NyraRequest:
     )
 
 
-async def process_adapter_input(data: AdapterInput, sessions: SessionManager, client) -> AdapterResult:
+async def process_adapter_input(data: AdapterInput, sessions: SessionManager, client, *, alerts=None) -> AdapterResult:
+    generation = alerts.generation(data.source_id) if alerts is not None and data.is_speaker else None
+    if generation is not None:
+        sessions.synchronize_audio_generation(data.conversation_key, generation)
     request = build_request(data, sessions)
+
+    def close_owned_request():
+        if sessions.owns_request(data.conversation_key, request.session_id, request.request_id):
+            sessions.complete_request(data.conversation_key)
+            sessions.close_session(data.conversation_key)
+
     try:
         response = await client.async_execute(request)
+    except asyncio.CancelledError:
+        close_owned_request()
+        raise
     except NyraRouterError:
+        if generation is not None and (alerts.generation(data.source_id) != generation or alerts.active(data.source_id)):
+            close_owned_request()
+            return AdapterResult("", data.conversation_key, False, interrupted=True)
         sessions.complete_request(data.conversation_key)
         if data.is_speaker:
             sessions.close_session(data.conversation_key)
@@ -152,25 +169,32 @@ async def process_adapter_input(data: AdapterInput, sessions: SessionManager, cl
             False,
         )
 
-    continuing = response.status is RequestStatus.NEEDS_CLARIFICATION
-    if continuing:
+    if generation is not None and (alerts.generation(data.source_id) != generation or alerts.active(data.source_id)):
+        close_owned_request()
+        return AdapterResult("", data.conversation_key, False, response, interrupted=True)
+
+    continuing = response.status is RequestStatus.NEEDS_CLARIFICATION or (response.status is RequestStatus.COMPLETED and response.continue_conversation)
+    if response.status is RequestStatus.NEEDS_CLARIFICATION:
         sessions.preserve_request(data.conversation_key)
     else:
         sessions.complete_request(data.conversation_key)
-        if data.is_speaker or response.status is RequestStatus.CLOSED:
+        if (data.is_speaker and not continuing) or response.status is RequestStatus.CLOSED:
             sessions.close_session(data.conversation_key)
 
     text = response.response.text if response.response is not None else ""
     if response.status in {RequestStatus.FAILED, RequestStatus.EXPIRED} and not text:
-        text = localized_adapter_message(data.language, "FAILED")
+        key = "UNAVAILABLE" if (response.error or {}).get("code") == "LLM_UNAVAILABLE" else "FAILED"
+        text = localized_adapter_message(data.language, key)
     return AdapterResult(text, data.conversation_key, continuing, response)
 
 
 def needs_home_assistant_fallback(result: AdapterResult) -> bool:
-    return result.response is None or result.response.status in {
+    if result.response is not None and (result.response.error or {}).get("code") == "LLM_UNAVAILABLE":
+        return False
+    return not result.interrupted and (result.response is None or result.response.status in {
         RequestStatus.FAILED,
         RequestStatus.EXPIRED,
-    }
+    })
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
@@ -257,7 +281,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities) -> None:
                     user_reference.display_name if user_reference is not None else None
                 ),
             )
-            result = await process_adapter_input(data, runtime.sessions, runtime.client)
+            result = await process_adapter_input(data, runtime.sessions, runtime.client, alerts=runtime.alerts)
             if needs_home_assistant_fallback(result):
                 default_agent = conversation.async_get_agent(
                     self.hass, conversation.HOME_ASSISTANT_AGENT

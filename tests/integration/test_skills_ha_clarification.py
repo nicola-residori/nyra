@@ -180,7 +180,7 @@ async def test_unrelated_followup_does_not_execute_stale_target(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_no_candidate_stays_non_fallback_failed(tmp_path):
+async def test_no_candidate_requests_details_without_llm_or_execution(tmp_path):
     class MissingCapability(AmbiguousCapability):
         async def resolve(self, reference, trusted_context, *, correlation):
             self.resolve_calls += 1
@@ -207,6 +207,6 @@ async def test_no_candidate_stays_non_fallback_failed(tmp_path):
         )
     )
 
-    assert result.status is RequestStatus.FAILED
+    assert result.status is RequestStatus.NEEDS_CLARIFICATION
     assert llm.calls == 0
     assert capability.execute_calls == []

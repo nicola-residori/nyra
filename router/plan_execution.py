@@ -2,7 +2,7 @@ from __future__ import annotations
 from shared.protocol.capabilities import ExecuteRequest,ResolveCardinality,ResourceReference
 from shared.protocol.common import CommonOutcome
 from shared.protocol.execution import ExecutionResult,StepResult
-from shared.protocol.execution_common import ExecutionStatus,PlanValidationState,StepStatus
+from shared.protocol.execution_common import ExecutionStatus,PlanValidationState,StepStatus,PlanOrigin
 from shared.protocol.capabilities import ResolveStatus
 
 class RouterPlanExecutor:
@@ -12,7 +12,8 @@ class RouterPlanExecutor:
             raise ValueError("Router executes only VALIDATED plans")
         results=[]
         for step in plan.steps:
-            resolved=step.target.resolved
+            # Model-provided IDs never establish target identity or uniqueness.
+            resolved=None if plan.origin is PlanOrigin.REASONING_LLM else step.target.resolved
             if resolved is None:
                 rr=await self.capability.resolve(ResourceReference(reference=step.target.reference,resource_type=step.target.resource_type,cardinality=ResolveCardinality.ONE),trusted_context,correlation=correlation)
                 if rr.status is not ResolveStatus.RESOLVED or len(rr.candidates)!=1:
