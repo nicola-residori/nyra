@@ -1,0 +1,161 @@
+# Soggiorno-only trial. Explicit selection persists; mute/alerts only pause it.
+globals:
+  - id: nyra_server_command_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_server_paused
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_server_retry_after
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+text_sensor:
+  - platform: template
+    name: "Nyra Server Wake State"
+    entity_category: diagnostic
+    update_interval: 1s
+    lambda: |-
+      return str_sprintf("requested=%d|paused=%d|stream=%d|clock=%d", id(nyra_server_trial).state, id(nyra_server_paused), id(va).is_running(), id(mww).is_running());
+
+switch:
+  - platform: template
+    id: nyra_server_trial
+    name: "Nyra Server Wake Trial"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - voice_assistant.stop:
+            - lambda: |-
+                id(nyra_server_paused) = false;
+                id(nyra_server_command_active) = false;
+                id(nyra_server_retry_after) = millis() + 4000;
+                id(va).set_use_wake_word(true);
+    turn_off_action:
+      - if:
+          condition:
+            lambda: return !id(init_in_progress);
+          then:
+            - voice_assistant.stop:
+            - lambda: |-
+                id(nyra_server_paused) = false;
+                id(nyra_server_command_active) = false;
+                id(va).set_use_wake_word(false);
+            - if:
+                condition:
+                  and:
+                    - switch.is_off: mic_mute_switch
+                    - switch.is_off: diag_disable_mic
+                    - not:
+                        micro_wake_word.is_running:
+                then:
+                  - micro_wake_word.start:
+
+voice_assistant:
+  on_wake_word_detected:
+    - if:
+        condition:
+          lambda: 'return id(nyra_server_trial).state;'
+        then:
+          - if:
+              condition:
+                lambda: 'return id(mic_is_muted) || id(diag_disable_mic).state || id(nyra_alert).active || id(timer_ringing).state;'
+              then:
+                - lambda: |-
+                    id(nyra_server_paused) = true;
+                    id(nyra_server_command_active) = false;
+                    id(va).set_use_wake_word(false);
+                - voice_assistant.stop:
+              else:
+                - lambda: |-
+                    id(nyra_server_command_active) = true;
+                    id(nyra_alert).wake();
+                    id(nyra_audio_epoch).publish_state(to_string(id(nyra_alert).epoch));
+                    ESP_LOGI("nyra_server_trial", "Server wake detected: Okay Nabu");
+                - homeassistant.event:
+                    event: esphome.nyra_wake
+                    data:
+                      source_id: "${source_id}"
+                      epoch: !lambda 'return to_string(id(nyra_alert).epoch);'
+                - script.execute: nyra_update_music_ducking
+  on_listening:
+    - lambda: |-
+        if (id(nyra_server_trial).state && !id(nyra_server_paused)) id(nyra_server_command_active) = true;
+  on_end:
+    - lambda: |-
+        id(nyra_server_command_active) = false;
+        id(nyra_server_retry_after) = millis() + 4000;
+  on_error:
+    - if:
+        condition:
+          lambda: 'return id(nyra_server_trial).state && code == "stt-no-text-recognized";'
+        then:
+          # Clear a stale continue_conversation flag after a silent follow-up.
+          - lambda: id(va).request_stop();
+    - lambda: 'id(nyra_server_retry_after) = millis() + 10000;'
+
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            and:
+              - switch.is_on: nyra_server_trial
+              - lambda: return !id(init_in_progress);
+          then:
+            - if:
+                condition:
+                  lambda: 'return id(nyra_alert).active || id(timer_ringing).state || id(mic_is_muted) || id(diag_disable_mic).state;'
+                then:
+                  - if:
+                      condition:
+                        lambda: return !id(nyra_server_paused);
+                      then:
+                        - lambda: |-
+                            id(nyra_server_paused) = true;
+                            id(nyra_server_command_active) = false;
+                            id(va).set_use_wake_word(false);
+                            ESP_LOGI("nyra_server_trial", "Paused for local audio/mute; selection retained");
+                        - voice_assistant.stop:
+                else:
+                  # Hold the I2S master clock through TTS, even when VA stops its mic source.
+                  - if:
+                      condition:
+                        not:
+                          micro_wake_word.is_running:
+                      then:
+                        - micro_wake_word.start:
+                  - if:
+                      condition:
+                        and:
+                          - lambda: return id(nyra_server_paused);
+                          - not:
+                              voice_assistant.is_running:
+                          - not:
+                              script.is_running: nyra_wake_listen
+                          - not:
+                              media_player.is_announcing: external_media_player
+                      then:
+                        - lambda: |-
+                            id(nyra_server_paused) = false;
+                            id(nyra_server_retry_after) = millis() + 1000;
+                            id(va).set_use_wake_word(true);
+                            ESP_LOGI("nyra_server_trial", "Resuming server wake after local audio/mute");
+                  - if:
+                      condition:
+                        and:
+                          - voice_assistant.connected:
+                          - not:
+                              voice_assistant.is_running:
+                          - lambda: 'return !id(nyra_server_paused) && (int32_t)(millis() - id(nyra_server_retry_after)) >= 0 && !id(nyra_wake_listen).is_running();'
+                      then:
+                        - lambda: id(va).set_use_wake_word(true);
+                        - voice_assistant.start:

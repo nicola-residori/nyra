@@ -1,0 +1,117 @@
+[
+  {
+    "lead_seconds": 0,
+    "detected": true,
+    "candidates": [
+      {
+        "t": 1.12,
+        "primary_probability": 0.9494615793228149,
+        "candidate_t": 0.88,
+        "probability": 0.9906625151634216,
+        "vad_speech_seconds": 0.768,
+        "verifier_wall_seconds": 1.150372193660587
+      }
+    ],
+    "detections": [
+      {
+        "candidate_t": 0.88,
+        "t": 1.12,
+        "probability": 0.9906625151634216,
+        "vad_speech_seconds": 0.768,
+        "verifier_wall_seconds": 1.150372193660587
+      }
+    ]
+  },
+  {
+    "lead_seconds": 0.08,
+    "detected": true,
+    "candidates": [
+      {
+        "t": 1.28,
+        "primary_probability": 0.9485001564025879,
+        "candidate_t": 1.04,
+        "probability": 0.9890387058258057,
+        "vad_speech_seconds": 0.768,
+        "verifier_wall_seconds": 0.9811560339294374
+      }
+    ],
+    "detections": [
+      {
+        "candidate_t": 1.04,
+        "t": 1.28,
+        "probability": 0.9890387058258057,
+        "vad_speech_seconds": 0.768,
+        "verifier_wall_seconds": 0.9811560339294374
+      }
+    ]
+  },
+  {
+    "lead_seconds": 0.2,
+    "detected": true,
+    "candidates": [
+      {
+        "t": 1.44,
+        "primary_probability": 0.9936583042144775,
+        "candidate_t": 1.2,
+        "probability": 0.972379744052887,
+        "vad_speech_seconds": 0.736,
+        "verifier_wall_seconds": 1.0365077089518309
+      }
+    ],
+    "detections": [
+      {
+        "candidate_t": 1.2,
+        "t": 1.44,
+        "probability": 0.972379744052887,
+        "vad_speech_seconds": 0.736,
+        "verifier_wall_seconds": 1.0365077089518309
+      }
+    ]
+  },
+  {
+    "lead_seconds": 0.5,
+    "detected": true,
+    "candidates": [
+      {
+        "t": 1.28,
+        "primary_probability": 0.9465608596801758,
+        "candidate_t": 1.04,
+        "probability": 0.9345203638076782,
+        "vad_speech_seconds": 0.736,
+        "verifier_wall_seconds": 1.1116433311253786
+      }
+    ],
+    "detections": [
+      {
+        "candidate_t": 1.04,
+        "t": 1.28,
+        "probability": 0.9345203638076782,
+        "vad_speech_seconds": 0.736,
+        "verifier_wall_seconds": 1.1116433311253786
+      }
+    ]
+  },
+  {
+    "lead_seconds": 1.0,
+    "detected": true,
+    "candidates": [
+      {
+        "t": 1.84,
+        "primary_probability": 0.5506553649902344,
+        "candidate_t": 1.6,
+        "probability": 0.9732527732849121,
+        "vad_speech_seconds": 0.896,
+        "verifier_wall_seconds": 0.9935629400424659
+      }
+    ],
+    "detections": [
+      {
+        "candidate_t": 1.6,
+        "t": 1.84,
+        "probability": 0.9732527732849121,
+        "vad_speech_seconds": 0.896,
+        "verifier_wall_seconds": 0.9935629400424659
+      }
+    ]
+  }
+]

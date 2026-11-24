@@ -1,3 +1,5 @@
+> **Current wake configuration (2026-11-25):** Soggiorno and Mansarda use the home-server **Ehi Nira** provider. Solo Nira is disabled. The user confirmed operation and requested an unchanged multi-day trial. See [current configuration, limits and evidence](WAKE_WORDS.md) and [runtime/recovery guide](../voice/wakeword/README.md). Local-model descriptions below are historical for these two devices.
+
 # Nyra Speakers
 
 Nyra speakers are ESPHome voice-assistant endpoints connected to Home Assistant. They are deliberately thin edge devices: they capture the wake word and voice input, expose a stable source identity, play Home Assistant TTS, and render Nyra's real-time interaction state. The Router remains the orchestration authority.

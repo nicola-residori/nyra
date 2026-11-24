@@ -1,384 +1,44 @@
-# Nyra Wake Words
+# Wake word: current installed configuration
 
-Nyra uses ESPHome `micro_wake_word` models that execute locally on the ESP32 speaker.
+As of 2026-11-25, **Soggiorno and Mansarda use the home-server Italian `Ehi Nira` provider**, not the old local ESPHome models for normal wake detection. The user confirmed recognition and a spoken response, with approximately one second of delay, and requested several days of testing without configuration changes.
 
-The project defines two canonical language-specific Nyra wake words:
+Say **“Ehi Nira, che ore sono?”** naturally, without waiting between wake phrase and command. Spaced and joined pronunciations (`ei`, `hei`, `hey`, `ehinira`) are positive cases. **“Nira” alone is excluded.** There is no promise of identical performance for every pronunciation or room.
 
-| Model artifact | Home Assistant label | Target pronunciation | Training profile |
-| --- | --- | --- | --- |
-| `nyra_it` | `Nyra IT` | Italian “Nì-ra” | real + synthetic |
-| `nyra_en` | `Nyra EN` | English “NYE-ruh” | synthetic-only |
+## Audio path and dependencies
 
-Both models are committed, deployed, and physically validated on the reference Nyra speaker.
+ESPHome microphone → Home Assistant `nyra_wake` buffered provider → Wyoming server on the home Intel N100 → openWakeWord primary detector → Italian wav2vec2 V2 INT8 verifier + Silero VAD → existing Nyra Assist pipeline.
 
-The two models represent the same assistant name but are trained separately because pronunciation and acoustic distributions differ by language. Their manifest `wake_word` values are intentionally distinct (`Nyra IT` and `Nyra EN`) because Home Assistant uses those visible names when building the ESPHome wake-word selector.
+The PC and Colab are not needed for operation. The home server, Home Assistant and local network must remain available. The existing downstream STT/LLM/TTS services retain their existing dependencies. Wake processing and its bounded command buffer keep PCM in RAM; this change does not disable any existing downstream voice/identity functionality.
 
-## Repository layout
+- Service: `nyra-wake.service`, `/opt/nyra-wake`, `192.168.0.16:10401` (trusted LAN; no public exposure or protocol authentication).
+- HA provider: `wake_word.nyra_italian_wake`; pipeline: **Nyra - Ehi Nira** (`01m87t35th7w2nk035gqdprs0p`). Original/global default pipelines preserved.
+- Primary threshold `.4`, two consecutive 80 ms frames; verifier `.2`, 2.8-second window and `.24`-second post-trigger context; VAD `.1` with `.096` seconds minimum speech; candidate refractory 2 seconds.
+- HA retains up to eight seconds of PCM with one-second pre-roll, preserving commands received during verification. Two independent stream engines share the large immutable verifier session; inference is serialized to bound memory/CPU.
+- Approximately one second of secondary-verifier delay was confirmed by the user. Two-client synthetic benchmarks were approximately 1.3/2.4 seconds after the primary candidate; load can increase delay. These are different measurements, not guaranteed latency limits.
 
-```text
-esphome/
-├── models/
-│   ├── nyra_it.json
-│   ├── nyra_it.tflite
-│   ├── nyra_en.json
-│   └── nyra_en.tflite
-├── packages/
-│   └── nyra-speaker.yaml
-└── training/
-    ├── MicroWakeWord_Nyra_IT_V3_FULL_66GB.ipynb
-    └── MicroWakeWord_Nyra_EN_V1_SYNTHETIC_66GB.ipynb
-```
+## Evidence and limits
 
-The exported `.json` manifest references the matching `.tflite` file. Both files must be copied together.
+Exact exported INT8 inference was evaluated on the target N100, with frozen thresholds and 6,680 cases. All training and evaluation audio is synthetic Italian TTS; held-out voice identities overlap training identities. Augmented cases are not independent real users or hours of television.
 
-## Training environment
+| Metric | Validation | Held-out testing |
+| --- | ---: | ---: |
+| Ehi Nira hits | 927 / 945 (98.10%) | 2,767 / 2,835 (97.60%) |
+| Ambient false events / synthetic exposure | 3 / 65 min | 17 / 260 min |
+| Ambient events/hour | 2.77 | 3.92 |
+| Hard-negative clips triggering | 4 / 120 | 14 / 600 |
+| Ordinary speech clips triggering | 0 / 120 | 0 / 500 |
+| Solo Nira negative controls triggering | 1 / 315 | 10 / 945 |
 
-The supplied notebooks are designed for **Google Colab** and were developed/tested with an **NVIDIA L4 GPU**.
+**The original 99% recall / ≤2 false events/hour target was not met.** Deployment was authorized as a positive-recall-priority experimental trial. The synthetic results do not establish real-room recall or false-event rate. The user subsequently confirmed that it works, but no measured multi-day room trial has concluded.
 
-The target runtime profile is approximately:
+Technical checks passed: model/config hashes, complete result identity, finite scores, streaming parity, command retention during delayed detection, concurrent streams, silent actual HA wake→STT with an immediately following command, and live microphone flow from both speakers. Silent test transcript: “Apri la finestra.” No intent/action/TTS was executed by that test. OTA, authenticated API reconnection and audio/clock diagnostics were verified on Mansarda. Service showed no restarts during deployment checks.
 
-- 113 GB local disk
-- about 66 GB initially free
-- about 52 GB system RAM
-- NVIDIA L4 GPU
+## Source, restoration and maintenance
 
-The notebooks actively manage disk usage and delete source WAV data after mmap features have been generated.
+- [Runtime, pinned environment, tests and recovery instructions](../voice/wakeword/README.md)
+- [Final exact evaluation report](../voice/wakeword/reports/final_report.json)
+- [Deployment receipt and user confirmation](../voice/wakeword/reports/deployment.json)
+- [HA integration source](../homeassistant/custom_components/nyra_wake)
+- [Historical local-model documentation](WAKE_WORDS_LEGACY.md) — superseded for these two installed speakers.
 
-### Select the Colab runtime
-
-Open the notebook in Google Colab, then choose:
-
-```text
-Runtime
-  -> Change runtime type
-  -> Hardware accelerator: GPU
-  -> GPU type: L4
-```
-
-An L4 is the recommended and known-good configuration for these notebooks. Other GPUs may work, but disk/RAM/GPU behavior has not been validated by the Nyra project and may require tuning.
-
-The notebooks mount Google Drive and use it for persistent inputs and outputs. Colab's local runtime disk is temporary.
-
-## Italian workflow: real + synthetic
-
-Use:
-
-```text
-esphome/training/MicroWakeWord_Nyra_IT_V3_FULL_66GB.ipynb
-```
-
-This notebook trains `nyra_it` for the Italian pronunciation **Nì-ra**.
-
-It combines:
-
-- real positive recordings supplied in `nyra_it_real_samples.zip`
-- synthetic positive samples generated with Italian Piper voices
-- synthetic hard negatives chosen to resemble the wake word
-- standard negative/background feature datasets used by the microWakeWord training pipeline
-
-Real and synthetic positives are kept as separate feature sources so a small set of real recordings is not statistically lost inside thousands of generated examples.
-
-### Real recordings
-
-Place the real samples in a ZIP named by `REAL_SAMPLES_ZIP_NAME`.
-
-The default is:
-
-```python
-REAL_SAMPLES_ZIP_NAME = "nyra_it_real_samples.zip"
-EXPECTED_REAL_SAMPLES = 30
-```
-
-Folder names and WAV filenames inside the ZIP do not matter. Every `.wav` found in the archive is treated as a positive sample.
-
-For another wake word, record multiple clean examples from the intended users and preferably vary:
-
-- distance from the microphone
-- speaking volume
-- room acoustics
-- cadence
-- speaker
-- microphone angle
-
-Do not deliberately include wrong pronunciations as positives.
-
-### Parameters to customize
-
-The principal configuration fields are:
-
-```python
-WAKE_WORD = "Nyra"
-PRONUNCIATION = "Nira"
-OUTPUT_NAME = "nyra_it"
-
-REAL_SAMPLES_ZIP_NAME = "nyra_it_real_samples.zip"
-EXPECTED_REAL_SAMPLES = 30
-```
-
-For a different word:
-
-- `WAKE_WORD`: the human-facing phrase.
-- `PRONUNCIATION`: text that guides the synthetic Italian voices toward the intended sound.
-- `OUTPUT_NAME`: technical model identifier and exported filename stem.
-- `REAL_SAMPLES_ZIP_NAME`: your real-positive archive.
-- `EXPECTED_REAL_SAMPLES`: expected number of real WAVs.
-
-Also review `CONFUSABLE_WORDS`. These are deliberately similar **negative** examples and are important for teaching the model what must *not* trigger it.
-
-For example, a custom word should have confusables that are close in syllable count, vowels, consonants, stress, or normal phrases likely to occur in conversation.
-
-### Preview before full generation
-
-The Italian notebook generates a small synthetic preview before the expensive full generation/training stage.
-
-Listen to the preview. If the synthetic pronunciation does not match the intended wake word, stop and fix `PRONUNCIATION` and/or the generator configuration before continuing.
-
-Synthetic data with the wrong pronunciation teaches the wrong model.
-
-## English workflow: synthetic-only
-
-Use:
-
-```text
-esphome/training/MicroWakeWord_Nyra_EN_V1_SYNTHETIC_66GB.ipynb
-```
-
-This notebook trains `nyra_en` without real recordings.
-
-It uses the English **LibriTTS-R multi-speaker Piper sample generator** and produces a large, diverse synthetic positive set.
-
-The default target is English **NYE-ruh**, approximately `/ˈnaɪrə/`.
-
-### Do not let TTS guess invented names
-
-The important configuration value is:
-
-```python
-WAKE_WORD_PHONEMES = "nˈaɪɹə"
-```
-
-The notebook passes phonemes to the sample generator so the English TTS model does not have to guess how an invented spelling such as `Nyra` should sound.
-
-For another invented/custom wake word, determine the pronunciation you actually want and update the phoneme sequence accordingly.
-
-The visible name and technical ID are configured separately:
-
-```python
-WAKE_WORD = "Nyra"
-OUTPUT_NAME = "nyra_en"
-```
-
-### Preview gate
-
-The English notebook creates preview samples first and lets you listen to them directly in Colab.
-
-The default gate is:
-
-```python
-PREVIEW_SAMPLES = 24
-PREVIEW_APPROVAL_TEXT = "OK"
-```
-
-Full positive generation cannot continue until the preview is explicitly approved.
-
-This gate should not be bypassed. For a custom wake word, the preview is where you verify that your phoneme sequence and synthetic voices produce the intended pronunciation.
-
-### Confusable phonemes
-
-English hard negatives are expressed as phrase/phoneme pairs:
-
-```python
-CONFUSABLE_PHONEMES = [
-    ("Myra", "mˈaɪɹə"),
-    ("Lyra", "lˈaɪɹə"),
-    ...
-]
-```
-
-Replace these with words and short expressions that could realistically be confused with your new wake word.
-
-They are negative examples: they should sound close without being the desired trigger.
-
-## Parameters that normally should not be changed first
-
-The supplied notebooks also expose parameters such as:
-
-- positive sample counts
-- repetitions / feature sampling weights
-- probability cutoff
-- sliding-window size
-- tensor-arena size
-- disk reserve
-- training hyperparameters
-- feature-generation settings
-
-These values affect memory use, training balance, false accepts, false rejects, runtime performance, and ESP32 compatibility.
-
-When creating a new wake word, first customize:
-
-1. wake-word text
-2. intended pronunciation or phonemes
-3. model/output ID
-4. language / TTS source
-5. real-positive archive if using the hybrid notebook
-6. confusable negatives
-
-Keep the known-good training and manifest values initially. Tune thresholds only after testing the exported model on the actual speaker.
-
-## General custom wake-word procedure
-
-A practical workflow is:
-
-```text
-choose the wake word
-        |
-        v
-define exactly how it must sound
-        |
-        +--> Italian/hybrid: pronunciation text + real WAVs
-        |
-        +--> English/synthetic: explicit phonemes
-        |
-        v
-choose realistic confusable negatives
-        |
-        v
-run preview in Colab on L4
-        |
-        v
-listen critically
-        |
-        +--> wrong pronunciation -> fix config and regenerate preview
-        |
-        v
-approve preview
-        |
-        v
-generate full dataset
-        |
-        v
-extract features
-        |
-        v
-train
-        |
-        v
-export .tflite + .json
-        |
-        v
-test on the real ESP32 speaker
-        |
-        v
-tune thresholds only if needed
-```
-
-## Exported model files
-
-A successful notebook run exports:
-
-```text
-<output_name>.tflite
-<output_name>.json
-```
-
-For example:
-
-```text
-nyra_it.tflite
-nyra_it.json
-
-nyra_en.tflite
-nyra_en.json
-```
-
-Copy both files into:
-
-```text
-esphome/models/
-```
-
-The manifest's `model` field must reference the matching TFLite filename.
-
-ESPHome currently expects a microWakeWord manifest schema supported by the installed ESPHome version. If a trainer exports a newer/incompatible manifest schema, adapt the manifest to the schema accepted by the project's ESPHome baseline without changing the actual trained model.
-
-## Add the model to the Nyra speaker package
-
-Nyra loads repository-managed local models from Home Assistant's ESPHome configuration directory.
-
-A local model entry has the form:
-
-```yaml
-micro_wake_word:
-  models:
-    - model: /config/esphome/models/my_wake_word.json
-      id: my_wake_word
-```
-
-The Nyra package is layered on top of a pinned Waveshare base package. Do **not** redefine upstream model IDs already supplied by that package: ESPHome will reject duplicate IDs.
-
-For the canonical Nyra pair, the intended local additions are:
-
-```yaml
-micro_wake_word:
-  models:
-    - id: !extend alexa
-      model: /config/esphome/models/nyra_it.json
-    - id: !extend okay_nabu
-      model: /config/esphome/models/nyra_en.json
-```
-
-The technical IDs `alexa` and `okay_nabu` are inherited compatibility anchors from the pinned Waveshare package, not user-visible Nyra model IDs. The upstream `Wake word sensitivity` selector references those IDs directly, so preserving them allows Nyra to replace the stock models without breaking the inherited sensitivity logic.
-
-At runtime the expected model list is:
-
-```text
-Wake Word: Nyra IT
-Wake Word: Nyra EN
-VAD Model
-```
-
-Alexa and Okay Nabu must not appear as separate runtime wake-word choices.
-
-## Deploy models to Home Assistant
-
-Copy the model files and shared package into the ESPHome directory used by Home Assistant:
-
-```text
-/config/esphome/models/
- /config/esphome/packages/nyra-speaker.yaml
-```
-
-Then validate the target speaker configuration in **ESPHome Device Builder** before installing it.
-
-A valid configuration should list every intended wake-word model exactly once.
-
-## First-device testing
-
-Do not judge a model only by training metrics. Test on the actual Waveshare speaker.
-
-Evaluate at least:
-
-- intended pronunciation at normal distance
-- quiet and noisy rooms
-- different speaking volumes
-- several users where possible
-- television/conversation false triggers
-- words chosen as confusables
-- repeated wake/sleep cycles
-
-Tune `probability_cutoff` and `sliding_window_size` only after collecting real device behavior. Increasing strictness can reduce false accepts while also increasing missed wake words; lowering it has the opposite trade-off.
-
-## Nyra default policy
-
-Nyra's default local wake-word pair is:
-
-```text
-Nyra IT
-Nyra EN
-```
-
-The corresponding repository artifacts remain `nyra_it` and `nyra_en`. They are two acoustic models for the same assistant name, not aliases of one model.
-
-Both choices must be selectable through Home Assistant and physically trigger the Assist pipeline before a speaker wake-word deployment is considered validated.
-
-This keeps pronunciation-specific training explicit while allowing the speaker to respond naturally to both Italian and English users.
+Keep this installed configuration unchanged during the requested room trial. Note speaker, approximate time, background noise/TV, missed wakes, spontaneous wakes and truncated commands. Do not silently retrain, adjust thresholds, restart old Colab jobs, or flash older weights. Alarm handling, arm/disarm chimes, identity and other speaker functions must be preserved in future changes.

@@ -1,4 +1,6 @@
-# microWakeWord training notebooks
+# microWakeWord training notebooks (historical local path)
+
+**Current installed path (2026-11-25):** server-based Ehi Nira on both speakers. See [current wake-word documentation](../../docs/WAKE_WORDS.md) and [runtime, research source and backup instructions](../../voice/wakeword/README.md). The V6/local notebooks below are historical and must not be used to overwrite the current working room trial.
 
 This directory stores the Google Colab notebooks used to train Nyra's local ESPHome `micro_wake_word` models.
 

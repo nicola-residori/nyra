@@ -1,0 +1,578 @@
+# Shared Nyra ESPHome speaker package.
+# Hardware is provided by the vendored Waveshare ESP32-S3 Audio VA v1.0.0 core.
+# Room/device identity belongs only in esphome/devices/*.yaml.
+packages:
+  waveshare_audio_va: !include ../vendor/waveshare-esp32-s3-audio-va-v1.0.0-server-trial.yaml
+  nyra_alerts: !include nyra-alerts-server-trial.yaml
+  nyra_server_trial: !include nyra-server-trial.yaml
+  nyra_identification: !include nyra-identification.yaml
+
+# Optional battery gauge value exposed natively to Home Assistant.
+number:
+  - platform: template
+    id: nyra_battery_percent
+    name: "Nyra Battery Gauge Percent"
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
+    entity_category: config
+
+# Stable, read-only source identity consumed by the Nyra Home Assistant adapter.
+# The value comes from the per-device `source_id` substitution created at provisioning.
+text_sensor:
+  - platform: template
+    id: nyra_wake_models_status
+    name: "Nyra Wake Models Status"
+    entity_category: diagnostic
+    update_interval: 15s
+    lambda: |-
+      return str_sprintf("v6-004-recall|running=%d|Ehi Nira=%d:%u|Nira=%d:%u", id(mww).is_running(), id(alexa).is_enabled(), id(alexa).get_probability_cutoff(), id(okay_nabu).is_enabled(), id(okay_nabu).get_probability_cutoff());
+  - platform: template
+    id: nyra_source_id
+    name: "Nyra Source ID"
+    entity_category: diagnostic
+
+esphome:
+  includes:
+    - ${nyra_assets_dir}/../components/nyra_status_ring/alarm_indicator.h
+  on_boot:
+    - priority: -110
+      then:
+        - micro_wake_word.enable_model: alexa
+        - micro_wake_word.enable_model: okay_nabu
+        - logger.log: "Nyra v6-004-recall: Ehi Nira e Nira abilitate"
+    - priority: 600
+      then:
+        - text_sensor.template.publish:
+            id: nyra_source_id
+            state: "${source_id}"
+
+# Nyra semantic ownership gate. While true, the pinned Waveshare phase state
+# machine may still run, but its final LED dispatcher must not paint status_ring.
+globals:
+  - id: nyra_alarm_indicator_enabled
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_alarm_indicator_state
+    type: uint8_t
+    restore_value: no
+    initial_value: '0'
+  - id: nyra_alarm_indicator_led_count
+    type: int
+    restore_value: no
+    initial_value: '2'
+  - id: nyra_ring_owned
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_speaking_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  # Identity feedback is a protected transient. TTS may start immediately,
+  # but purple rendering waits until the complete double blink has finished.
+  - id: nyra_identity_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  # Exact ring state visible immediately before Nyra acquires it.
+  - id: nyra_ring_restore_state
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: nyra_ring_restore_effect
+    type: std::string
+    restore_value: no
+    initial_value: '"None"'
+  - id: nyra_ring_restore_red
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_green
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_blue
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: nyra_ring_restore_brightness
+    type: float
+    restore_value: no
+    initial_value: '1.0'
+
+# Router/HA owns semantic pipeline state. Firmware owns rendering only.
+# These public effect names are the contract consumed by the Nyra HA adapter.
+# Pre-Router voice phases are local to the satellite. Keep the ring in Nyra's
+# listening visual until the HA adapter/Router takes ownership after STT.
+# Local TTS playback owns the SPEAKING visual because the satellite is the only
+# component that knows the actual playback lifetime.
+voice_assistant:
+  on_listening:
+    - lambda: |-
+        // Snapshot only on the ownership transition. Nyra's later visual
+        // phases must never overwrite the external/background state.
+        if (!id(nyra_ring_owned)) {
+          const auto &values = id(status_ring).remote_values;
+          id(nyra_ring_restore_state) = values.is_on();
+          id(nyra_ring_restore_effect) = std::string(id(status_ring).get_effect_name());
+          id(nyra_ring_restore_red) = values.get_red();
+          id(nyra_ring_restore_green) = values.get_green();
+          id(nyra_ring_restore_blue) = values.get_blue();
+          id(nyra_ring_restore_brightness) = values.get_brightness();
+        }
+        id(nyra_ring_owned) = true;
+    - light.turn_on:
+        id: status_ring
+        effect: "Pulse Fast"
+        red: 100%
+        green: 100%
+        blue: 100%
+  on_stt_vad_start:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_listening_white_fast"
+  on_stt_vad_end:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_listening_white_fast"
+  on_stt_end:
+    - light.turn_on:
+        id: status_ring
+        effect: "nyra_listening_white_fast"
+  on_end:
+    - if:
+        condition:
+          lambda: 'return !id(nyra_alert).active;'
+        then:
+          - lambda: id(nyra_ring_owned) = false;
+          - script.execute: nyra_ring_restore
+
+media_player:
+  - id: !extend external_media_player
+    on_state:
+      - if:
+          condition:
+            and:
+              - media_player.is_announcing:
+                  id: external_media_player
+              - lambda: 'return id(nyra_ring_owned) && !id(nyra_speaking_active);'
+          then:
+            - lambda: 'id(nyra_speaking_active) = true;'
+            - homeassistant.event:
+                event: esphome.nyra_speaking_started
+                data:
+                  source_id: "${source_id}"
+            # SPEAKING has priority over semantic processing, but not over the
+            # protected identity transient. The identity sequence will switch
+            # to purple after its 650 ms protection window if TTS is still active.
+            - if:
+                condition:
+                  lambda: 'return !id(nyra_identity_active);'
+                then:
+                  - light.turn_on:
+                      id: status_ring
+                      effect: "nyra_speaking_purple_audio"
+          else:
+            - if:
+                condition:
+                  and:
+                    - lambda: 'return id(nyra_speaking_active);'
+                    - not:
+                        media_player.is_announcing:
+                          id: external_media_player
+                then:
+                  - lambda: 'id(nyra_speaking_active) = false;'
+                  - homeassistant.event:
+                      event: esphome.nyra_speaking_ended
+                      data:
+                        source_id: "${source_id}"
+
+light:
+  - id: !extend status_ring
+    name: "Nyra Status Ring"
+    effects:
+      - addressable_lambda:
+          name: "nyra_battery_gauge"
+          update_interval: 500ms
+          lambda: |-
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            if (n < 3) return;
+
+            // Physical front mapping on the 7-LED Waveshare ring.
+            const int left = 1;
+            const int center = 0;
+            const int right = n - 1;
+
+            float pct = id(nyra_battery_percent).state;
+            if (isnan(pct)) pct = 0.0f;
+            if (pct < 0.0f) pct = 0.0f;
+            if (pct > 100.0f) pct = 100.0f;
+
+            Color color(0, 255, 0);
+            int count = 3;
+            if (pct <= 5.0f)       { color = Color(255, 0, 0); count = 1; }
+            else if (pct <= 10.0f) { color = Color(255, 0, 0); count = 2; }
+            else if (pct <= 15.0f) { color = Color(255, 0, 0); count = 3; }
+            else if (pct <= 20.0f) { color = Color(255, 210, 0); count = 1; }
+            else if (pct <= 30.0f) { color = Color(255, 210, 0); count = 2; }
+            else if (pct <= 40.0f) { color = Color(255, 210, 0); count = 3; }
+            else if (pct <= 60.0f) { color = Color(0, 255, 0); count = 1; }
+            else if (pct <= 80.0f) { color = Color(0, 255, 0); count = 2; }
+
+            it[left] = color;
+            if (count >= 2) it[center] = color;
+            if (count >= 3) it[right] = color;
+
+            nyra::render_alarm_indicator(n, id(nyra_alarm_indicator_led_count),
+                id(nyra_alarm_indicator_enabled), static_cast<nyra::AlarmIndicatorState>(id(nyra_alarm_indicator_state)), millis(),
+                [&](int index, uint8_t r, uint8_t g, uint8_t b) { it[index] = Color(r, g, b); });
+
+      - addressable_lambda:
+          name: "nyra_listening_white_fast"
+          update_interval: 30ms
+          lambda: |-
+            const float phase = (millis() % 600) / 600.0f;
+            const float triangle = phase < 0.5f ? phase * 2.0f : (1.0f - phase) * 2.0f;
+            const float brightness = 0.08f + 0.92f * triangle;
+            const uint8_t level = static_cast<uint8_t>(255.0f * brightness);
+            it.all() = Color(level, level, level);
+
+      - addressable_lambda:
+          name: "nyra_identifying_white_comet"
+          update_interval: 75ms
+          lambda: |-
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.55f, 0.25f};
+            for (int d = 0; d < 3 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = Color(255 * tail[d], 255 * tail[d], 255 * tail[d]);
+            }
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_identity_green_2blink"
+          update_interval: 40ms
+          lambda: |-
+            static uint32_t started = 0;
+            if (initial_run) started = millis();
+            const uint32_t t = millis() - started;
+            const bool on = (t < 180) || (t >= 300 && t < 480);
+            it.all() = on ? Color(0, 255, 0) : Color(0, 0, 0);
+
+      - addressable_lambda:
+          name: "nyra_identity_red_2blink"
+          update_interval: 40ms
+          lambda: |-
+            static uint32_t started = 0;
+            if (initial_run) started = millis();
+            const uint32_t t = millis() - started;
+            const bool on = (t < 180) || (t >= 300 && t < 480);
+            it.all() = on ? Color(255, 0, 0) : Color(0, 0, 0);
+
+      - addressable_lambda:
+          name: "nyra_identity_blue_2blink"
+          update_interval: 40ms
+          lambda: |-
+            static uint32_t started = 0;
+            if (initial_run) started = millis();
+            const uint32_t t = millis() - started;
+            const bool on = (t < 180) || (t >= 300 && t < 480);
+            it.all() = on ? Color(0, 120, 255) : Color(0, 0, 0);
+
+      - addressable_lambda:
+          name: "nyra_processing_local_turquoise_comet"
+          update_interval: 70ms
+          lambda: |-
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.60f, 0.30f, 0.12f};
+            for (int d = 0; d < 4 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = Color(0, 210 * tail[d], 210 * tail[d]);
+            }
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_processing_global_rainbow_comet"
+          update_interval: 70ms
+          lambda: |-
+            static int head = 0;
+            static uint8_t phase = 0;
+            if (initial_run) { head = 0; phase = 0; }
+            const int n = it.size();
+            auto rainbow = [](uint8_t hue, float brightness) -> Color {
+              uint8_t region = hue / 43;
+              uint8_t remainder = (hue - region * 43) * 6;
+              uint8_t p = 0, q = 255 - remainder, t = remainder;
+              uint8_t r, g, b;
+              switch (region) {
+                case 0: r = 255; g = t; b = p; break;
+                case 1: r = q; g = 255; b = p; break;
+                case 2: r = p; g = 255; b = t; break;
+                case 3: r = p; g = q; b = 255; break;
+                case 4: r = t; g = p; b = 255; break;
+                default: r = 255; g = p; b = q; break;
+              }
+              return Color(r * brightness, g * brightness, b * brightness);
+            };
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.72f, 0.48f, 0.28f, 0.14f};
+            for (int d = 0; d < 5 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = rainbow((uint8_t)(phase - d * 42), tail[d]);
+            }
+            head = (head + 1) % n;
+            phase += 7;
+
+      - addressable_lambda:
+          name: "nyra_using_tool_yellow_comet"
+          update_interval: 70ms
+          lambda: |-
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(0, 0, 0);
+            const float tail[] = {1.0f, 0.60f, 0.30f, 0.12f};
+            for (int d = 0; d < 4 && d < n; d++) {
+              const int p = (head - d + n) % n;
+              it[p] = Color(255 * tail[d], 175 * tail[d], 0);
+            }
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_speaking_purple_audio"
+          update_interval: 60ms
+          lambda: |-
+            // The Waveshare base package does not expose PCM amplitude to light effects.
+            // Render SPEAKING as a lively rotating purple pulse. A future amplitude
+            // hook can replace this without changing the public effect contract.
+            static int head = 0;
+            if (initial_run) head = 0;
+            const int n = it.size();
+            it.all() = Color(18, 0, 28);
+            it[head] = Color(180, 0, 255);
+            it[(head - 1 + n) % n] = Color(90, 0, 150);
+            head = (head + 1) % n;
+
+      - addressable_lambda:
+          name: "nyra_error_red"
+          update_interval: 100ms
+          lambda: |-
+            const bool on = ((millis() / 250) % 2) == 0;
+            it.all() = on ? Color(255, 0, 0) : Color(45, 0, 0);
+
+# Atomic close feedback endpoint consumed by the HA bridge:
+# local chime + blue double blink. No Router round-trip for rendering details.
+audio_file:
+  - id: nyra_close_sound
+    file: ${nyra_assets_dir}/nyra_close.wav
+
+script:
+  # Restore the exact state that was visible before Nyra temporarily acquired
+  # the ring. External HA uses (alarm/battery/etc.) therefore survive a session.
+  - id: nyra_ring_restore
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(nyra_ring_restore_state);'
+          then:
+            - lambda: |-
+                auto call = id(status_ring).turn_on();
+                call.set_rgb(id(nyra_ring_restore_red),
+                             id(nyra_ring_restore_green),
+                             id(nyra_ring_restore_blue));
+                call.set_brightness(id(nyra_ring_restore_brightness));
+                const std::string effect = id(nyra_ring_restore_effect);
+                call.set_effect(effect.empty() ? "None" : effect);
+                call.perform();
+          else:
+            - light.turn_off: status_ring
+
+  # Replace only the upstream final LED dispatcher. control_leds and the rest of
+  # the Waveshare voice state machine stay intact; phase-driven writes are simply
+  # ignored while Nyra owns the semantic ring.
+  # Replace only the upstream Waveshare phase LED controller.
+  # While Nyra owns the ring, upstream phase changes still happen internally
+  # but are prevented from repainting status_ring.
+  - id: !remove control_leds
+
+  - id: control_leds
+    mode: single
+    then:
+      - lambda: |-
+          if (id(nyra_ring_owned)) {
+            ESP_LOGD("led", "control_leds: skipped while Nyra owns status_ring");
+            return;
+          }
+          const bool wifi_connected = id(wifi_id).is_connected();
+          const bool api_connected  = id(api_id).is_connected();
+          const bool ringing        = id(timer_ringing).state;
+          const bool improv_ble     = id(improv_ble_in_progress);
+          const bool init_progress  = id(init_in_progress);
+          const int  phase          = id(voice_assistant_phase);
+
+          id(check_if_timers_active).execute();
+          const bool timers_active = id(is_timer_active);
+          ESP_LOGD("led",
+                   "control_leds: wifi=%d api=%d improv=%d init=%d ringing=%d timers_active=%d phase=%d",
+                   (int)wifi_connected, (int)api_connected, (int)improv_ble, (int)init_progress,
+                   (int)ringing, (int)timers_active, phase);
+
+          auto set = [&](const std::string &effect, float r, float g, float b) {
+            id(led_set_effect).execute(effect, r, g, b);
+          };
+          if (improv_ble) {
+            set("Pulse Medium", 1.0, 0.89, 0.71);
+            return;
+          }
+          if (init_progress) {
+            if (wifi_connected) set("Rainbow Slow", 0.9, 0.1, 0.85);
+            else                set("Rainbow Slow", 1.0, 0.1, 0.1);
+            return;
+          }
+          if (!wifi_connected || !api_connected) {
+            set("Pulse Medium", 1.0, 0.0, 0.0);
+            return;
+          }
+          if (ringing) {
+            set("Pulse Fast", 0.6, 0.0, 0.6);
+            return;
+          }
+          switch (phase) {
+            case ${voice_assist_waiting_for_command_phase_id}:
+              set("solid", 0.5, 0.0, 0.5);
+              return;
+            case ${voice_assist_listening_for_command_phase_id}:
+              set(id(listening_effect).current_option(), 0.8, 0.0, 0.8);
+              return;
+            case ${voice_assist_thinking_phase_id}:
+              set(id(thinking_effect).current_option(), 0.6, 0.0, 0.6);
+              return;
+            case ${voice_assist_replying_phase_id}:
+              set(id(replying_effect).current_option(), 0.6, 0.0, 0.6);
+              return;
+            case ${voice_assist_error_phase_id}:
+              set("Pulse Fast", 1.0, 0.0, 0.0);
+              return;
+            case ${voice_assist_not_ready_phase_id}:
+              set("Pulse Slow", 1.0, 0.0, 0.0);
+              return;
+            default:
+              break;
+          }
+          if (timers_active) {
+            set("Pulse Slow", 0.6, 0.0, 0.6);
+            return;
+          }
+
+          set("off", 0, 0, 0);
+
+  - id: nyra_close_feedback_sequence
+    mode: restart
+    then:
+      - script.execute:
+          id: play_sound
+          priority: true
+          sound_file: !lambda 'return id(nyra_close_sound);'
+      - light.turn_on:
+          id: status_ring
+          effect: "nyra_identity_blue_2blink"
+      - delay: 650ms
+      - light.turn_off: status_ring
+
+button:
+  # Identity feedback uses a single HA -> ESPHome command. The complete visual
+  # transient is protected locally, so TTS cannot overwrite it after ~100 ms.
+  - platform: template
+    id: nyra_identity_recognized
+    name: "Nyra Identity Recognized"
+    entity_category: diagnostic
+    on_press:
+      - lambda: 'id(nyra_identity_active) = true;'
+      - light.turn_on:
+          id: status_ring
+          effect: "nyra_identity_green_2blink"
+      - delay: 650ms
+      - lambda: 'id(nyra_identity_active) = false;'
+      - if:
+          condition:
+            and:
+              - lambda: 'return id(nyra_speaking_active);'
+              - media_player.is_announcing:
+                  id: external_media_player
+          then:
+            - light.turn_on:
+                id: status_ring
+                effect: "nyra_speaking_purple_audio"
+
+  - platform: template
+    id: nyra_identity_not_recognized
+    name: "Nyra Identity Not Recognized"
+    entity_category: diagnostic
+    on_press:
+      - lambda: 'id(nyra_identity_active) = true;'
+      - light.turn_on:
+          id: status_ring
+          effect: "nyra_identity_red_2blink"
+      - delay: 650ms
+      - lambda: 'id(nyra_identity_active) = false;'
+      - if:
+          condition:
+            and:
+              - lambda: 'return id(nyra_speaking_active);'
+              - media_player.is_announcing:
+                  id: external_media_player
+          then:
+            - light.turn_on:
+                id: status_ring
+                effect: "nyra_speaking_purple_audio"
+
+  - platform: template
+    id: nyra_identity_changed
+    name: "Nyra Identity Changed"
+    entity_category: diagnostic
+    on_press:
+      - lambda: 'id(nyra_identity_active) = true;'
+      - light.turn_on:
+          id: status_ring
+          effect: "nyra_identity_blue_2blink"
+      - delay: 650ms
+      - lambda: 'id(nyra_identity_active) = false;'
+      - if:
+          condition:
+            and:
+              - lambda: 'return id(nyra_speaking_active);'
+              - media_player.is_announcing:
+                  id: external_media_player
+          then:
+            - light.turn_on:
+                id: status_ring
+                effect: "nyra_speaking_purple_audio"
+
+  - platform: template
+    id: nyra_close_feedback
+    name: "Nyra Close Feedback"
+    entity_category: diagnostic
+    on_press:
+      - script.execute: nyra_close_feedback_sequence
+
+# Custom Nyra wake word.
+# Alexa and Okay Nabu are inherited from the pinned Waveshare base package;
+# only the local Nyra model is appended here to avoid duplicate model IDs.
+micro_wake_word:
+  models:
+    - id: !extend alexa
+      model: /config/esphome/training/v6-004/export_recall_priority/ehi_nira_it.json
+    - id: !extend okay_nabu
+      model: /config/esphome/training/v6-004/export_recall_priority/nira_it.json
