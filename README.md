@@ -16,6 +16,8 @@ The project is self-hosted, observable, extensible, reproducible, and independen
 
 ## Project status
 
+Italian script/cleaning commands and clarification behavior are documented in [Italian home commands](docs/ITALIAN_HOME_COMMANDS.md).
+
 **Current speaker wake word (2026-11-25):** Soggiorno and Mansarda use the home-server **Ehi Nira** provider, including joined pronunciations; solo Nira is disabled. User confirmed working with approximately one second of delay. This is an experimental room trial: synthetic recall 97.6%, synthetic ambient false events 3.92/hour. See [current configuration and limits](docs/WAKE_WORDS.md) and [runtime/recovery sources](voice/wakeword/README.md). PC/Colab are not needed for operation.
 
 Nyra v1 is under active development.

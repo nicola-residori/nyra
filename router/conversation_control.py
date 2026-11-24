@@ -2,7 +2,7 @@
 import re
 import unicodedata
 
-_CLOSING_PHRASES = {"grazie", "chiudi", "ok grazie", "ok", "okay", "thanks", "thank you", "close", "okay thanks", "ok thanks"}
+_CLOSING_PHRASES = {"annulla", "annulla tutto", "lascia stare", "cancel", "grazie", "chiudi", "ok grazie", "ok", "okay", "thanks", "thank you", "close", "okay thanks", "ok thanks"}
 
 
 def is_conversation_close(text: str) -> bool:

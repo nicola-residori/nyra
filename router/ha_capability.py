@@ -641,7 +641,10 @@ class HomeAssistantCapabilityPort:
         if (
             isinstance(area, str)
             and area.strip()
-            and reference.resource_type is not None
+            and reference.resource_type in {
+                NyraResourceType.LIGHT, NyraResourceType.SWITCH, NyraResourceType.COVER,
+                NyraResourceType.CLIMATE, NyraResourceType.MEDIA_PLAYER,
+            }
             and len(query_tokens) == 1
         ):
             area_ids = await self.client.area_entities(area.strip())

@@ -210,10 +210,11 @@ def _missing_target_state(pending_state, skill_name):
 def _target_name_reply(text):
     words = _normalized(text).split()
     # Questions/new topics go through reasoning, never a named-resource trigger.
-    return bool(words) and words[0] not in {
+    return 0 < len(words) <= 4 and words[0] not in {
         "che", "cosa", "come", "quando", "perche", "dimmi", "parliamo", "raccontami",
         "fammi", "mi", "what", "why", "how", "when", "tell", "show", "give", "let",
         "activate", "deactivate", "please", "esegui", "attiva", "disattiva", "puoi",
+        "intendevo", "intendo", "volevo", "devi", "non", "annulla", "cancella", "lascia", "pulisci", "aspira",
     }
 
 
@@ -309,9 +310,50 @@ def _resource_type(language: str, reference: str) -> NyraResourceType | None:
     return None
 
 
-def parse_command(text: str, language: str) -> ParsedHomeAssistantCommand | None:
+def _named_trigger(text: str, language: str, *, allow_target_correction: bool = False) -> ParsedHomeAssistantCommand | None:
+    if language != "it":
+        return None
+    value = _normalized(text)
+    if allow_target_correction:
+        value = re.sub(r"^(?:è|e) ", "", value)
+    value = re.sub(r"^(?:esegui|avvia|attiva|lancia) ", "", value)
+    value = re.sub(r"^(?:lo|la|il|uno|una|un|l) ", "", value)
+    match = re.fullmatch(r"(script|scena|automazione) (.+)", value)
+    if match is None:
+        return None
+    kind, reference = match.groups()
+    reference = re.sub(r"^(?:si chiama|chiamato|chiamata) ", "", reference)
+    reference = re.sub(r"^(?:della|dello|del|di|la|il|lo|l) ", "", reference).strip()
+    if not reference:
+        return None
+    resource = {"script": NyraResourceType.SCRIPT, "scena": NyraResourceType.SCENE, "automazione": NyraResourceType.AUTOMATION}[kind]
+    return ParsedHomeAssistantCommand(NyraOperation.TRIGGER, resource, reference)
+
+
+def _cleaning_command(text: str, language: str) -> ParsedHomeAssistantCommand | None:
+    if language != "it":
+        return None
+    match = re.fullmatch(r"(pulisci profondamente|pulisci a fondo|pulisci|aspira) (.+)", _normalized(text))
+    if match is None:
+        return None
+    verb, target = match.groups()
+    target = re.sub(r"^(?:la|il|lo|l|le|i|gli) ", "", target).strip()
+    if not target:
+        return None
+    # Alternative modes, scheduling and conjunctions require semantic interpretation.
+    modifiers = {"a", "fondo", "profondamente", "profonda", "aspirazione", "aspirando", "solo", "senza", "prima", "poi", "domani", "tra", "dopo", "non", "anche", "se", "quando", "e", "invece", "lavando", "lavare"}
+    if set(target.split()) & modifiers:
+        return None
+    mode = "aspirazione" if verb == "aspira" else "profonda" if verb != "pulisci" else "standard"
+    return ParsedHomeAssistantCommand(NyraOperation.TRIGGER, NyraResourceType.SCRIPT, f"pulizia {target} {mode}")
+
+
+def parse_command(text: str, language: str, *, allow_target_correction: bool = False) -> ParsedHomeAssistantCommand | None:
     selected_language = _language(language)
     normalized = _normalized(text)
+    named = _named_trigger(text, selected_language, allow_target_correction=allow_target_correction) or _cleaning_command(text, selected_language)
+    if named is not None:
+        return named
 
     for pattern, operation in _ACTIONS[selected_language]:
         match = pattern.fullmatch(normalized)
@@ -379,11 +421,12 @@ class HomeAssistantActionSkill:
 
     def matches(self, request: SkillCheckRequest) -> bool:
         missing = _missing_target_state(request.pending_state, self.name)
-        if missing is not None and parse_command(request.text, request.language) is None:
-            return _target_name_reply(request.text)
+        if (missing is not None and missing.get("resource_type") not in {kind.value for kind in _TRIGGERABLE_NAMED_RESOURCES}
+                and parse_command(request.text, request.language, allow_target_correction=_missing_target_state(request.pending_state, self.name) is not None) is None and _target_name_reply(request.text)):
+            return True
         if request.semantic is not None:
             return _semantic_command(request) is not None
-        if parse_command(request.text, request.language) is not None:
+        if parse_command(request.text, request.language, allow_target_correction=_missing_target_state(request.pending_state, self.name) is not None) is not None:
             return True
 
         state = _clarification_state(request.pending_state, self.name)
@@ -407,6 +450,8 @@ class HomeAssistantActionSkill:
             if reference.startswith(prefix):
                 reference = reference[len(prefix):].strip()
                 break
+        if language == "it":
+            reference = re.sub(r"^(?:la|il|lo|l|uno|una|un) ", "", reference)
         if not reference:
             return None
         correlation = CapabilityCorrelation(**request.correlation.model_dump())
@@ -424,19 +469,16 @@ class HomeAssistantActionSkill:
         return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":NyraOperation.TRIGGER.value,"resource_type":candidates[0].resource.resource_type.value,"reference":reference,"fast_path":"named_ha_resource","fast_path_candidates":choices})
 
     def match(self, request: SkillCheckRequest) -> SkillMatch:
-        parsed = parse_command(request.text, request.language)
+        parsed = parse_command(request.text, request.language, allow_target_correction=_missing_target_state(request.pending_state, self.name) is not None)
         missing = _missing_target_state(request.pending_state, self.name)
-        if missing is not None and parsed is None:
-            return SkillMatch(
-                matched=True, skill_name=self.name, token=self.name,
-                memory_requirement=MemoryRequirement.NONE,
-                metadata={
+        if (missing is not None and missing.get("resource_type") not in {kind.value for kind in _TRIGGERABLE_NAMED_RESOURCES}
+                and parsed is None and _target_name_reply(request.text) and request.semantic is None):
+            return SkillMatch(matched=True, skill_name=self.name, token=self.name,
+                memory_requirement=MemoryRequirement.NONE, metadata={
                     "operation": missing["operation"], "resource_type": missing["resource_type"],
-                    "reference": request.text.strip(),
-                    "cardinality": missing.get("cardinality", ResolveCardinality.ONE.value),
+                    "reference": request.text.strip(), "cardinality": missing.get("cardinality", ResolveCardinality.ONE.value),
                     **({"area": missing["area"]} if missing.get("area") else {}),
-                },
-            )
+                })
         semantic_parsed = _semantic_command(request)
         if parsed is not None or semantic_parsed is not None:
             operation,resource_type,reference=(parsed.operation,parsed.resource_type,parsed.reference) if parsed is not None else semantic_parsed
