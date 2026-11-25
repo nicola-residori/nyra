@@ -4,9 +4,13 @@ As of 2026-11-25, **Soggiorno and Mansarda use the home-server Italian `Ehi Nira
 
 Say **“Ehi Nira, che ore sono?”** naturally, without waiting between wake phrase and command. Spaced and joined pronunciations (`ei`, `hei`, `hey`, `ehinira`) are positive cases. **“Nira” alone is excluded.** There is no promise of identical performance for every pronunciation or room.
 
-## Active mitigation profile — 2026-11-25
+## Current strict profile — 2026-11-25 12:54 Europe/Rome
 
-After repeated morning false wakes, both speakers now use verifier cutoff **0.8**, raised from **0.2**, through `/opt/nyra-wake/profiles/20261125-less-false-wakes` and the systemd drop-in `20-confirmation-profile.conf`. Model weights, primary detector, VAD, firmware and timing are unchanged; original hashed export remains intact. The baseline metrics below refer to the original 0.2 profile.
+User confirmed that all six detections in the preceding monitored hour were false. The active shared service now uses `profiles/20261125-strict98`, verifier cutoff **0.98**, replacing0.8. All six recorded scores were below0.98 (maximum0.9721), so the new threshold would reject those six. This is not a guarantee against future false wakes. Weights, primary detector, timing, firmware and prior profiles are preserved. Saved-score replay yields **1,953/2,835 positives (68.89%)** and3ambientevents/260minutes: a substantial sensitivity tradeoff explicitly communicated before applying. Real-room recall remains unmeasured. [Receipt](../voice/wakeword/reports/strict98_20261125.json).
+
+## Earlier mitigation profile — 2026-11-25
+
+After repeated morning false wakes, both speakers initially used verifier cutoff **0.8**, raised from **0.2**, through `/opt/nyra-wake/profiles/20261125-less-false-wakes` and the systemd drop-in `20-confirmation-profile.conf`. Model weights, primary detector, VAD, firmware and timing are unchanged; original hashed export remains intact. The baseline metrics below refer to the original 0.2 profile.
 
 Filtering the stored candidate scores at 0.8 gives held-out positives **2,628/2,835 (92.70%)** versus 2,767/2,835, and synthetic ambient events **5/17** over the same 260 minutes (1.15 events/hour). This is score replay, not a new end-to-end room test; it does not establish a 70% reduction at home. Higher false-wake scores were also observed in morning logs, so some spontaneous wakes may remain.
 

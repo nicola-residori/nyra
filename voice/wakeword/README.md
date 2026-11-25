@@ -60,3 +60,7 @@ Upstream provenance: openWakeWord `368c03716d1e92591906a84949bc477f3a834455`; py
 ## Current false-wake mitigation (2026-11-25)
 
 The active service uses `profiles/20261125-less-false-wakes`, verifier cutoff0.8; the original `model` export remains immutable at0.2. See the current wake-word guide for recall/false-event tradeoffs. To reconstruct this profile, copy its tracked config/manifest into the same relative directory under `/opt/nyra-wake`; for each manifest entry except `config.json`, restore the matching original model file or create a symlink to `/opt/nyra-wake/model/<name>`. Verify every manifest SHA. Install the tracked `20-confirmation-profile.conf` into `/etc/systemd/system/nyra-wake.service.d/`, then reload/restart the service. This separate profile/drop-in preserves the original model bundle and does not require new speaker firmware. No new training or complete dataset generation was performed.
+
+## Strict confirmation supersedes 0.8
+
+As of 2026-11-25 12:54 Europe/Rome the active profile is `profiles/20261125-strict98`, cutoff0.98. Restore using that directory and its drop-in, following the same symlink/manifest procedure above. The earlier0.8 profile is historical and preserved. User confirmed all six recent wakes were false; their scores would all be rejected at0.98. Saved-score positive recall drops to68.89%; human recall and future room false-wake rate remain unmeasured.
