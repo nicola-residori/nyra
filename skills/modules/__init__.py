@@ -7,6 +7,7 @@ from skills.modules.home_assistant import (
     RouterHomeAssistantCapabilityClient,
 )
 from skills.modules.identity import IdentityQuerySkill
+from skills.modules.local_time import LocalTimeSkill
 from skills.modules.memory_management import MemoryManagementSkill
 from skills.registry import SkillDefinition, SkillRegistry
 
@@ -46,6 +47,10 @@ def register_builtin_skills(
             executor=memory_management.execute,
         )
     )
+
+    clock = LocalTimeSkill(alert_timezone)
+    registry.register(SkillDefinition(name=clock.name, priority=clock.priority,
+                                      matcher=clock.matches, executor=clock.execute))
 
     identity = IdentityQuerySkill()
     registry.register(

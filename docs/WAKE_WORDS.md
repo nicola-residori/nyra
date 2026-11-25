@@ -1,12 +1,14 @@
 # Wake word: current installed configuration
 
-Soggiorno and Mansarda use the Italian **Ehi Nira** provider on the home server. The current profile started on 25 November 2026 at 18:58 Europe/Rome.
+Soggiorno and Mansarda use the Italian **Ehi Nira** provider on the home server. The current profile started on the evening of 25 November 2026.
 
 Say **“Ehi Nira, che ore sono?”** naturally, without waiting between wake phrase and command. Spaced and joined pronunciations (`ei`, `hei`, `hey`, `ehinira`) are positive cases. **“Nira” alone is excluded.** There is no promise of identical performance for every pronunciation or room.
 
 ## Current room profile
 
-The shared service uses `ctc-it-quiet`. For acoustic scores from 0.85 to below 0.98 it normally requires a letter-alignment cost of 2 or less. If the primary score reaches 0.95 and the lead-in contains zero speech frames, it allows a cost up to 8. The standard branch still requires an acoustic score of 0.98 and a cost up to 14. See the [comparison with the previous profile](../voice/wakeword/README.md#quiet-calls-with-strong-primary-evidence).
+The shared service uses `ctc-it-quiet12`. For acoustic scores from 0.85 to below 0.98 it normally requires a letter-alignment cost of 2 or less. If the primary score reaches 0.90 and the lead-in contains zero speech frames, it allows a cost up to 12. The standard branch still requires an acoustic score of 0.98 and a cost up to 14. See the [comparison with the previous profile](../voice/wakeword/README.md#quiet-calls-with-strong-primary-evidence).
+
+Nyra forwards joined commands through `stt.nyra_command_stt` to the same Home Assistant Cloud transcriber. The custom STT entry measures speech after the wake timestamp so speech already buffered during verification counts toward the end of the command. Soggiorno uses aggressive end-of-speech detection. The local-time skill answers direct Italian clock questions from the configured household time zone and closes the conversation.
 
 The service checks the acoustic score, the sounds of the greeting and name, and whether speech was already in progress before the call. This reduces the chance of taking part of a conversation as a wake word. Continuous speech from a TV can also mask an intentional call. The deployed profile and the comparison on synthetic audio are documented in [the wake service guide](../voice/wakeword/README.md#italian-phrase-and-prior-speech-checks).
 

@@ -1,6 +1,6 @@
 # Nyra Italian server wake provider
 
-The active profile for Soggiorno and Mansarda is `profiles/ctc-it-quiet`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
+The active profile for Soggiorno and Mansarda is `profiles/ctc-it-quiet12`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
 
 ## Layout
 
@@ -90,3 +90,11 @@ For recovery, verify the selective profile manifest. Its five shared assets (inc
 The active shared profile since 18:58 Europe/Rome on November 25 accepts a marginal candidate at letter-alignment cost up to 8 only when the primary score reaches 0.95 and all 48 lead-in frames are below the speech threshold. It otherwise uses the preceding selective profile's limits. The saved numeric evidence for a candidate coinciding with a reported missed call passes this rule in replay. The household audio was not retained.
 
 On the development testing panel, detected calls increased from 46 to 49 of 60. False detections on the 600 similar utterances increased from one to two. All 260 minutes of synthetic background, 945 solo-name cases and 500 speech cases still produced zero detections. The separate 60-call panel increased from 40 to 41. The on-server Home Assistant synthetic wake and STT test passed after deployment, and both live streams resumed. Room performance with this profile requires observation. Restore using the preceding profile procedure with the quiet profile's directory, manifest and drop-in.
+
+## Joined commands and Italian local time
+
+The November 25 evening profile is `ctc-it-quiet12`. Use the four runtime modules under `ctc-it-quiet/runtime/` and the manifest, config and drop-in under `ctc-it-quiet12/`. The quiet branch accepts a primary score from 0.90 with alignment cost up to 12 and zero prior speech frames. On the reference testing panel, detected calls increased from 49 to 52 of 60 and close-sounding negative hits increased from two to three of 600. There were zero wakes across 260 minutes of synthetic background. On the separate 60-call sample, detections increased from 41 to 47. Household false-wake rates for this profile require further observation.
+
+Restore all files in `homeassistant/custom_components/nyra_wake/` as a unit. Set the Nyra pipeline STT engine to `stt.nyra_command_stt`. The entity delegates to `stt.home_assistant_cloud` using the existing HA account. The task-local wake timestamp offset excludes the greeting from end-of-speech scoring while preserving the PCM for transcription. The extra end detector requires 160 ms of voiced frames and 450 ms of subsequent silence. For STT-only calls without a Nyra wake, the underlying pipeline controls endpointing. Soggiorno's native finished-speaking selector is set to aggressive. Clock requests use the local Italian time skill in nyra-skills and the household's configured time zone.
+
+An identical synthetic wake and immediately joined clock request with VAD enabled took 12.73 seconds from wake recognition to final transcription before the STT correction and 0.71 seconds afterwards. The complete synthetic pipeline generated a time reply about 1.0 second after recognition without opening a follow-up turn. This excludes the time spent recognizing the wake and the physical playback delay. Cloud transcription can still mishear an entire fast utterance, even when tested separately with all the original PCM.
