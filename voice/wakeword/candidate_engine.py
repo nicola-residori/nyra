@@ -5,7 +5,7 @@ import json,time,logging
 import numpy as np,onnxruntime as ort
 from pyopen_wakeword import OpenWakeWord
 from cached_frontend import CachedStreamFront
-from phrase_confirmation import PhraseConfirmation
+from phrase_confirmation import PhraseConfirmation, phrase_matches
 
 class VoiceGate:
  def __init__(self,path):
@@ -63,10 +63,7 @@ class CandidateEngine:
    phrase_ok=True
    if phrase_cost is not None:
     prior_frames=sum(p>=.5 for p in probs[:48])
-    cost_limit=self.config['phrase_max_cost']
-    if probability<self.config['verifier_cutoff']:
-     cost_limit=self.config['clear_phrase_max_cost']
-    phrase_ok=phrase_cost<=cost_limit and prior_frames<=self.config['max_prior_speech_frames']
+    phrase_ok=phrase_matches(self.config, probability, entry['primary_probability'], phrase_cost, prior_frames)
     record['prior_speech_frames']=entry['prior_speech_frames']=prior_frames
     if not phrase_ok:
      event='PHRASE_REJECT' if probability>=self.config['verifier_cutoff'] else 'MARGINAL_REJECT'

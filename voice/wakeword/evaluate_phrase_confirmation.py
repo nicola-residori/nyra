@@ -10,7 +10,7 @@ import numpy as np
 import onnxruntime as ort
 
 from evaluate_candidate import render
-from phrase_confirmation import PhraseConfirmation
+from phrase_confirmation import PhraseConfirmation, phrase_matches
 from candidate_engine import VoiceGate
 
 
@@ -55,14 +55,9 @@ def replay(data, results, profile, split):
             probability, logits = session.run(None, {'audio': audio[None]})
             if abs(probability.item() - previous) > 1e-4:
                 raise ValueError('Acoustic parity failed at ' + row['key'])
-            score = probability.item()
-            if score >= config['verifier_cutoff']:
-                accepted = gate.cost(logits) <= config['phrase_max_cost']
-            else:
-                accepted = ('clear_phrase_cutoff' in config and score >= config['clear_phrase_cutoff']
-                            and gate.cost(logits) <= config['clear_phrase_max_cost'])
             prior_frames = sum(p >= .5 for p in vad.probabilities(audio)[:48])
-            accepted = accepted and prior_frames <= config['max_prior_speech_frames']
+            accepted = phrase_matches(config, probability.item(), event['primary_probability'],
+                                      gate.cost(logits), prior_frames)
             stats['previous_events'] += int(previous >= .98)
             stats['events'] += int(accepted)
             if accepted and (not positive(row) or 4 <= event['t'] <= 5 + item['row']['duration']):

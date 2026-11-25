@@ -1,6 +1,6 @@
 # Nyra Italian server wake provider
 
-The active profile for Soggiorno and Mansarda is `profiles/ctc-it-selective`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
+The active profile for Soggiorno and Mansarda is `profiles/ctc-it-quiet`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
 
 ## Layout
 
@@ -84,3 +84,9 @@ On November 25 at 18:53 Europe/Rome the service enabled a second decision branch
 The reference sample improved from 42 to 46 of 60 calls. The same 600 hard negatives still produced one wake, with zero on the 945 solo-name examples, 500 ordinary speech examples and 260 minutes of background. Those cases were inspected during development. On the separate 60-call sample, recovery improved from 37 to 40. The end-to-end synthetic wake and immediate command passed through Home Assistant STT after deployment.
 
 For recovery, verify the selective profile manifest. Its five shared assets (including the vocabulary) resolve to the verified ctc-it files. Install the current four runtime modules under the selective profile's `runtime/` path and use its service drop-in.
+
+## Quiet calls with strong primary evidence
+
+The active shared profile since 18:58 Europe/Rome on November 25 accepts a marginal candidate at letter-alignment cost up to 8 only when the primary score reaches 0.95 and all 48 lead-in frames are below the speech threshold. It otherwise uses the preceding selective profile's limits. The saved numeric evidence for a candidate coinciding with a reported missed call passes this rule in replay. The household audio was not retained.
+
+On the development testing panel, detected calls increased from 46 to 49 of 60. False detections on the 600 similar utterances increased from one to two. All 260 minutes of synthetic background, 945 solo-name cases and 500 speech cases still produced zero detections. The separate 60-call panel increased from 40 to 41. The on-server Home Assistant synthetic wake and STT test passed after deployment, and both live streams resumed. Room performance with this profile requires observation. Restore using the preceding profile procedure with the quiet profile's directory, manifest and drop-in.

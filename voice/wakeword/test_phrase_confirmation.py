@@ -68,3 +68,12 @@ class StreamingDecisionTests(unittest.TestCase):
         self.assertFalse(self.decision(0, 2.1, probability=.97, selective=True))
         self.assertFalse(self.decision(0, 0, probability=.84, selective=True))
         self.assertTrue(self.decision(6, 14, probability=.99, selective=True))
+
+    def test_quiet_profile_requires_both_detectors_and_a_quiet_lead_in(self):
+        from phrase_confirmation import phrase_matches
+        config = json.loads((Path(__file__).parent / 'profiles/ctc-it-quiet/config.json').read_text())
+        self.assertTrue(phrase_matches(config, .9372, .9954, 6.91, 0))
+        self.assertFalse(phrase_matches(config, .9372, .9954, 6.91, 1))
+        self.assertFalse(phrase_matches(config, .9372, .94, 6.91, 0))
+        self.assertFalse(phrase_matches(config, .84, .9954, 6.91, 0))
+        self.assertFalse(phrase_matches(config, .9372, .9954, 8.1, 0))

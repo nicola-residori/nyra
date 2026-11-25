@@ -4,6 +4,20 @@ import unicodedata
 import numpy as np
 
 
+def phrase_matches(config, acoustic, primary, cost, prior_frames):
+    """Apply the same decision to a live candidate and a benchmark replay."""
+    if prior_frames > config['max_prior_speech_frames']:
+        return False
+    if acoustic >= config['verifier_cutoff']:
+        return cost <= config['phrase_max_cost']
+    if 'clear_phrase_cutoff' not in config or acoustic < config['clear_phrase_cutoff']:
+        return False
+    if (prior_frames == 0 and 'quiet_primary_cutoff' in config
+            and primary >= config['quiet_primary_cutoff']):
+        return cost <= config['quiet_phrase_max_cost']
+    return cost <= config['clear_phrase_max_cost']
+
+
 class PhraseConfirmation:
     def __init__(self, vocabulary):
         def fold(token):

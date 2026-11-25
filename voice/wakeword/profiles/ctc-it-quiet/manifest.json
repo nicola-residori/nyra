@@ -1,0 +1,8 @@
+{
+  "primary_ehi_nira.tflite": "995d06b164d4e2e37a78fa55d772b907a96eb20c49ca8981d657b26432e6e242",
+  "verifier.int8.onnx": "fc4b5d0df349b60da36a8481d5fb9e7aceade2eda62971b5d86315b47f02fcc6",
+  "silero_vad.onnx": "f6f4407b41e05e277e7f5cfd9b9ae957b1dfe763c6076a934734c0b448e09b31",
+  "config.json": "ab13ceba7b033802868fa0aabbd757126b57d409870f045a08cef657947c8d6d",
+  "parity_inputs.npz": "3cbfee9cc11c8edc554a65f3fbfa2b3f9123df37efb110a2bb26f356f6074a41",
+  "vocab.json": "deee9194b91e4e4f628ff37da6226a9c9cfe564810c917ae545920458723c58e"
+}
