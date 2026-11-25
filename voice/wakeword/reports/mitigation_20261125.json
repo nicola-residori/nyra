@@ -1,0 +1,24 @@
+{
+  "changed_utc": "2026-11-25T10:38:43.483103+00:00",
+  "profile": "/opt/nyra-wake/profiles/20261125-less-false-wakes",
+  "original_config_untouched": true,
+  "only_changed_inference_parameter": "verifier_cutoff",
+  "before": 0.2,
+  "after": 0.8,
+  "testing_saved_score_replay": {
+    "positive_before": [
+      2767,
+      2835
+    ],
+    "positive_after": [
+      2628,
+      2835
+    ],
+    "ambient_events_before": 17,
+    "ambient_events_after": 5,
+    "ambient_hours": 4.333333333333333
+  },
+  "human_test": false,
+  "room_false_wake_reduction_not_measured": true,
+  "scope": "both speakers using shared provider"
+}

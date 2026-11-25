@@ -4,6 +4,14 @@ As of 2026-11-25, **Soggiorno and Mansarda use the home-server Italian `Ehi Nira
 
 Say **“Ehi Nira, che ore sono?”** naturally, without waiting between wake phrase and command. Spaced and joined pronunciations (`ei`, `hei`, `hey`, `ehinira`) are positive cases. **“Nira” alone is excluded.** There is no promise of identical performance for every pronunciation or room.
 
+## Active mitigation profile — 2026-11-25
+
+After repeated morning false wakes, both speakers now use verifier cutoff **0.8**, raised from **0.2**, through `/opt/nyra-wake/profiles/20261125-less-false-wakes` and the systemd drop-in `20-confirmation-profile.conf`. Model weights, primary detector, VAD, firmware and timing are unchanged; original hashed export remains intact. The baseline metrics below refer to the original 0.2 profile.
+
+Filtering the stored candidate scores at 0.8 gives held-out positives **2,628/2,835 (92.70%)** versus 2,767/2,835, and synthetic ambient events **5/17** over the same 260 minutes (1.15 events/hour). This is score replay, not a new end-to-end room test; it does not establish a 70% reduction at home. Higher false-wake scores were also observed in morning logs, so some spontaneous wakes may remain.
+
+Both live microphone streams/clock states were verified after the service restart. Actual HA synthetic wake→STT passed at probability0.996, with the following command preserved; no household action or TTS was executed. User-voice performance after this change remains unmeasured. [Mitigation receipt](../voice/wakeword/reports/mitigation_20261125.json).
+
 ## Audio path and dependencies
 
 ESPHome microphone → Home Assistant `nyra_wake` buffered provider → Wyoming server on the home Intel N100 → openWakeWord primary detector → Italian wav2vec2 V2 INT8 verifier + Silero VAD → existing Nyra Assist pipeline.
@@ -41,4 +49,4 @@ Technical checks passed: model/config hashes, complete result identity, finite s
 - [HA integration source](../homeassistant/custom_components/nyra_wake)
 - [Historical local-model documentation](WAKE_WORDS_LEGACY.md) — superseded for these two installed speakers.
 
-Keep this installed configuration unchanged during the requested room trial. Note speaker, approximate time, background noise/TV, missed wakes, spontaneous wakes and truncated commands. Do not silently retrain, adjust thresholds, restart old Colab jobs, or flash older weights. Alarm handling, arm/disarm chimes, identity and other speaker functions must be preserved in future changes.
+Keep the active mitigation profile stable while measuring the room trial. Note speaker, approximate time, background noise/TV, missed wakes, spontaneous wakes and truncated commands. Do not silently retrain, adjust thresholds, restart old Colab jobs, or flash older weights. Alarm handling, arm/disarm chimes, identity and other speaker functions must be preserved in future changes.
