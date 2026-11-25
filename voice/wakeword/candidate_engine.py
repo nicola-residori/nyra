@@ -23,6 +23,10 @@ class CandidateEngine:
   self.history_limit=history_limit
   self.directory=Path(directory);self.config=json.loads((self.directory/'config.json').read_text());self.front=CachedStreamFront();self.primary=OpenWakeWord.from_model(self.directory/'primary_ehi_nira.tflite');self.vad=VoiceGate(self.directory/'silero_vad.onnx');self.session=None
   self.phrase_gate=None
+  if 'clear_phrase_cutoff' in self.config:
+   if not (0 < self.config['clear_phrase_cutoff'] < self.config['verifier_cutoff']
+           and 0 <= self.config['clear_phrase_max_cost'] < self.config['phrase_max_cost']):
+    raise ValueError('Invalid thresholds for clear phrase confirmation')
   if 'phrase_max_cost' in self.config:
    self.phrase_gate=PhraseConfirmation(json.loads((self.directory/'vocab.json').read_text()))
   if not skip_verifier:
@@ -48,23 +52,28 @@ class CandidateEngine:
    if len(audio)<self.config['verifier_window_samples']:audio=np.pad(audio,(self.config['verifier_window_samples']-len(audio),0))
    assert len(audio)==44800;probs=self.vad.probabilities(audio);speech=sum(p>=self.config['vad_cutoff'] for p in probs)*.032;started=time.monotonic();probability=None
    phrase_cost=None
+   min_score=self.config.get('clear_phrase_cutoff',self.config['verifier_cutoff'])
    if speech>=self.config['vad_min_speech_seconds'] and self.session is not None:
     outputs=self.session.run(None,{'audio':audio[None]})
     probability=float(outputs[0].item())
-    if probability>=self.config['verifier_cutoff'] and self.phrase_gate:
+    if probability>=min_score and self.phrase_gate:
      phrase_cost=self.phrase_gate.cost(outputs[1])
    record=dict(candidate_t=candidate,t=deadline,probability=probability,vad_speech_seconds=speech,verifier_wall_seconds=time.monotonic()-started);entry.update(record)
    if phrase_cost is not None:record['phrase_cost']=entry['phrase_cost']=phrase_cost
    phrase_ok=True
    if phrase_cost is not None:
     prior_frames=sum(p>=.5 for p in probs[:48])
-    phrase_ok=phrase_cost<=self.config['phrase_max_cost'] and prior_frames<=self.config['max_prior_speech_frames']
+    cost_limit=self.config['phrase_max_cost']
+    if probability<self.config['verifier_cutoff']:
+     cost_limit=self.config['clear_phrase_max_cost']
+    phrase_ok=phrase_cost<=cost_limit and prior_frames<=self.config['max_prior_speech_frames']
     record['prior_speech_frames']=entry['prior_speech_frames']=prior_frames
     if not phrase_ok:
-     logging.info('PHRASE_REJECT acoustic=%.4f cost=%.2f prior_speech_frames=%d',probability,phrase_cost,prior_frames)
+     event='PHRASE_REJECT' if probability>=self.config['verifier_cutoff'] else 'MARGINAL_REJECT'
+     logging.info('%s acoustic=%.4f cost=%.2f prior_speech_frames=%d',event,probability,phrase_cost,prior_frames)
    elif 'phrase_max_cost' in self.config:
     phrase_ok=False
-   if phrase_ok and probability is not None and probability>=self.config['verifier_cutoff']:
+   if phrase_ok and probability is not None and probability>=min_score:
     self.detections.append(record);emitted.append(record)
     if self.history_limit and len(self.detections)>self.history_limit:del self.detections[:-self.history_limit]
   return emitted

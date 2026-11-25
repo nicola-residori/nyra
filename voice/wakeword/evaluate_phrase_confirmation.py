@@ -45,7 +45,7 @@ def replay(data, results, profile, split):
         hit = False
         for event in row['candidates']:
             previous = event.get('probability')
-            if previous is None or previous < min(.98, config['verifier_cutoff']):
+            if previous is None or previous < min(.98, config.get('clear_phrase_cutoff', config['verifier_cutoff'])):
                 continue
             if pcm is None:
                 pcm = render(item, data, worker)
@@ -55,7 +55,12 @@ def replay(data, results, profile, split):
             probability, logits = session.run(None, {'audio': audio[None]})
             if abs(probability.item() - previous) > 1e-4:
                 raise ValueError('Acoustic parity failed at ' + row['key'])
-            accepted = probability.item() >= config['verifier_cutoff'] and gate.cost(logits) <= config['phrase_max_cost']
+            score = probability.item()
+            if score >= config['verifier_cutoff']:
+                accepted = gate.cost(logits) <= config['phrase_max_cost']
+            else:
+                accepted = ('clear_phrase_cutoff' in config and score >= config['clear_phrase_cutoff']
+                            and gate.cost(logits) <= config['clear_phrase_max_cost'])
             prior_frames = sum(p >= .5 for p in vad.probabilities(audio)[:48])
             accepted = accepted and prior_frames <= config['max_prior_speech_frames']
             stats['previous_events'] += int(previous >= .98)

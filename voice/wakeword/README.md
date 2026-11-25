@@ -1,6 +1,6 @@
 # Nyra Italian server wake provider
 
-The active profile for Soggiorno and Mansarda is `profiles/ctc-it`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
+The active profile for Soggiorno and Mansarda is `profiles/ctc-it-selective`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
 
 ## Layout
 
@@ -76,3 +76,11 @@ Restore the original profile assets listed in the manifest. Place the new verifi
 The [comparison on synthetic cases](reports/phrase_20261125.json) uses the same original candidate times for both profiles. The reference testing panel was inspected during development. A separate sample and fresh synthetic mixtures were reserved for the final check. To reproduce the reference comparison, run `evaluate_phrase_confirmation.py TESTDATA ORIGINAL_RESULTS_JSONL PROFILE testing` and repeat with `validation`. The home integration test sent an approved synthetic wake and immediate command through wake detection and STT. It stopped before intent execution. Human recognition and household false wakes are measured separately.
 
 On the reference testing panel the new profile suppressed all three prior background wakes in 260 minutes, retained 42 of 60 intended calls and still accepted one of 600 hard negatives. The separate post-selection check detected 37 of 60 synthetic calls versus 38 with the old profile. Both produced zero events in 16 minutes of newly mixed synthetic negatives. This second sample used held-back cases from the same synthetic corpus. It cannot establish the false-wake rate in an occupied room.
+
+## Selective confirmation for missed calls
+
+On November 25 at 18:53 Europe/Rome the service enabled a second decision branch. An acoustic score of at least 0.85 can pass if the letter alignment costs at most 2. The original branch still requires 0.98 and permits a cost of up to 14. Both require at most six prior speech frames. The weights and the two streaming frontends are identical. Scores below 0.98 previously skipped letter alignment, so earlier missed household calls cannot be reclassified retrospectively. Marginal rejections now log numeric scores separately as `MARGINAL_REJECT`.
+
+The reference sample improved from 42 to 46 of 60 calls. The same 600 hard negatives still produced one wake, with zero on the 945 solo-name examples, 500 ordinary speech examples and 260 minutes of background. Those cases were inspected during development. On the separate 60-call sample, recovery improved from 37 to 40. The end-to-end synthetic wake and immediate command passed through Home Assistant STT after deployment.
+
+For recovery, verify the selective profile manifest. Its five shared assets (including the vocabulary) resolve to the verified ctc-it files. Install the current four runtime modules under the selective profile's `runtime/` path and use its service drop-in.

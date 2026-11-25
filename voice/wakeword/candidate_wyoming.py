@@ -16,7 +16,7 @@ def info():
  a=Attribution(name='Nyra research candidate',url='https://github.com/rhasspy/pyopen-wakeword')
  return Info(wake=[WakeProgram(name='Nyra Italian candidate',attribution=a,installed=True,description='Experimental Ehi Nira server recognizer',version='italian-v2-int8-1',models=[WakeModel(name=NAME,attribution=a,installed=True,description='Ehi Nira',version='1',languages=['it'],phrase='Ehi Nira')])])
 def diagnostic_snapshot(engines):
- fields=('t','candidate_t','primary_probability','probability','vad_speech_seconds','verifier_wall_seconds')
+ fields=('t','candidate_t','primary_probability','probability','vad_speech_seconds','verifier_wall_seconds','phrase_cost','prior_speech_frames')
  def scalar_rows(rows):return [{k:r[k] for k in fields if k in r and isinstance(r[k],(int,float,type(None)))} for r in rows[-12:]]
  return [dict(engine=i,audio_seconds_processed=e.samples/16000,candidates=scalar_rows(e.candidates),detections=scalar_rows(e.detections)) for i,e in enumerate(engines)]
 class ReadyEngines:

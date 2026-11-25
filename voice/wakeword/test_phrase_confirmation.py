@@ -35,12 +35,14 @@ class Tests(unittest.TestCase):
         self.assertGreaterEqual(self.gate.cost(self.frames('ei|nira', trailing=80)), 20)
 
 class StreamingDecisionTests(unittest.TestCase):
-    def decision(self, prior_frames, cost, probability=.99):
+    def decision(self, prior_frames, cost, probability=.99, selective=False):
         from unittest.mock import Mock
         from test_candidate_history import engine
         candidate = engine(None)
         candidate.config.update(verifier_cutoff=.98, phrase_max_cost=14.,
                                 max_prior_speech_frames=6)
+        if selective:
+            candidate.config.update(clear_phrase_cutoff=.85, clear_phrase_max_cost=2.)
         candidate.vad = Mock()
         candidate.vad.probabilities.return_value = [1.] * prior_frames + [0.] * (48 - prior_frames) + [1.] * 40
         candidate.session = Mock()
@@ -59,3 +61,10 @@ class StreamingDecisionTests(unittest.TestCase):
         self.assertFalse(self.decision(0, 15))
         self.assertFalse(self.decision(0, 0, probability=.97))
         self.assertTrue(self.decision(0, 14))
+
+    def test_recovers_only_clear_marginal_calls_after_a_quiet_lead_in(self):
+        self.assertTrue(self.decision(6, 2, probability=.90, selective=True))
+        self.assertFalse(self.decision(7, 2, probability=.90, selective=True))
+        self.assertFalse(self.decision(0, 2.1, probability=.97, selective=True))
+        self.assertFalse(self.decision(0, 0, probability=.84, selective=True))
+        self.assertTrue(self.decision(6, 14, probability=.99, selective=True))

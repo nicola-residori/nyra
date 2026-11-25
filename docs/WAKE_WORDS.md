@@ -1,10 +1,12 @@
 # Wake word: current installed configuration
 
-Soggiorno and Mansarda use the Italian **Ehi Nira** provider on the home server. The current profile started on 25 November 2026 at 15:05 Europe/Rome.
+Soggiorno and Mansarda use the Italian **Ehi Nira** provider on the home server. The current profile started on 25 November 2026 at 18:53 Europe/Rome.
 
 Say **“Ehi Nira, che ore sono?”** naturally, without waiting between wake phrase and command. Spaced and joined pronunciations (`ei`, `hei`, `hey`, `ehinira`) are positive cases. **“Nira” alone is excluded.** There is no promise of identical performance for every pronunciation or room.
 
 ## Current room profile
+
+The shared service uses `ctc-it-selective`. The normal acoustic threshold is 0.98. Scores from 0.85 to below 0.98 qualify only when the Italian greeting and name align with a cost of 2 or less. Both branches require the same quiet lead-in. The selective branch recovered three of the 23 missed calls on a separate 60-case synthetic panel. Human call success and false wakes need to be measured in the rooms.
 
 The service checks the acoustic score, the sounds of the greeting and name, and whether speech was already in progress before the call. This reduces the chance of taking part of a conversation as a wake word. Continuous speech from a TV can also mask an intentional call. The deployed profile and the comparison on synthetic audio are documented in [the wake service guide](../voice/wakeword/README.md#italian-phrase-and-prior-speech-checks).
 
