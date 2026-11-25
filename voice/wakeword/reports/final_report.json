@@ -1,0 +1,362 @@
+{
+  "completed_cases": 6680,
+  "expected_cases": 6680,
+  "metrics": {
+    "validation": {
+      "completed": 1560,
+      "positive_hits": 927,
+      "positive_total": 945,
+      "recall": 0.9809523809523809,
+      "ambient_events": 3,
+      "ambient_hours": 1.0833333333333333,
+      "faph": 2.7692307692307696,
+      "hard_hits": 4,
+      "hard_total": 120,
+      "speech_hits": 0,
+      "speech_total": 120,
+      "solo_nira_hits": 1,
+      "solo_nira_total": 315,
+      "preword": 0,
+      "by_variant": {
+        "ei_spaced": [
+          105,
+          105
+        ],
+        "hei_spaced": [
+          105,
+          105
+        ],
+        "hey_spaced": [
+          103,
+          105
+        ],
+        "joined_ehi": [
+          98,
+          105
+        ],
+        "joined_ei": [
+          103,
+          105
+        ],
+        "joined_hei": [
+          104,
+          105
+        ],
+        "joined_hey": [
+          104,
+          105
+        ],
+        "pause": [
+          100,
+          105
+        ],
+        "spaced": [
+          105,
+          105
+        ]
+      },
+      "by_condition": {
+        "clean__floor-75": [
+          44,
+          45
+        ],
+        "clean__floor-60": [
+          44,
+          45
+        ],
+        "clean__floor-45": [
+          44,
+          45
+        ],
+        "quiet__floor-75": [
+          45,
+          45
+        ],
+        "quiet__floor-60": [
+          45,
+          45
+        ],
+        "quiet__floor-45": [
+          43,
+          45
+        ],
+        "off_axis_mild__floor-75": [
+          44,
+          45
+        ],
+        "off_axis_mild__floor-60": [
+          45,
+          45
+        ],
+        "off_axis_mild__floor-45": [
+          45,
+          45
+        ],
+        "off_axis_strong__floor-75": [
+          45,
+          45
+        ],
+        "off_axis_strong__floor-60": [
+          44,
+          45
+        ],
+        "off_axis_strong__floor-45": [
+          45,
+          45
+        ],
+        "reflections__floor-75": [
+          44,
+          45
+        ],
+        "reflections__floor-60": [
+          45,
+          45
+        ],
+        "reflections__floor-45": [
+          45,
+          45
+        ],
+        "noise_snr10__floor-75": [
+          43,
+          45
+        ],
+        "noise_snr10__floor-60": [
+          43,
+          45
+        ],
+        "noise_snr10__floor-45": [
+          43,
+          45
+        ],
+        "off_axis_noise__floor-75": [
+          43,
+          45
+        ],
+        "off_axis_noise__floor-60": [
+          44,
+          45
+        ],
+        "off_axis_noise__floor-45": [
+          44,
+          45
+        ]
+      },
+      "by_voice": {
+        "kokoro_nicola": [
+          187,
+          189
+        ],
+        "kokoro_sara": [
+          189,
+          189
+        ],
+        "paola": [
+          189,
+          189
+        ],
+        "riccardo": [
+          176,
+          189
+        ],
+        "serena": [
+          186,
+          189
+        ]
+      },
+      "minimum_condition_recall": 0.9555555555555556,
+      "minimum_variant_recall": 0.9333333333333333,
+      "minimum_voice_recall": 0.9312169312169312
+    },
+    "testing": {
+      "completed": 5120,
+      "positive_hits": 2767,
+      "positive_total": 2835,
+      "recall": 0.9760141093474427,
+      "ambient_events": 17,
+      "ambient_hours": 4.333333333333333,
+      "faph": 3.9230769230769234,
+      "hard_hits": 14,
+      "hard_total": 600,
+      "speech_hits": 0,
+      "speech_total": 500,
+      "solo_nira_hits": 10,
+      "solo_nira_total": 945,
+      "preword": 0,
+      "by_variant": {
+        "ei_spaced": [
+          311,
+          315
+        ],
+        "hei_spaced": [
+          311,
+          315
+        ],
+        "hey_spaced": [
+          314,
+          315
+        ],
+        "joined_ehi": [
+          310,
+          315
+        ],
+        "joined_ei": [
+          302,
+          315
+        ],
+        "joined_hei": [
+          309,
+          315
+        ],
+        "joined_hey": [
+          304,
+          315
+        ],
+        "pause": [
+          298,
+          315
+        ],
+        "spaced": [
+          308,
+          315
+        ]
+      },
+      "by_condition": {
+        "clean__floor-75": [
+          129,
+          135
+        ],
+        "clean__floor-60": [
+          130,
+          135
+        ],
+        "clean__floor-45": [
+          131,
+          135
+        ],
+        "quiet__floor-75": [
+          131,
+          135
+        ],
+        "quiet__floor-60": [
+          132,
+          135
+        ],
+        "quiet__floor-45": [
+          134,
+          135
+        ],
+        "off_axis_mild__floor-75": [
+          133,
+          135
+        ],
+        "off_axis_mild__floor-60": [
+          132,
+          135
+        ],
+        "off_axis_mild__floor-45": [
+          132,
+          135
+        ],
+        "off_axis_strong__floor-75": [
+          133,
+          135
+        ],
+        "off_axis_strong__floor-60": [
+          129,
+          135
+        ],
+        "off_axis_strong__floor-45": [
+          132,
+          135
+        ],
+        "reflections__floor-75": [
+          131,
+          135
+        ],
+        "reflections__floor-60": [
+          130,
+          135
+        ],
+        "reflections__floor-45": [
+          132,
+          135
+        ],
+        "noise_snr10__floor-75": [
+          132,
+          135
+        ],
+        "noise_snr10__floor-60": [
+          133,
+          135
+        ],
+        "noise_snr10__floor-45": [
+          132,
+          135
+        ],
+        "off_axis_noise__floor-75": [
+          133,
+          135
+        ],
+        "off_axis_noise__floor-60": [
+          134,
+          135
+        ],
+        "off_axis_noise__floor-45": [
+          132,
+          135
+        ]
+      },
+      "by_voice": {
+        "kokoro_nicola": [
+          560,
+          567
+        ],
+        "kokoro_sara": [
+          560,
+          567
+        ],
+        "paola": [
+          548,
+          567
+        ],
+        "riccardo": [
+          552,
+          567
+        ],
+        "serena": [
+          547,
+          567
+        ]
+      },
+      "minimum_condition_recall": 0.9555555555555556,
+      "minimum_variant_recall": 0.946031746031746,
+      "minimum_voice_recall": 0.9647266313932981
+    }
+  },
+  "config_sha256": "619dcdf8978086f714815c59db1823b344382cc24a10c552d36ab66db5d45ceb",
+  "model_manifest": {
+    "primary_ehi_nira.tflite": "995d06b164d4e2e37a78fa55d772b907a96eb20c49ca8981d657b26432e6e242",
+    "verifier.int8.onnx": "90cf72e4664ae15817c0b1323e01c0ec66b915fa9806914cb8c1def344f168ff",
+    "silero_vad.onnx": "f6f4407b41e05e277e7f5cfd9b9ae957b1dfe763c6076a934734c0b448e09b31",
+    "config.json": "619dcdf8978086f714815c59db1823b344382cc24a10c552d36ab66db5d45ceb",
+    "parity_inputs.npz": "3cbfee9cc11c8edc554a65f3fbfa2b3f9123df37efb110a2bb26f356f6074a41"
+  },
+  "results_sha256": "fd616a470f333061c0f8d7fea474e026842d303a4d6f52b593c3c1b2ee7917df",
+  "source_plan_sha256": "4889bd54ce4e6902d7c84f7ea38ddc242b6abbd1c953c2b4c06ff0039e5d8493",
+  "updated": 1795558507.16053,
+  "original_strict_validation_target_passed": false,
+  "all_audio_synthetic": true,
+  "human_room_test_performed": false,
+  "test_voice_identities_overlap_training": true,
+  "audio_clock_detection_delay_testing_seconds": {
+    "p50": 0.17793749999999964,
+    "p90": 0.3200624999999997,
+    "note": "Input-audio timestamps only; excludes verifier compute, transport and concurrent-client queue time."
+  },
+  "deployment_authorized_by_report": false,
+  "limits": [
+    "Synthetic validation and testing do not establish human-speaker or room reliability.",
+    "False activations/hour measured on synthetic stress streams, not real TV or room recordings.",
+    "This report does not change the frozen thresholds or approve a production deployment."
+  ]
+}

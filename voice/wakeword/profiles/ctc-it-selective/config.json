@@ -1,0 +1,23 @@
+{
+  "status": "Italian letter confirmation trial",
+  "phrase": "Ehi Nira",
+  "solo_nira_enabled": false,
+  "all_audio_synthetic": true,
+  "primary_cutoff": 0.4,
+  "primary_consecutive_frames": 2,
+  "verifier_cutoff": 0.98,
+  "verifier_window_samples": 44800,
+  "verifier_post_trigger_seconds": 0.24,
+  "vad_cutoff": 0.1,
+  "vad_min_speech_seconds": 0.096,
+  "refractory_seconds": 2.0,
+  "foundation": "jonatasgrosman/wav2vec2-large-xlsr-53-italian",
+  "foundation_revision": "dab04a3e00d8326052f3fb22a6ff276b822f6131",
+  "head": "italian_verifier_v2",
+  "head_sha256": "9172b84703bb8902b3cc61f2aa6b61cf1639623e8232c361a466f666d331a51a",
+  "human_test": false,
+  "phrase_max_cost": 14.0,
+  "max_prior_speech_frames": 6,
+  "clear_phrase_cutoff": 0.85,
+  "clear_phrase_max_cost": 2.0
+}

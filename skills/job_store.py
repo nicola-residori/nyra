@@ -245,7 +245,7 @@ class JobStore:
             cursor = connection.execute("""
                 UPDATE jobs
                 SET status = ?, finished_at = ?, error = COALESCE(error, ?)
-                WHERE status = ?
+                WHERE status = ? AND COALESCE(json_extract(payload_json, '$.kind'), '') != 'voice_alert'
             """, (
                 JobStatus.UNKNOWN_OUTCOME.value, _to_storage(current),
                 "service restarted while job was RUNNING",
@@ -253,5 +253,29 @@ class JobStore:
             ))
             connection.commit()
             return cursor.rowcount
+        finally:
+            self._close(connection)
+
+    def reschedule_alert(self, job_id: str) -> None:
+        connection = self._connect()
+        try:
+            connection.execute("UPDATE jobs SET status = ?, started_at = NULL WHERE job_id = ? AND status = ? AND json_extract(payload_json, '$.kind') = 'voice_alert'", (JobStatus.SCHEDULED.value, job_id, JobStatus.RUNNING.value))
+            connection.commit()
+        finally:
+            self._close(connection)
+
+    def update_alert_payload(self, job_id: str, changes: dict) -> None:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT payload_json FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+            if row is None:
+                raise KeyError(job_id)
+            payload = json.loads(row[0])
+            if payload.get('kind') != 'voice_alert':
+                raise ValueError('not an alert')
+            payload.update(changes)
+            connection.execute("UPDATE jobs SET payload_json = ? WHERE job_id = ?", (json.dumps(payload), job_id))
+            connection.commit()
         finally:
             self._close(connection)

@@ -1,0 +1,1 @@
+{"config":{"step":{"user":{"title":"Nyra Italian Wake","description":"Connect the local Italian wake-word provider.","data":{"host":"Host","port":"Port"}}},"error":{"cannot_connect":"Cannot connect to the Ehi Nira provider."},"abort":{"already_configured":"This provider is already configured."}}}

@@ -1,0 +1,1 @@
+Profilo priorita positivi richiesto dall utente. Gate originale 0.5 FP/h NON superato. Solo test sintetici. Arena stimata. Worker e pesi invariati.

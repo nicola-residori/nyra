@@ -173,7 +173,11 @@ api:
   actions:
     - action: start_va
       then:
-        - voice_assistant.start
+        - if:
+            condition:
+              lambda: 'return !id(nyra_alert).protected_audio();'
+            then:
+              - voice_assistant.start
     - action: stop_va
       then:
         - voice_assistant.stop
@@ -337,10 +341,7 @@ media_player:
       num_channels: 1           # mono hardware, one speaker
       sample_rate: 48000
     on_announcement:
-      - mixer_speaker.apply_ducking:
-          id: media_mixing_input
-          decibel_reduction: 20
-          duration: 0.0s
+      - script.execute: nyra_update_music_ducking
     on_state:
       # Amp follows playback: turn it on the instant audio starts. It stays on
       # afterwards (the speaker then holds the line at clean silence), so there
@@ -361,10 +362,7 @@ media_player:
               - not:
                   media_player.is_announcing:
           then:
-            - mixer_speaker.apply_ducking:
-                id: media_mixing_input
-                decibel_reduction: 0
-                duration: 1.0s
+            - script.execute: nyra_update_music_ducking
     on_mute:
       - delay: 100ms            # debounce
       - script.execute: control_leds_volume_changed
@@ -400,66 +398,36 @@ micro_wake_word:
   vad:
     model: https://github.com/esphome/micro-wake-word-models/raw/main/models/v2/vad.json
   on_wake_word_detected:
-    # Muted (software mute switch)? Do nothing at all.
     - if:
         condition:
-          switch.is_off: mic_mute_switch
+          and:
+            - switch.is_off: mic_mute_switch
+            - lambda: 'return !id(nyra_alert).protected_audio();'
         then:
-          # A timer is ringing -> the wake word just silences it.
-          - if:
-              condition:
-                switch.is_on: timer_ringing
-              then:
-                - switch.turn_off: timer_ringing
-              else:
-                # Already listening -> the wake word cancels the session.
-                - if:
-                    condition:
-                      voice_assistant.is_running:
-                    then:
-                      voice_assistant.stop:
-                    else:
-                      # Announcing -> the wake word stops the announcement.
-                      - if:
-                          condition:
-                            media_player.is_announcing:
-                          then:
-                            - media_player.stop:
-                                announcement: true
-                          # Otherwise: beep, then start Assist.
-                          else:
-                            # Give immediate visual acknowledgement while the
-                            # wake cue finishes outside the captured speech.
-                            - light.turn_on:
-                                id: status_ring
-                                effect: "Pulse Fast"
-                                red: 100%
-                                green: 100%
-                                blue: 100%
-                            - if:
-                                condition:
-                                  switch.is_on: wake_sound
-                                then:
-                                  - script.execute:
-                                      id: play_sound
-                                      priority: true
-                                      sound_file: !lambda return id(wake_word_triggered_sound);
-                                  # Follow the real announcement lifecycle instead of a fixed delay.
-                                  # This starts Assist at the first safe instant while keeping the
-                                  # wake cue out of STT and Speaker-ID audio.
-                                  - wait_until:
-                                      condition:
-                                        media_player.is_announcing:
-                                          id: external_media_player
-                                      timeout: 300ms
-                                  - wait_until:
-                                      condition:
-                                        not:
-                                          media_player.is_announcing:
-                                            id: external_media_player
-                                      timeout: 1200ms
-                            - voice_assistant.start:
-                                wake_word: !lambda return wake_word;
+          # Cancel an earlier handoff before invalidating any current audio.
+          - script.stop: nyra_wake_listen
+          # Wake interrupts ordinary alerts; intrusion is excluded above.
+          - lambda: |-
+              const bool was_alert = id(nyra_alert).active;
+              id(va).invalidate_output();
+              id(nyra_alert).wake();
+              id(nyra_audio_epoch).publish_state(to_string(id(nyra_alert).epoch));
+              if (was_alert) id(nyra_alert_finish).execute();
+          - homeassistant.event:
+              event: esphome.nyra_wake
+              data:
+                source_id: "${source_id}"
+                epoch: !lambda 'return to_string(id(nyra_alert).epoch);'
+          - script.stop: nyra_alert_repeat
+          - switch.turn_off: timer_ringing
+          - script.execute: disable_repeat
+          - voice_assistant.stop:
+          - media_player.stop:
+              id: external_media_player
+              announcement: true
+          - script.execute:
+              id: nyra_wake_listen
+              wake_phrase: !lambda return wake_word;
 
 voice_assistant:
   id: va
@@ -528,10 +496,7 @@ voice_assistant:
               priority: true
               sound_file: !lambda return id(error_cloud_expired);
   on_start:
-    - mixer_speaker.apply_ducking:
-        id: media_mixing_input
-        decibel_reduction: 30    # duck music hard while listening
-        duration: 0.0s
+    - script.execute: nyra_update_music_ducking
   on_listening:
     - lambda: id(voice_assistant_phase) = ${voice_assist_waiting_for_command_phase_id};
     - script.execute: control_leds
@@ -568,10 +533,7 @@ voice_assistant:
     - wait_until:
         not:
           voice_assistant.is_running:
-    - mixer_speaker.apply_ducking:
-        id: media_mixing_input
-        decibel_reduction: 0
-        duration: 1.0s
+    - script.execute: nyra_update_music_ducking
     - if:
         condition:
           lambda: return id(voice_assistant_phase) == ${voice_assist_error_phase_id};
@@ -580,7 +542,11 @@ voice_assistant:
     - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
     - script.execute: control_leds
   on_timer_finished:
-    - switch.turn_on: timer_ringing
+    - if:
+        condition:
+          lambda: 'return !id(nyra_alert).protected_audio();'
+        then:
+          - switch.turn_on: timer_ringing
     - lambda: |
         id(next_timer).publish_state(-1);
         id(next_timer_name).publish_state("-");
@@ -788,6 +754,70 @@ globals:
     restore_value: no
 
 script:
+  - id: nyra_wake_listen
+    mode: restart
+    parameters:
+      wake_phrase: std::string
+    then:
+      - wait_until:
+          condition:
+            and:
+              - not:
+                  voice_assistant.is_running:
+              - not:
+                  media_player.is_announcing: external_media_player
+      # Remain pending until HA has released the old pipeline. A later wake
+      # restarts this script; mute or a higher-priority alert cancels it.
+      - if:
+          condition:
+            and:
+              - switch.is_off: mic_mute_switch
+              - not:
+                  voice_assistant.is_running:
+              - not:
+                  media_player.is_announcing: external_media_player
+          then:
+            # Otherwise: beep, then start Assist.
+            # Give immediate visual acknowledgement while the
+            # wake cue finishes outside the captured speech.
+            - light.turn_on:
+                id: status_ring
+                effect: "Pulse Fast"
+                red: 100%
+                green: 100%
+                blue: 100%
+            - if:
+                condition:
+                  switch.is_on: wake_sound
+                then:
+                  - script.execute:
+                      id: play_sound
+                      priority: true
+                      sound_file: !lambda return id(wake_word_triggered_sound);
+                  # Follow the real announcement lifecycle instead of a fixed delay.
+                  # This starts Assist at the first safe instant while keeping the
+                  # wake cue out of STT and Speaker-ID audio.
+                  - wait_until:
+                      condition:
+                        media_player.is_announcing:
+                          id: external_media_player
+                      timeout: 300ms
+                  - wait_until:
+                      condition:
+                        not:
+                          media_player.is_announcing:
+                            id: external_media_player
+                      timeout: 1200ms
+            - if:
+                condition:
+                  and:
+                    - switch.is_off: mic_mute_switch
+                    - lambda: 'return !id(nyra_alert).active;'
+                    - not:
+                        media_player.is_announcing: external_media_player
+                then:
+                  - voice_assistant.start:
+                      wake_word: !lambda return wake_phrase;
   - id: flash_ring
     then:
       - light.turn_on: { id: status_ring, red: 1.0, green: 0.0, blue: 0.0, brightness: 100%, effect: "None" }
@@ -954,9 +984,10 @@ script:
   - id: play_sound
     parameters:
       priority: bool
-      sound_file: "audio::AudioFile*"
+      sound_file: "nyra::AudioFilePointer"
     then:
       - lambda: |-
+          if (id(nyra_alert).protected_audio()) return;
           if (priority) {
             id(external_media_player)
               ->make_call()
@@ -965,7 +996,7 @@ script:
               .perform();
           }
           if ((id(external_media_player).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING) || priority) {
-            id(external_media_player)->play_file(sound_file, true, false);
+            nyra::play_asset(id(external_media_player), sound_file);
           }
 
   - id: fetch_first_active_timer
@@ -1007,6 +1038,7 @@ script:
     then:
       - lambda: |-
           id(publish_current_time).execute();
+          if (id(nyra_alert).protected_audio()) return;
           if (id(alarm_on).state && id(alarm_time).has_state()) {
             auto set_alarm_time = id(alarm_time).state;
             if (set_alarm_time.length() == 5 &&
@@ -1078,20 +1110,13 @@ select:
       - Slightly sensitive
       - Moderately sensitive
       - Very sensitive
-    # Probability cutoffs are quantised uint8 (255 = 1.0); the comment on each
-    # line is the floating point value. FAPH = false accepts per hour measured
-    # against the Dinner Party Corpus. Values apply to the models pinned above.
+    # Nyra replaces the stock models. Never reuse Alexa/Nabu calibration values.
+    # Slightly sensitive uses each model manifest; other levels lower it by 0.10/0.20.
     on_value:
       - lambda: |-
-          if (x == "Slightly sensitive") {
-            id(alexa).set_probability_cutoff(230);        // 0.90
-            id(okay_nabu).set_probability_cutoff(217);    // 0.85 -> 0.000 FAPH (manifest default)
-          } else if (x == "Moderately sensitive") {
-            id(alexa).set_probability_cutoff(191);        // 0.75
-            id(okay_nabu).set_probability_cutoff(176);    // 0.69 -> 0.376 FAPH
-          } else if (x == "Very sensitive") {
-            id(alexa).set_probability_cutoff(128);        // 0.50
-            id(okay_nabu).set_probability_cutoff(143);    // 0.56 -> 0.751 FAPH
+          const uint8_t sensitivity = x == "Very sensitive" ? 2 : (x == "Moderately sensitive" ? 1 : 0);
+          for (auto &model : id(mww).get_wake_words()) {
+            model->set_probability_cutoff(nyra::wake_word_cutoff(model->get_default_probability_cutoff(), sensitivity));
           }
 
   # Pick the ring animation for each voice-assistant phase, from HA, live.
@@ -1232,6 +1257,7 @@ switch:
     # UNITY gain, not silence. The mic kept hearing the room and only the wake
     # word handler ignored it.
     turn_on_action:
+      - script.stop: nyra_wake_listen
       - lambda: id(mic_is_muted) = true;
       - microphone.mute: i2s_mics
       - script.execute: flash_ring
@@ -1262,26 +1288,24 @@ switch:
     internal: true
     restore_mode: ALWAYS_OFF
     on_turn_on:
-      - mixer_speaker.apply_ducking:
-          id: media_mixing_input
-          decibel_reduction: 20
-          duration: 0.0s
+      - script.execute: nyra_update_music_ducking
       - script.execute: ring_timer
       - script.execute: control_leds
-      - delay: 15min           # give up if nobody stops it
+      - delay: 60s             # all audible timers are capped locally
       - switch.turn_off: timer_ringing
     on_turn_off:
-      - script.execute: disable_repeat
       - if:
           condition:
-            media_player.is_announcing:
+            lambda: 'return !id(nyra_alert).protected_audio();'
           then:
-            media_player.stop:
-              announcement: true
-      - mixer_speaker.apply_ducking:
-          id: media_mixing_input
-          decibel_reduction: 0
-          duration: 1.0s
+            - script.execute: disable_repeat
+            - if:
+                condition:
+                  media_player.is_announcing:
+                then:
+                  media_player.stop:
+                    announcement: true
+      - script.execute: nyra_update_music_ducking
       - script.execute: control_leds
 
   - platform: template

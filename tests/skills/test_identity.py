@@ -183,7 +183,7 @@ def test_identity_skill_is_wired_through_private_registry_and_http_api():
 def test_skills_http_returns_miss_for_unrelated_request():
     client = TestClient(create_app())
     payload = check_request(
-        "che ore sono",
+        "raccontami una favola",
         "it-IT",
         display_name="Nicola Residori",
     )

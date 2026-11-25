@@ -50,6 +50,16 @@ class RouterHomeAssistantCapabilityClient:
         self.timeout = timeout
         self.transport = transport
 
+    async def music(self, payload):
+        async with httpx.AsyncClient(base_url=self.base_url,timeout=max(self.timeout,15),transport=self.transport) as client:
+            response=await client.post("/v1/capabilities/music",json=payload)
+            response.raise_for_status()
+            return response.json()
+
+    async def alert(self, request):
+        from skills.alert_client import RouterAlertClient
+        return await RouterAlertClient(self.base_url, timeout=self.timeout, transport=self.transport).alert(request)
+
     async def resolve(
         self,
         reference: ResourceReference,
@@ -133,12 +143,12 @@ _ACTIONS = {
 _RESOURCE_TERMS = {
     "en": (
         (NyraResourceType.LIGHT, {"light", "lamp"}),
-        (NyraResourceType.SWITCH, {"switch"}),
+        (NyraResourceType.SWITCH, {"switch", "pump"}),
         (NyraResourceType.COVER, {"blind", "cover", "shutter"}),
     ),
     "it": (
         (NyraResourceType.LIGHT, {"luce", "luci", "lampada", "lampade"}),
-        (NyraResourceType.SWITCH, {"interruttore", "interruttori"}),
+        (NyraResourceType.SWITCH, {"interruttore", "interruttori", "pompa"}),
         (NyraResourceType.COVER, {"tenda", "tende", "tapparella", "tapparelle"}),
     ),
 }
@@ -150,6 +160,11 @@ _STOP_WORDS = {
         "quella", "quello", "quell", "della", "dello", "del", "di",
         "la", "il", "lo", "l", "una", "uno",
     },
+}
+
+_REFERENCE_LINK_WORDS = {
+    "it": {"della", "dello", "del", "di", "dell"},
+    "en": {"of", "the"},
 }
 
 _CONTINUATION_PREFIXES = {
@@ -180,6 +195,26 @@ def _meaningful_tokens(value: str, language: str) -> set[str]:
         token
         for token in _normalized(value).split()
         if token not in _STOP_WORDS[language]
+    }
+
+
+def _missing_target_state(pending_state, skill_name):
+    if not isinstance(pending_state, dict):
+        return None
+    state = pending_state.get("llm_clarification")
+    if not isinstance(state, dict) or state.get("reason") != "HA_TARGET_NOT_FOUND" or state.get("skill_name") != skill_name:
+        return None
+    return state
+
+
+def _target_name_reply(text):
+    words = _normalized(text).split()
+    # Questions/new topics go through reasoning, never a named-resource trigger.
+    return 0 < len(words) <= 4 and words[0] not in {
+        "che", "cosa", "come", "quando", "perche", "dimmi", "parliamo", "raccontami",
+        "fammi", "mi", "what", "why", "how", "when", "tell", "show", "give", "let",
+        "activate", "deactivate", "please", "esegui", "attiva", "disattiva", "puoi",
+        "intendevo", "intendo", "volevo", "devi", "non", "annulla", "cancella", "lascia", "pulisci", "aspira",
     }
 
 
@@ -275,9 +310,50 @@ def _resource_type(language: str, reference: str) -> NyraResourceType | None:
     return None
 
 
-def parse_command(text: str, language: str) -> ParsedHomeAssistantCommand | None:
+def _named_trigger(text: str, language: str, *, allow_target_correction: bool = False) -> ParsedHomeAssistantCommand | None:
+    if language != "it":
+        return None
+    value = _normalized(text)
+    if allow_target_correction:
+        value = re.sub(r"^(?:è|e) ", "", value)
+    value = re.sub(r"^(?:esegui|avvia|attiva|lancia) ", "", value)
+    value = re.sub(r"^(?:lo|la|il|uno|una|un|l) ", "", value)
+    match = re.fullmatch(r"(script|scena|automazione) (.+)", value)
+    if match is None:
+        return None
+    kind, reference = match.groups()
+    reference = re.sub(r"^(?:si chiama|chiamato|chiamata) ", "", reference)
+    reference = re.sub(r"^(?:della|dello|del|di|la|il|lo|l) ", "", reference).strip()
+    if not reference:
+        return None
+    resource = {"script": NyraResourceType.SCRIPT, "scena": NyraResourceType.SCENE, "automazione": NyraResourceType.AUTOMATION}[kind]
+    return ParsedHomeAssistantCommand(NyraOperation.TRIGGER, resource, reference)
+
+
+def _cleaning_command(text: str, language: str) -> ParsedHomeAssistantCommand | None:
+    if language != "it":
+        return None
+    match = re.fullmatch(r"(pulisci profondamente|pulisci a fondo|pulisci|aspira) (.+)", _normalized(text))
+    if match is None:
+        return None
+    verb, target = match.groups()
+    target = re.sub(r"^(?:la|il|lo|l|le|i|gli) ", "", target).strip()
+    if not target:
+        return None
+    # Alternative modes, scheduling and conjunctions require semantic interpretation.
+    modifiers = {"a", "fondo", "profondamente", "profonda", "aspirazione", "aspirando", "solo", "senza", "prima", "poi", "domani", "tra", "dopo", "non", "anche", "se", "quando", "e", "invece", "lavando", "lavare"}
+    if set(target.split()) & modifiers:
+        return None
+    mode = "aspirazione" if verb == "aspira" else "profonda" if verb != "pulisci" else "standard"
+    return ParsedHomeAssistantCommand(NyraOperation.TRIGGER, NyraResourceType.SCRIPT, f"pulizia {target} {mode}")
+
+
+def parse_command(text: str, language: str, *, allow_target_correction: bool = False) -> ParsedHomeAssistantCommand | None:
     selected_language = _language(language)
     normalized = _normalized(text)
+    named = _named_trigger(text, selected_language, allow_target_correction=allow_target_correction) or _cleaning_command(text, selected_language)
+    if named is not None:
+        return named
 
     for pattern, operation in _ACTIONS[selected_language]:
         match = pattern.fullmatch(normalized)
@@ -344,9 +420,13 @@ class HomeAssistantActionSkill:
         self.capability = capability
 
     def matches(self, request: SkillCheckRequest) -> bool:
+        missing = _missing_target_state(request.pending_state, self.name)
+        if (missing is not None and missing.get("resource_type") not in {kind.value for kind in _TRIGGERABLE_NAMED_RESOURCES}
+                and parse_command(request.text, request.language, allow_target_correction=_missing_target_state(request.pending_state, self.name) is not None) is None and _target_name_reply(request.text)):
+            return True
         if request.semantic is not None:
             return _semantic_command(request) is not None
-        if parse_command(request.text, request.language) is not None:
+        if parse_command(request.text, request.language, allow_target_correction=_missing_target_state(request.pending_state, self.name) is not None) is not None:
             return True
 
         state = _clarification_state(request.pending_state, self.name)
@@ -362,7 +442,7 @@ class HomeAssistantActionSkill:
         return normalized.startswith(_CONTINUATION_PREFIXES[language])
 
     async def fast_path_match(self, request: SkillCheckRequest) -> SkillMatch | None:
-        if request.semantic is not None or _clarification_state(request.pending_state, self.name) is not None:
+        if request.semantic is not None or _clarification_state(request.pending_state, self.name) is not None or _missing_target_state(request.pending_state, self.name) is not None:
             return None
         language = _language(request.language)
         reference = _normalized(request.text)
@@ -370,6 +450,8 @@ class HomeAssistantActionSkill:
             if reference.startswith(prefix):
                 reference = reference[len(prefix):].strip()
                 break
+        if language == "it":
+            reference = re.sub(r"^(?:la|il|lo|l|uno|una|un) ", "", reference)
         if not reference:
             return None
         correlation = CapabilityCorrelation(**request.correlation.model_dump())
@@ -387,7 +469,16 @@ class HomeAssistantActionSkill:
         return SkillMatch(matched=True,skill_name=self.name,token=self.name,memory_requirement=MemoryRequirement.NONE,metadata={"operation":NyraOperation.TRIGGER.value,"resource_type":candidates[0].resource.resource_type.value,"reference":reference,"fast_path":"named_ha_resource","fast_path_candidates":choices})
 
     def match(self, request: SkillCheckRequest) -> SkillMatch:
-        parsed = parse_command(request.text, request.language)
+        parsed = parse_command(request.text, request.language, allow_target_correction=_missing_target_state(request.pending_state, self.name) is not None)
+        missing = _missing_target_state(request.pending_state, self.name)
+        if (missing is not None and missing.get("resource_type") not in {kind.value for kind in _TRIGGERABLE_NAMED_RESOURCES}
+                and parsed is None and _target_name_reply(request.text) and request.semantic is None):
+            return SkillMatch(matched=True, skill_name=self.name, token=self.name,
+                memory_requirement=MemoryRequirement.NONE, metadata={
+                    "operation": missing["operation"], "resource_type": missing["resource_type"],
+                    "reference": request.text.strip(), "cardinality": missing.get("cardinality", ResolveCardinality.ONE.value),
+                    **({"area": missing["area"]} if missing.get("area") else {}),
+                })
         semantic_parsed = _semantic_command(request)
         if parsed is not None or semantic_parsed is not None:
             operation,resource_type,reference=(parsed.operation,parsed.resource_type,parsed.reference) if parsed is not None else semantic_parsed
@@ -539,7 +630,7 @@ class HomeAssistantActionSkill:
             area_tokens = _normalized(explicit_area).split()
             if area_tokens and canonical_tokens[-len(area_tokens):] == area_tokens:
                 canonical_tokens = canonical_tokens[:-len(area_tokens)]
-        canonical_reference = " ".join(canonical_tokens)
+        canonical_reference = " ".join(token for token in canonical_tokens if token not in _REFERENCE_LINK_WORDS[language])
         resolved = await self.capability.resolve(
             ResourceReference(
                 reference=canonical_reference,
@@ -553,8 +644,20 @@ class HomeAssistantActionSkill:
         if resolved.status is ResolveStatus.NOT_FOUND:
             return SkillExecuteResponse(
                 correlation=request.correlation,
-                outcome=SkillOutcome.FAILED,
-                error=ErrorDetail(code="HA_TARGET_NOT_FOUND"),
+                outcome=SkillOutcome.NEEDS_CLARIFICATION,
+                text=(question := (
+                    "Non trovo una corrispondenza sicura: quale nome o stanza devo cercare?"
+                    if language == "it" else
+                    "I cannot find a clear match: which name or room should I search for?"
+                )),
+                pending_state={"llm_clarification": {
+                    "question": question, "reason": "HA_TARGET_NOT_FOUND",
+                    "skill_name": self.name,
+                    "cardinality": cardinality.value,
+                    **({"area": explicit_area} if explicit_area else {}),
+                    "operation": operation.value, "resource_type": resource_type.value,
+                    "reference": reference_text,
+                }},
             )
 
         if resolved.status is ResolveStatus.AMBIGUOUS:

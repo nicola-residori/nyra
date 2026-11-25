@@ -35,7 +35,7 @@ class ReasoningCapabilityDispatcher:
                 data=await self.ha_capability.reasoning_read_attribute(entity,attribute,trusted,correlation=correlation)
             elif cap is ReasoningCapability.DISCOVER_RESOURCES:
                 if self.ha_capability is None: raise RuntimeError("HA_UNAVAILABLE")
-                data=await self.ha_capability.reasoning_discover_resources(str(params.get("query","")),trusted,correlation=correlation)
+                data=await self.ha_capability.reasoning_discover_resources(str(params.get("query","")),{**trusted,"discovery_focus":request.input.text},correlation=correlation)
             else: raise ValueError("CAPABILITY_NOT_ALLOWED")
             return CapabilityResult(capability_call_id=call_id,capability=cap,status=CapabilityStatus.COMPLETED,data=data or {})
         except Exception as exc:

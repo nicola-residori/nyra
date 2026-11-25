@@ -37,6 +37,11 @@ class LlmService:
             messages=reasoning_messages(request),response_schema=ReasoningResult.model_json_schema(),
         ))
         raw=json.loads(response.content)
+        # Providers may put a spoken preamble in response_text alongside a valid
+        # question/tool request. Only the typed outcome payload is used; actions remain
+        # subject to the unchanged strict protocol validators.
+        if raw.get("outcome") in {"NEEDS_CLARIFICATION", "NEEDS_CAPABILITY"} and isinstance(raw.get("response_text"), str):
+            raw.pop("response_text")
         raw["reasoning_id"]=reasoning_id
         usage=getattr(response,"usage",None)
         if usage is not None:

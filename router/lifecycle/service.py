@@ -77,10 +77,11 @@ class LifecycleDecision:
     close_reason: CloseReason | None = None
     error: dict[str, Any] | None = None
     llm_fallback: bool = False
+    continue_conversation: bool = False
 
     @classmethod
-    def completed(cls, text: str | None = None):
-        return cls(RequestStatus.COMPLETED, text=text)
+    def completed(cls, text: str | None = None, *, continue_conversation: bool = False):
+        return cls(RequestStatus.COMPLETED, text=text, continue_conversation=continue_conversation)
 
     @classmethod
     def needs_clarification(cls, text: str, pending_state: dict[str, Any]):
@@ -487,112 +488,121 @@ class RequestLifecycleService:
             trace_id=trace_id,
         )
         memory = None
-        self._log(request, trace_id, span_id, "SKILLS_CHECK_STARTED", params={"stage":"skills.check"})
-        match = await self.skill_port.check(request, context, None, pending_state)
-        self._log(request, trace_id, span_id, "SKILLS_CHECK_COMPLETED",
-                  result=("HIT" if match.matched else match.outcome.value),
-                  params={"stage":"skills.check","skill_name":match.skill_name})
-        if match.outcome is SkillOutcome.NEEDS_CLARIFICATION:
-            decision = LifecycleDecision.needs_clarification(
-                match.text or "",
-                match.pending_state or {},
-            )
-        elif match.outcome is SkillOutcome.FAILED:
-            decision = LifecycleDecision.failed(
-                match.error_code or "SKILLS_FAILED"
-            )
-        elif match.outcome is SkillOutcome.MISS:
-            await self._state(request,trace_id,span_id,InteractionState.PROCESSING_GLOBAL)
-            self._log(request,trace_id,span_id,"LLM_SEMANTIC_STARTED",params={"stage":"llm.semantic"})
-            try:
-                semantic=await self.llm_port.semantic(request,context,pending_state) if hasattr(self.llm_port,"semantic") else None
-            except LlmUnavailable:
-                semantic=None
-                semantic_result="UNAVAILABLE"
-            else:
-                semantic_result="ACCEPTED" if semantic is not None else "REJECTED"
-            self._log(request,trace_id,span_id,"LLM_SEMANTIC_COMPLETED",result=semantic_result,params={"stage":"llm.semantic"})
-            semantic_match=None
-            if semantic is not None and hasattr(self.skill_port,"semantic_check"):
-                self._log(request,trace_id,span_id,"SKILLS_SEMANTIC_CHECK_STARTED",params={"stage":"skills.semantic_check"})
-                semantic_match=await self.skill_port.semantic_check(request,context,pending_state,semantic)
-                self._log(request,trace_id,span_id,"SKILLS_SEMANTIC_CHECK_COMPLETED",result="HIT" if semantic_match.matched else semantic_match.outcome.value,params={"stage":"skills.semantic_check","skill_name":semantic_match.skill_name})
-            if semantic_match is not None and semantic_match.matched:
-                await self._state(request,trace_id,span_id,skill_interaction_state(semantic_match.skill_name))
-                self._log(request,trace_id,span_id,"SKILLS_EXECUTE_STARTED",params={"stage":"skills.execute","skill_name":semantic_match.skill_name})
-                decision=await self.skill_port.execute(semantic_match,request,context,None,pending_state)
-                self._log(request,trace_id,span_id,"SKILLS_EXECUTE_COMPLETED",result=decision.status.value,params={"stage":"skills.execute","skill_name":semantic_match.skill_name})
-            elif semantic_match is not None and semantic_match.outcome is SkillOutcome.FAILED:
-                decision=LifecycleDecision.failed(semantic_match.error_code or "SKILLS_FAILED")
-            else:
-                self._log(request,trace_id,span_id,"MEMORY_SEARCH_SKIPPED",params={"reason":"SKILL_MISS"})
-                self._log(request,trace_id,span_id,"LLM_REASONING_STARTED",params={"stage":"llm.reason"})
-                decision=await self.llm_port.reason(request,context,memory,pending_state)
-                self._log(request,trace_id,span_id,"LLM_REASONING_COMPLETED",result=decision.status.value,params={"stage":"llm.reason","fallback":decision.llm_fallback})
-        elif match.matched:
-            if match.memory_requirement is MemoryRequirement.NONE:
-                self._log(
-                    request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",
-                    params={"requirement": MemoryRequirement.NONE.value},
+        from router.conversation_control import is_conversation_close
+        if request.type is not ExecutionType.JOB and is_conversation_close(request.input.text):
+            decision = LifecycleDecision.closed(CloseReason.EXPLICIT_CLOSE)
+        else:
+            self._log(request, trace_id, span_id, "SKILLS_CHECK_STARTED", params={"stage":"skills.check"})
+            match = await self.skill_port.check(request, context, None, pending_state)
+            self._log(request, trace_id, span_id, "SKILLS_CHECK_COMPLETED",
+                      result=("HIT" if match.matched else match.outcome.value),
+                      params={"stage":"skills.check","skill_name":match.skill_name})
+            if match.outcome is SkillOutcome.NEEDS_CLARIFICATION:
+                decision = LifecycleDecision.needs_clarification(
+                    match.text or "",
+                    match.pending_state or {},
                 )
-            else:
-                raw_query = match.memory_query
-                query = (
-                    raw_query
-                    if isinstance(raw_query, MemoryQuery)
-                    else MemoryQuery(query=raw_query or request.input.text)
+            elif match.outcome is SkillOutcome.FAILED:
+                decision = LifecycleDecision.failed(
+                    match.error_code or "SKILLS_FAILED"
                 )
-                self._log(
-                    request, trace_id, span_id, "MEMORY_SEARCH_START",
-                    params={"requirement": match.memory_requirement.value},
-                )
+            elif match.outcome is SkillOutcome.MISS:
+                await self._state(request,trace_id,span_id,InteractionState.PROCESSING_GLOBAL)
+                self._log(request,trace_id,span_id,"LLM_SEMANTIC_STARTED",params={"stage":"llm.semantic"})
                 try:
-                    memory = await self.memory_port.search(
-                        request, identity_user_id, query, trace_id
+                    semantic=await self.llm_port.semantic(request,context,pending_state) if hasattr(self.llm_port,"semantic") else None
+                except LlmUnavailable:
+                    semantic=None
+                    semantic_result="UNAVAILABLE"
+                else:
+                    semantic_result="ACCEPTED" if semantic is not None else "REJECTED"
+                self._log(request,trace_id,span_id,"LLM_SEMANTIC_COMPLETED",result=semantic_result,params={"stage":"llm.semantic"})
+                semantic_match=None
+                if semantic is not None and hasattr(self.skill_port,"semantic_check"):
+                    self._log(request,trace_id,span_id,"SKILLS_SEMANTIC_CHECK_STARTED",params={"stage":"skills.semantic_check"})
+                    semantic_match=await self.skill_port.semantic_check(request,context,pending_state,semantic)
+                    self._log(request,trace_id,span_id,"SKILLS_SEMANTIC_CHECK_COMPLETED",result="HIT" if semantic_match.matched else semantic_match.outcome.value,params={"stage":"skills.semantic_check","skill_name":semantic_match.skill_name})
+                if semantic_match is not None and semantic_match.matched:
+                    await self._state(request,trace_id,span_id,skill_interaction_state(semantic_match.skill_name))
+                    self._log(request,trace_id,span_id,"SKILLS_EXECUTE_STARTED",params={"stage":"skills.execute","skill_name":semantic_match.skill_name})
+                    decision=await self.skill_port.execute(semantic_match,request,context,None,pending_state)
+                    self._log(request,trace_id,span_id,"SKILLS_EXECUTE_COMPLETED",result=decision.status.value,params={"stage":"skills.execute","skill_name":semantic_match.skill_name})
+                elif semantic_match is not None and semantic_match.outcome is SkillOutcome.FAILED:
+                    decision=LifecycleDecision.failed(semantic_match.error_code or "SKILLS_FAILED")
+                else:
+                    self._log(request,trace_id,span_id,"MEMORY_SEARCH_SKIPPED",params={"reason":"SKILL_MISS"})
+                    self._log(request,trace_id,span_id,"LLM_REASONING_STARTED",params={"stage":"llm.reason"})
+                    decision=await self.llm_port.reason(request,context,memory,pending_state)
+                    self._log(request,trace_id,span_id,"LLM_REASONING_COMPLETED",result=decision.status.value,params={"stage":"llm.reason","fallback":decision.llm_fallback})
+            elif match.matched:
+                if match.memory_requirement is MemoryRequirement.NONE:
+                    self._log(
+                        request, trace_id, span_id, "MEMORY_SEARCH_SKIPPED",
+                        params={"requirement": MemoryRequirement.NONE.value},
+                    )
+                else:
+                    raw_query = match.memory_query
+                    query = (
+                        raw_query
+                        if isinstance(raw_query, MemoryQuery)
+                        else MemoryQuery(query=raw_query or request.input.text)
                     )
                     self._log(
-                        request, trace_id, span_id, "MEMORY_SEARCH_COMPLETED",
-                        result="SUCCESS",
-                        params={
-                            "requirement": match.memory_requirement.value,
-                            "result_count": len(memory.get("items", [])),
-                        },
-                    )
-                except MemoryAccessError as exc:
-                    self._log(
-                        request, trace_id, span_id, "MEMORY_SEARCH_FAILED",
-                        kind=LogKind.FAULT,
-                        result=type(exc).__name__,
+                        request, trace_id, span_id, "MEMORY_SEARCH_START",
                         params={"requirement": match.memory_requirement.value},
                     )
-                    if match.memory_requirement is MemoryRequirement.REQUIRED:
-                        decision = LifecycleDecision.failed("MEMORY_UNAVAILABLE")
+                    try:
+                        memory = await self.memory_port.search(
+                            request, identity_user_id, query, trace_id
+                        )
+                        self._log(
+                            request, trace_id, span_id, "MEMORY_SEARCH_COMPLETED",
+                            result="SUCCESS",
+                            params={
+                                "requirement": match.memory_requirement.value,
+                                "result_count": len(memory.get("items", [])),
+                            },
+                        )
+                    except MemoryAccessError as exc:
+                        self._log(
+                            request, trace_id, span_id, "MEMORY_SEARCH_FAILED",
+                            kind=LogKind.FAULT,
+                            result=type(exc).__name__,
+                            params={"requirement": match.memory_requirement.value},
+                        )
+                        if match.memory_requirement is MemoryRequirement.REQUIRED:
+                            decision = LifecycleDecision.failed("MEMORY_UNAVAILABLE")
+                        else:
+                            decision = None
                     else:
                         decision = None
-                else:
+                if match.memory_requirement is MemoryRequirement.NONE:
                     decision = None
-            if match.memory_requirement is MemoryRequirement.NONE:
-                decision = None
-            if decision is None:
-                stage = skill_interaction_state(match.skill_name)
-                if stage is InteractionState.USING_TOOL:
-                    await self._state(
-                        request, trace_id, span_id, InteractionState.USING_TOOL
+                if decision is None:
+                    stage = skill_interaction_state(match.skill_name)
+                    if stage is InteractionState.USING_TOOL:
+                        await self._state(
+                            request, trace_id, span_id, InteractionState.USING_TOOL
+                        )
+                    self._log(request, trace_id, span_id, "SKILLS_EXECUTE_STARTED",
+                              params={"stage":"skills.execute","skill_name":match.skill_name})
+                    decision = await self.skill_port.execute(
+                        match,
+                        request,
+                        context,
+                        memory,
+                        pending_state,
                     )
-                self._log(request, trace_id, span_id, "SKILLS_EXECUTE_STARTED",
-                          params={"stage":"skills.execute","skill_name":match.skill_name})
-                decision = await self.skill_port.execute(
-                    match,
-                    request,
-                    context,
-                    memory,
-                    pending_state,
-                )
-                self._log(request, trace_id, span_id, "SKILLS_EXECUTE_COMPLETED",
-                          result=decision.status.value,
-                          params={"stage":"skills.execute","skill_name":match.skill_name})
-        else:
-            decision = LifecycleDecision.failed("SKILLS_INVALID_MATCH")
+                    self._log(request, trace_id, span_id, "SKILLS_EXECUTE_COMPLETED",
+                              result=decision.status.value,
+                              params={"stage":"skills.execute","skill_name":match.skill_name})
+            else:
+                decision = LifecycleDecision.failed("SKILLS_INVALID_MATCH")
+        turns = list(existing.conversation_turns) if existing is not None else []
+        turns.append({"role": "user", "content": request.input.text})
+        if decision.text:
+            turns.append({"role": "assistant", "content": decision.text})
+        turns = turns[-12:]
 
         if request_context.request_id is not None:
             if existing is None:
@@ -605,6 +615,8 @@ class RequestLifecycleService:
                     identity_user_id=request_context.identity.user_id if request_context.identity else None,
                     last_trusted_user_id=last_trusted_user_id,
                     original_input=request.input.text,
+                    response_text=decision.text,
+                    conversation_turns=turns,
                     status=decision.status,
                     current_trace_id=request_context.trace_id,
                     pending_state=decision.pending_state,
@@ -619,6 +631,8 @@ class RequestLifecycleService:
                 existing.status = decision.status
                 existing.current_trace_id = request_context.trace_id
                 existing.pending_state = decision.pending_state
+                existing.response_text = decision.text
+                existing.conversation_turns = turns
                 existing.updated_at = now
                 existing.expires_at = (now + timedelta(seconds=self.clarification_timeout_seconds)) if decision.status is RequestStatus.NEEDS_CLARIFICATION else None
                 self.store.update(existing)
@@ -639,6 +653,7 @@ class RequestLifecycleService:
 
         return NyraRequestResponse(
             status=decision.status,
+            continue_conversation=(decision.status is RequestStatus.NEEDS_CLARIFICATION or (decision.status is RequestStatus.COMPLETED and decision.continue_conversation)),
             session_id=request_context.session_id,
             request_id=request_context.request_id,
             trace_id=request_context.trace_id,

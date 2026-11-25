@@ -1,3 +1,4 @@
+from .music import MusicCommand
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,6 +44,7 @@ class SemanticCondition(BaseModel):
 class SemanticResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     intent: str
+    music: MusicCommand | None = None
     domain: str | None = None
     actions: list[SemanticAction] = Field(default_factory=list)
     temporal: SemanticTemporal | None = None

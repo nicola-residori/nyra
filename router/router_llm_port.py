@@ -21,12 +21,20 @@ class RouterLlmPort:
         if self.history_store is None or request.session_id is None:
             return []
         states=self.history_store.list_recent_for_session(request.session_id,self.history_limit)
-        return [{"role":"user","content":state.original_input} for state in states if state.request_id != request.request_id]
+        history = []
+        for state in states:
+            if state.conversation_turns:
+                history.extend(state.conversation_turns)
+                continue
+            history.append({"role": "user", "content": state.original_input})
+            if state.response_text:
+                history.append({"role": "assistant", "content": state.response_text})
+        return history
 
     async def semantic(self,request,context,pending_state):
         semantic_context=build_reasoning_context(request,context,pending_state)
         semantic_context=semantic_context.model_copy(
-            update={"operational":{**semantic_context.operational,"mode":"skill_routing"}}
+            update={"operational":{**semantic_context.operational,"mode":"skill_routing"},"conversation_history":self._conversation_history(request)}
         )
         observability=getattr(self.orchestrator,"observability",None)
         if observability is not None:
@@ -37,7 +45,7 @@ class RouterLlmPort:
             if observability is not None:
                 observability.trace_event("LLM_PROVIDER_RESPONSE",request_id=request.request_id,origin_request_id=request.origin_request_id or request.request_id,trace_id=context.trace_id,operation="llm.provider",result="UNAVAILABLE",params={"purpose":"SEMANTIC"})
             raise
-        accepted=self.semantic_bridge.accept(result)
+        accepted=self.semantic_bridge.accept(result,text=request.input.text)
         if observability is not None:
             observability.trace_event("LLM_PROVIDER_RESPONSE",request_id=request.request_id,origin_request_id=request.origin_request_id or request.request_id,trace_id=context.trace_id,operation="llm.provider",result="ACCEPTED" if accepted is not None else "REJECTED",params={"purpose":"SEMANTIC"})
         return accepted
@@ -72,7 +80,7 @@ class RouterLlmPort:
                     return LifecycleDecision.failed(str(exc))
                 if executed.status is not ExecutionStatus.COMPLETED:
                     return LifecycleDecision.failed("LLM_ACTION_EXECUTION_FAILED")
-            return LifecycleDecision.completed(result.response_text)
+            return LifecycleDecision.completed(result.response_text, continue_conversation=result.proposed_execution_plan is None)
         if result.outcome is ReasoningOutcome.NEEDS_CLARIFICATION:
             return LifecycleDecision.needs_clarification(
                 result.clarification.question,

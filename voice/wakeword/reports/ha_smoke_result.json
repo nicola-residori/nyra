@@ -1,0 +1,20 @@
+{
+  "pipeline": "01m87t35th7w2nk035gqdprs0p",
+  "wake_word": {
+    "wake_word_id": "ehi_nira_it",
+    "wake_word_phrase": "Ehi Nira",
+    "timestamp": 4880
+  },
+  "synthetic_transcript": "Apri la finestra.",
+  "events": [
+    "run-start",
+    "wake_word-start",
+    "wake_word-end",
+    "stt-start",
+    "stt-end",
+    "run-end"
+  ],
+  "intents_executed": false,
+  "tts_played": false,
+  "human_test": false
+}

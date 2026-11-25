@@ -1,0 +1,54 @@
+{
+  "household_actions_executed": false,
+  "checks": [
+    {
+      "phrase": "esegui lo script della buonanotte",
+      "resolved": [
+        "script.buonanotte"
+      ],
+      "live_llm": false
+    },
+    {
+      "phrase": "attiva la buonanotte",
+      "resolved": [
+        "script.buonanotte"
+      ],
+      "live_llm": false
+    },
+    {
+      "phrase": "pulisci zona giorno",
+      "resolved": [
+        "script.pulizia_zona_giorno_standard"
+      ],
+      "live_llm": false
+    },
+    {
+      "phrase": "aspira zona giorno",
+      "resolved": [
+        "script.pulizia_zona_giorno_aspirazione"
+      ],
+      "live_llm": false
+    },
+    {
+      "phrase": "pulisci profondamente zona giorno",
+      "resolved": [
+        "script.pulizia_zona_giorno_profonda"
+      ],
+      "live_llm": false
+    },
+    {
+      "phrase": "puoi passare solo l aspirapolvere in cucina?",
+      "resolved": [
+        "script.pulizia_cucina_aspirazione"
+      ],
+      "live_llm": true
+    },
+    {
+      "phrase": "pulisci zona giorno a fondo",
+      "resolved": [
+        "script.pulizia_zona_giorno_profonda"
+      ],
+      "live_llm": true
+    }
+  ]
+}

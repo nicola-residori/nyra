@@ -1,0 +1,20 @@
+[
+  {
+    "client": 1,
+    "candidate_timestamp_ms": 4880,
+    "latency_after_candidate_seconds": 1.3213838067650796,
+    "buffered_command_bytes": 74240,
+    "upstream_received_ms": 6200.0,
+    "first_buffered_timestamp": 3880.0,
+    "full_command_retained": true
+  },
+  {
+    "client": 2,
+    "candidate_timestamp_ms": 4880,
+    "latency_after_candidate_seconds": 2.3807585527002812,
+    "buffered_command_bytes": 108160,
+    "upstream_received_ms": 7260.0,
+    "first_buffered_timestamp": 3880.0,
+    "full_command_retained": true
+  }
+]

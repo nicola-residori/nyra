@@ -1,0 +1,15 @@
+{
+  "new_candidate_installed_on_speakers": true,
+  "mode": "experimental physical trial; original strict target not met",
+  "service": "nyra-wake.service enabled active on 192.168.0.16:10401, NRestarts=0",
+  "home_assistant_provider": "wake_word.nyra_italian_wake",
+  "pipeline": "Nyra - Ehi Nira",
+  "pipeline_id": "01m87t35th7w2nk035gqdprs0p",
+  "Soggiorno": "selected new pipeline, server trial ON, microphone unmuted, stream=1 clock=1, server audio progressing",
+  "Mansarda": "OTA successful SHA bf99fe7fb8fc6c7fd1ec8a1761edf04f3f0d9d5b3ade67bc71038443b311bd80, selected new pipeline, server trial ON, microphone unmuted, stream=1 clock=1, server audio progressing",
+  "human_room_test": false,
+  "silent_HA_wake_and_following_command": "passed Ehi Nira +80ms then Apri la finestra; STT correct; no intents or TTS executed",
+  "alarm_state": "disarmed; both indicator states preserved",
+  "pc_required_for_operation": false,
+  "user_report_2026_11_25": "User confirms working with approximately one second delay, requests unchanged configuration for several days of testing."
+}

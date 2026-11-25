@@ -1,0 +1,100 @@
+# Nyra Italian server wake provider
+
+The active profile for Soggiorno and Mansarda is `profiles/ctc-it-quiet12`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
+
+## Layout
+
+- `candidate_engine.py`, `cached_frontend.py`, `candidate_wyoming.py`: exact deployed inference/transport sources, compared byte-for-byte with the home service when archived.
+- `requirements.lock.txt`: exact deployed Python 3.11 environment. Colab training used separate Python 3.12; do not replace production dependencies with Colab dependencies.
+- `nyra-wake.service`: installed service definition, two streams, bounded inference executor, DynamicUser and 1200 MiB memory limit. Adjust the private bind address for another installation.
+- `model/config.json`, `model/manifest.json`: immutable exported profile and SHA-256 file inventory. The original config's research/unvalidated metadata records export-time status; use `reports/final_report.json` and `reports/deployment.json` for subsequent evaluation/deployment. Do not edit the hashed config to relabel it successful.
+- `reports/`: exact target-machine evaluation and technical deployment evidence. Human confirmation is qualitative, not a measured recognition score.
+- `training/`: initial research notebook with outputs removed, primary training/bootstrap and selected Italian V2/export scripts. **Not a consolidated, freshly validated Run All notebook**. Interactive recovery and extra dependencies are preserved in the full Drive archive, not implied to be automated by this historical notebook.
+- `evaluate_candidate.py`, `finalize_evaluation.py`, diagnostics and `test_*.py`: frozen evaluation logic and focused regression tests. Finalizer preserves the original recovery paths `/tmp/nyra-italian-benchmark` and `/opt/nyra-wake/recovery`; do not execute it against an incomplete/unrelated run.
+- `ha_prepare_candidate.py`, `ha_smoke_candidate.py`, `render_ha_smoke.py`: audited deployment helpers. Prepare **writes** a separate HA entry/pipeline, not a read-only probe. Helpers read the existing `/opt/nyra-router/.env`; credentials are not distributed here. The smoke helper ends at STT and never executes its synthetic command.
+
+## Models and full recovery (not in Git)
+
+Large model binaries, generated WAV/features, personal credentials and raw inference JSONL are excluded from Git. The verifier alone is approximately 357 MB; do not commit it as a normal Git blob. Existing private, hash-verified recovery locations:
+
+1. Home server `/opt/nyra-wake/model/`: complete deployed bundle. Verify **every** entry against `model/manifest.json`, including parity inputs, before starting a restored service.
+2. Home server `/opt/nyra-wake/recovery/`: full 6,680-case `results.jsonl`, `plan.json`, `final_report.json`, model manifest, source/checkpoint recovery and testdata archive. `/tmp` is not the durable copy.
+3. Google Drive `MyDrive/nyra_openwakeword_it/oww-it-v1-001/nyra_italian_full_recovery_20261124.tar.gz`: 2,936,193,613 bytes, SHA-256 `289d6544406f3d4e89cad36a1153c4a1c2bbecf43bf43a210370f258513f775c`; 23,379 members, each verified. Includes Italian V1/V2/V3 feature/checkpoint/source history and selected FP32/INT8 exports. This is a private prerequisite, not a publicly downloadable release.
+4. Candidate ZIP `nyra_italian_candidate_v1.zip`: 361,036,884 bytes, SHA-256 `b09eed35a79fdb0502c5bae8ceb8a1d9dbaf8159913b11b451881e8907f0e01d`.
+5. `nyra_final_testdata.tar.gz`: 503,135,284 bytes, SHA-256 `5f6fe14c3304cdc52a94787488abb0e76ee682086abf70e91e05e076de833478`.
+
+Historical Colab: https://colab.research.google.com/drive/18EtC_PdDJ0RabNMzCye5SyR0eq8x7VZ_
+
+The full recovery archive is the authoritative research snapshot; the notebook in Git is the initial notebook, not a copy of every subsequent live Colab cell. A fresh end-to-end retraining/restoration has not been tested from Git alone.
+
+## Restore service and HA integration
+
+This is a recovery procedure, **not an instruction to change the working installation during the trial**.
+
+1. On the N100, copy runtime files into `/opt/nyra-wake`, restore the complete model directory and verify its manifest hashes. Create an isolated Python 3.11 environment at `env`, install `requirements.lock.txt`. The small runtime environment is independent of Router and HA environments.
+2. Install the unit into `/etc/systemd/system/nyra-wake.service`, run `systemctl daemon-reload`, then `systemctl enable --now nyra-wake.service`. Check status/journal, resource use and LAN access; do not expose port 10401 publicly.
+3. Copy `homeassistant/custom_components/nyra_wake` into `/config/custom_components/nyra_wake`, preserving the separate existing `nyra` integration. HA restart is needed to load a previously unknown custom domain; schedule it around active household functions.
+4. Configure `nyra_wake` with host `192.168.0.16`, port `10401`; use a separate Assist pipeline cloned from the existing Nyra pipeline with wake provider **Nyra Italian Wake**, ID `ehi_nira_it`. Preserve STT, conversation agent and TTS selections. The installed HA version was 2026.11.2 with Wyoming 1.10.2; server environment uses Wyoming 1.7.2 and actual interoperability was tested.
+5. Select **Nyra - Ehi Nira** on each speaker's primary Assistant selector. Leave the secondary selector/default global pipeline alone. Enable its **Nyra Server Wake Trial** switch and verify `requested=1|paused=0|stream=1|clock=1`. If changing a running pipeline, turn only that trial switch off/on to replace its session.
+
+ESPHome server-mode sources are archived under `esphome/packages/*server-trial.yaml` and `esphome/vendor/*server-trial.yaml`. Configure the device package to include `nyra-speaker-server-trial.yaml`, keeping device-specific secrets, enrollment, alarm indicator and all other functionality. Use `/config/esphome` paths on HA; adapt paths for a local compiler. The deployed Mansarda OTA SHA-256 was `bf99fe7fb8fc6c7fd1ec8a1761edf04f3f0d9d5b3ade67bc71038443b311bd80` (2,244,512 bytes, ESPHome 2026.10.1). This repository does not include a new generic device secret file or require reflashing currently working devices.
+
+The archived server-trial package references the already tracked `esphome/training/v6-004/export_recall_priority` model pairs. Their four files were verified byte-identical to the installed firmware inputs; only the package paths differ from the deployed `/config/esphome/models` paths. Copy that tracked archive too when restoring a firmware build.
+
+The local microWakeWord instances remain part of the firmware audio-clock/lifecycle machinery. Their old labels can remain visible; they are not the normal server-mode recognition profile. `stop_after_detection: false` and existing watchdog/pause/resume logic must be preserved. `RESTORE_DEFAULT_OFF` restores the saved switch state and defaults OFF only when no saved value exists.
+
+## Diagnostics and focused checks
+
+`systemctl status nyra-wake.service` and `journalctl -u nyra-wake.service` report transport/service failures. `systemctl kill -s SIGUSR1 --kill-who=main nyra-wake.service` requests bounded numeric score snapshots after the service is initialized; snapshots do not contain PCM or transcripts. Verify both engines' processed-audio counters advance. Do not infer successful human recognition from counters alone.
+
+From this directory, use a separate test environment with `pip install -r requirements-test.txt` (adds SciPy 1.15.3 to the pinned runtime dependencies). Do not add test dependencies to the running production service:
+
+```sh
+python -m unittest test_audio_buffer test_buffered_stream test_candidate_wyoming test_candidate_history test_evaluation_metrics test_finalizer_identity
+```
+
+Tests use synthetic/mocked audio and local sockets, without physical device changes. Model parity/concurrency diagnostics additionally require the complete private model bundle and testdata. HA integration files can be syntax-checked without installing Home Assistant, but that does not replace the actual HA wake→STT test already recorded in `reports/ha_smoke_result.json`.
+
+Upstream provenance: openWakeWord `368c03716d1e92591906a84949bc477f3a834455`; pyopen-wakeword `6bc5c5f5c9c71e46a723b6c9277b1d50f2ba13fd`; Italian encoder `jonatasgrosman/wav2vec2-large-xlsr-53-italian` revision `dab04a3e00d8326052f3fb22a6ff276b822f6131` (Apache-2.0); Silero source `bfa5f8cef40abb5de2bd4a2f4c3f22778172dfec`. Preserve upstream license requirements when redistributing model bundles.
+
+## Current false-wake mitigation (2026-11-25)
+
+The active service uses `profiles/20261125-less-false-wakes`, verifier cutoff0.8; the original `model` export remains immutable at0.2. See the current wake-word guide for recall/false-event tradeoffs. To reconstruct this profile, copy its tracked config/manifest into the same relative directory under `/opt/nyra-wake`; for each manifest entry except `config.json`, restore the matching original model file or create a symlink to `/opt/nyra-wake/model/<name>`. Verify every manifest SHA. Install the tracked `20-confirmation-profile.conf` into `/etc/systemd/system/nyra-wake.service.d/`, then reload/restart the service. This separate profile/drop-in preserves the original model bundle and does not require new speaker firmware. No new training or complete dataset generation was performed.
+
+## Strict confirmation supersedes 0.8
+
+As of 2026-11-25 12:54 Europe/Rome the profile was `profiles/20261125-strict98`, cutoff0.98. Restore using that directory and its drop-in, following the same symlink/manifest procedure above. The earlier0.8 profile is historical and preserved. User confirmed all six recent wakes were false; their scores would all be rejected at0.98. Saved-score positive recall drops to68.89%; human recall and future room false-wake rate remain unmeasured.
+
+## Italian phrase and prior-speech checks
+
+Deployed on 25 November 2026 at 15:05 Europe/Rome. Each stream requires a 0.98 acoustic score and an ordered Italian letter alignment for the greeting and name. The alignment searches the final 1.3 seconds. The model rejects a candidate if its alignment cost exceeds 14 or if more than six of the first 48 speech-detector frames contain voice at probability 0.5 or above. Each frame spans 32 ms. The early speech rule helps reject ongoing conversation and can also reject an intentional call over TV dialogue. The command may immediately follow the wake word.
+
+The new output comes from the original Italian encoder’s letter head. Both heads share the same encoder and inference pass. No production dependency was added. Only numeric rejection diagnostics enter the journal. Home Assistant’s existing command pipeline still handles confirmed wakes.
+
+Restore the original profile assets listed in the manifest. Place the new verifier, vocabulary, config and manifest in `/opt/nyra-wake/profiles/ctc-it`. Put `candidate_wyoming.py`, `cached_frontend.py`, `candidate_engine.py` and `phrase_confirmation.py` in its `runtime/` directory. The original primary detector, VAD and parity-input files may be symlinks to the base model. Verify every manifest digest before installing the profile’s service drop-in. To reproduce the augmented verifier, run `training/export_phrase_confirmation.py BASE_VERIFIER pytorch_model.bin DESTINATION` with the foundation revision in the profile config. The exporter verifies the base verifier and both original tensors. The rebuilt output matched the deployed SHA-256.
+
+The [comparison on synthetic cases](reports/phrase_20261125.json) uses the same original candidate times for both profiles. The reference testing panel was inspected during development. A separate sample and fresh synthetic mixtures were reserved for the final check. To reproduce the reference comparison, run `evaluate_phrase_confirmation.py TESTDATA ORIGINAL_RESULTS_JSONL PROFILE testing` and repeat with `validation`. The home integration test sent an approved synthetic wake and immediate command through wake detection and STT. It stopped before intent execution. Human recognition and household false wakes are measured separately.
+
+On the reference testing panel the new profile suppressed all three prior background wakes in 260 minutes, retained 42 of 60 intended calls and still accepted one of 600 hard negatives. The separate post-selection check detected 37 of 60 synthetic calls versus 38 with the old profile. Both produced zero events in 16 minutes of newly mixed synthetic negatives. This second sample used held-back cases from the same synthetic corpus. It cannot establish the false-wake rate in an occupied room.
+
+## Selective confirmation for missed calls
+
+On November 25 at 18:53 Europe/Rome the service enabled a second decision branch. An acoustic score of at least 0.85 can pass if the letter alignment costs at most 2. The original branch still requires 0.98 and permits a cost of up to 14. Both require at most six prior speech frames. The weights and the two streaming frontends are identical. Scores below 0.98 previously skipped letter alignment, so earlier missed household calls cannot be reclassified retrospectively. Marginal rejections now log numeric scores separately as `MARGINAL_REJECT`.
+
+The reference sample improved from 42 to 46 of 60 calls. The same 600 hard negatives still produced one wake, with zero on the 945 solo-name examples, 500 ordinary speech examples and 260 minutes of background. Those cases were inspected during development. On the separate 60-call sample, recovery improved from 37 to 40. The end-to-end synthetic wake and immediate command passed through Home Assistant STT after deployment.
+
+For recovery, verify the selective profile manifest. Its five shared assets (including the vocabulary) resolve to the verified ctc-it files. Install the current four runtime modules under the selective profile's `runtime/` path and use its service drop-in.
+
+## Quiet calls with strong primary evidence
+
+The active shared profile since 18:58 Europe/Rome on November 25 accepts a marginal candidate at letter-alignment cost up to 8 only when the primary score reaches 0.95 and all 48 lead-in frames are below the speech threshold. It otherwise uses the preceding selective profile's limits. The saved numeric evidence for a candidate coinciding with a reported missed call passes this rule in replay. The household audio was not retained.
+
+On the development testing panel, detected calls increased from 46 to 49 of 60. False detections on the 600 similar utterances increased from one to two. All 260 minutes of synthetic background, 945 solo-name cases and 500 speech cases still produced zero detections. The separate 60-call panel increased from 40 to 41. The on-server Home Assistant synthetic wake and STT test passed after deployment, and both live streams resumed. Room performance with this profile requires observation. Restore using the preceding profile procedure with the quiet profile's directory, manifest and drop-in.
+
+## Joined commands and Italian local time
+
+The November 25 evening profile is `ctc-it-quiet12`. Use the four runtime modules under `ctc-it-quiet/runtime/` and the manifest, config and drop-in under `ctc-it-quiet12/`. The quiet branch accepts a primary score from 0.90 with alignment cost up to 12 and zero prior speech frames. On the reference testing panel, detected calls increased from 49 to 52 of 60 and close-sounding negative hits increased from two to three of 600. There were zero wakes across 260 minutes of synthetic background. On the separate 60-call sample, detections increased from 41 to 47. Household false-wake rates for this profile require further observation.
+
+Restore all files in `homeassistant/custom_components/nyra_wake/` as a unit. Set the Nyra pipeline STT engine to `stt.nyra_command_stt`. The entity delegates to `stt.home_assistant_cloud` using the existing HA account. The task-local wake timestamp offset excludes the greeting from end-of-speech scoring while preserving the PCM for transcription. The extra end detector requires 160 ms of voiced frames and 450 ms of subsequent silence. For STT-only calls without a Nyra wake, the underlying pipeline controls endpointing. Soggiorno's native finished-speaking selector is set to aggressive. Clock requests use the local Italian time skill in nyra-skills and the household's configured time zone.
+
+An identical synthetic wake and immediately joined clock request with VAD enabled took 12.73 seconds from wake recognition to final transcription before the STT correction and 0.71 seconds afterwards. The complete synthetic pipeline generated a time reply about 1.0 second after recognition without opening a follow-up turn. This excludes the time spent recognizing the wake and the physical playback delay. Cloud transcription can still mishear an entire fast utterance, even when tested separately with all the original PCM.

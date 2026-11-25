@@ -44,6 +44,11 @@ _RESOURCE_DOMAIN = {
     NyraResourceType.AUTOMATION: "automation",
 }
 _DOMAIN_RESOURCE = {domain: resource for resource, domain in _RESOURCE_DOMAIN.items()}
+_GENERIC_RESOURCE_WORDS = {
+    NyraResourceType.LIGHT: {"light", "lights", "luce", "luci"},
+    NyraResourceType.SWITCH: {"switch", "switches", "interruttore", "interruttori"},
+    NyraResourceType.COVER: {"cover", "covers"},
+}
 
 
 def _tokens(value: str) -> set[str]:
@@ -327,16 +332,8 @@ class HomeAssistantCapabilityPort:
         self._observe("ha.reasoning.discover_resources", correlation)
         allowed = trusted_context.get("allowed_resource_ids")
         allowed_ids = {item for item in allowed if isinstance(item, str)} if isinstance(allowed, list) else None
-        query = query.casefold(); items = []
-        for item in await self.client.states():
-            entity = item.get("entity_id")
-            if not isinstance(entity, str): continue
-            if allowed_ids is not None and entity not in allowed_ids: continue
-            name = (item.get("attributes") or {}).get("friendly_name")
-            if query and query not in f"{entity} {name or ''}".casefold(): continue
-            items.append({"entity_id": entity, "name": name, "state": item.get("state")})
-            if len(items) >= 20: break
-        return {"items": items}
+        from router.resource_discovery import discover_resources
+        return discover_resources(await self.client.states(), query, allowed_ids, focus=trusted_context.get("discovery_focus"))
 
     async def _native_behavior_config(
         self,
@@ -644,7 +641,10 @@ class HomeAssistantCapabilityPort:
         if (
             isinstance(area, str)
             and area.strip()
-            and reference.resource_type is not None
+            and reference.resource_type in {
+                NyraResourceType.LIGHT, NyraResourceType.SWITCH, NyraResourceType.COVER,
+                NyraResourceType.CLIMATE, NyraResourceType.MEDIA_PLAYER,
+            }
             and len(query_tokens) == 1
         ):
             area_ids = await self.client.area_entities(area.strip())
@@ -682,7 +682,10 @@ class HomeAssistantCapabilityPort:
                 if value
             )
             searchable_tokens = _tokens(searchable)
-            area_scoped_generic = area_ids is not None and len(query_tokens) == 1
+            area_scoped_generic = (
+                area_ids is not None and len(query_tokens) == 1
+                and query_tokens.issubset(_GENERIC_RESOURCE_WORDS.get(reference.resource_type, set()))
+            )
             if (
                 query_tokens
                 and not area_scoped_generic

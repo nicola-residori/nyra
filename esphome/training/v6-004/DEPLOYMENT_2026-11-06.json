@@ -1,0 +1,49 @@
+{
+  "run": "nyra-it-v6-004-continuous",
+  "profile": "v6-004-recall",
+  "status": "installed_verified_runtime",
+  "verified_at": "2026-11-06T15:16:57.016609+01:00",
+  "devices": {
+    "soggiorno": {
+      "ota_success": true,
+      "stable_seconds": 65,
+      "build_time": "2026-11-06 15:03:50 +0100",
+      "config_hash": "0x353c8899",
+      "firmware_sha256": "0105d6d59b1491c62ed7e486749856bd3cd22de9c23c1fef4901b12875edd84b",
+      "wake_status": "v6-004-recall|running=1|Ehi Nira=1:204|Nira=1:245"
+    },
+    "mansarda": {
+      "ota_success": true,
+      "stable_seconds": 65,
+      "build_time": "2026-11-06 15:09:17 +0100",
+      "config_hash": "0x8329b28a",
+      "firmware_sha256": "d343c6227fc3c84de08e82bd0b93175cbdaeb99d8cd48c1a854c8ce4475b9903",
+      "wake_status": "v6-004-recall|running=1|Ehi Nira=1:204|Nira=1:245"
+    }
+  },
+  "models": {
+    "ehi_nira_it": {
+      "sha256": "e66d89b9583ff5e8e6da1ea00d1b1d7caf6bf13709be2c98df1219f33f47a020",
+      "cutoff": 0.8,
+      "sliding_window_size": 3,
+      "synthetic_test_recall": 0.9907142857,
+      "synthetic_test_false_positives_per_hour": 3.461538
+    },
+    "nira_it": {
+      "sha256": "c652e4c330efc1db087b107e615420f2470a2299700d4b0493f37f7030bdc2d7",
+      "cutoff": 0.9607843137254902,
+      "sliding_window_size": 3,
+      "synthetic_test_recall": 0.992579365,
+      "synthetic_test_false_positives_per_hour": 2.076923
+    }
+  },
+  "original_strict_false_positive_gate_passed": false,
+  "unchanged_support_files_verified": 78,
+  "human_voice_test_performed": false,
+  "audible_alarm_test_performed": false,
+  "notes": [
+    "Positive recall priority requested by user; false positives remain to calibrate.",
+    "Separate model false positive rates are not a measured combined rate.",
+    "Startup and running status verified; real-room recognition not yet measured."
+  ]
+}

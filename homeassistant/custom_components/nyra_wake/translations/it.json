@@ -1,0 +1,1 @@
+{"config":{"step":{"user":{"title":"Nyra Italian Wake","description":"Collega il riconoscimento italiano sul server locale.","data":{"host":"Indirizzo del server","port":"Porta"}}},"error":{"cannot_connect":"Impossibile collegarsi al riconoscimento Ehi Nira."},"abort":{"already_configured":"Questo server è già configurato."}}}

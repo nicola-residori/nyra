@@ -1,0 +1,15 @@
+{
+  "updated_utc": "2026-11-25T11:54:05.656187+00:00",
+  "profile": "/opt/nyra-wake/profiles/20261125-strict98",
+  "before": 0.8,
+  "after": 0.98,
+  "user_confirmed_false_events_previous_hour": 6,
+  "previous_hour_max_score": 0.9721,
+  "all_six_rejected_by_new_cutoff_in_score_replay": true,
+  "saved_testing_positive_hits": 1953,
+  "saved_testing_positive_total": 2835,
+  "saved_testing_ambient_events": 3,
+  "actual_room_recall_unmeasured": true,
+  "scope": "both speakers shared service",
+  "original_weights_and_profiles_preserved": true
+}

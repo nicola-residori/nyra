@@ -1,0 +1,3 @@
+-r requirements.lock.txt
+# Evaluation/report regression tests; not needed by the production listener.
+scipy==1.15.3

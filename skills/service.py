@@ -104,7 +104,8 @@ class SkillsService:
             definition = self.registry.get("home_assistant_action")
             skill = getattr(definition.matcher, "__self__", None) if definition is not None else None
             fast_path = getattr(skill, "fast_path_match", None)
-            if fast_path is not None:
+            from skills.modules.music import looks_like_music
+            if fast_path is not None and not looks_like_music(request.text):
                 match = fast_path(request)
                 if inspect.isawaitable(match):
                     match = await match

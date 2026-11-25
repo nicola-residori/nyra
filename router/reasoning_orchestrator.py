@@ -15,7 +15,7 @@ class ReasoningOrchestrator:
         async def run():
             reasoning_id=None; results=[]
             reasoning_context=build_reasoning_context(request,context,pending_state,conversation_history=conversation_history)
-            for _ in range(self.max_rounds):
+            for round_index in range(self.max_rounds):
                 if self.observability is not None:
                     self.observability.trace_event(
                         "LLM_PROVIDER_REQUEST",
@@ -26,7 +26,9 @@ class ReasoningOrchestrator:
                         params={"purpose":"REASONING","round":len(results)+1},
                     )
                 result=await self.llm_client.reason(LlmRequest(
-                    purpose=LlmPurpose.REASONING,context=reasoning_context,
+                    purpose=LlmPurpose.REASONING,context=reasoning_context.model_copy(update={
+                        "operational": {**reasoning_context.operational, "remaining_capability_calls": self.max_rounds - round_index - 1}
+                    }),
                     reasoning_id=reasoning_id,capability_results=results,
                 ))
                 if self.observability is not None:
@@ -46,7 +48,7 @@ class ReasoningOrchestrator:
                     result.capability_request,request=request,
                     identity_user_id=identity_user_id,context=context,trace_id=context.trace_id,
                 )
-                results=[capability]
+                results.append(capability)
             raise ReasoningBudgetExceeded("reasoning round budget exhausted")
         try:
             return await asyncio.wait_for(run(),timeout=self.total_timeout_seconds)

@@ -78,3 +78,19 @@ async def test_reasoning_discovery_is_policy_scoped():
     result=await d.execute(CapabilityRequest(capability=ReasoningCapability.DISCOVER_RESOURCES,parameters={"query":"light"}),request=req,identity_user_id="u",context=ctx,trace_id=ctx.trace_id)
     assert result.status is CapabilityStatus.COMPLETED
     assert result.data["items"] == [{"entity_id":"light.kitchen","name":"light.kitchen","state":"on"}]
+
+
+@pytest.mark.asyncio
+async def test_discovery_stays_on_user_solar_topic_when_model_adds_generic_energy_terms():
+    import httpx
+    from router.ha_capability import HomeAssistantApiClient, HomeAssistantCapabilityPort
+    states = [{"entity_id": f"sensor.battery_energy_{i}", "state": "5", "attributes": {"friendly_name": f"Battery energy {i}", "device_class": "energy", "unit_of_measurement": "kWh"}} for i in range(25)]
+    states += [{"entity_id": "sensor.plant_solar_power", "state": "1.2", "attributes": {"friendly_name": "Solar power", "device_class": "power", "unit_of_measurement": "kW"}}]
+    async def handler(req):
+        return httpx.Response(200, json=states)
+    port = HomeAssistantCapabilityPort(HomeAssistantApiClient("http://ha", "token", transport=httpx.MockTransport(handler)))
+    dispatcher = ReasoningCapabilityDispatcher(ha_capability=port)
+    req = request(kind="ha_assist", text="Fammi un resoconto del fotovoltaico")
+    ctx = ContextResult(data={}, trace_id="trc_00000000-0000-4000-8000-000000000001")
+    result = await dispatcher.execute(CapabilityRequest(capability=ReasoningCapability.DISCOVER_RESOURCES, parameters={"query": "fotovoltaico solare inverter batteria energia"}), request=req, identity_user_id=None, context=ctx, trace_id=ctx.trace_id)
+    assert [item["entity_id"] for item in result.data["items"]] == ["sensor.plant_solar_power"]

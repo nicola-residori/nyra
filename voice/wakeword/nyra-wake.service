@@ -1,0 +1,23 @@
+[Unit]
+Description=Nyra Italian wake word provider
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+DynamicUser=yes
+WorkingDirectory=/opt/nyra-wake
+ExecStart=/opt/nyra-wake/env/bin/python -u /opt/nyra-wake/candidate_wyoming.py --candidate /opt/nyra-wake/model --uri tcp://192.168.0.16:10401
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=1200M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

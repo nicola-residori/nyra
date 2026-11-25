@@ -1,0 +1,109 @@
+{
+  "validation": {
+    "groups": {
+      "positive": {
+        "cases": 60,
+        "old_hits": 47,
+        "new_hits": 45,
+        "old_events": 47,
+        "new_events": 45
+      },
+      "solo": {
+        "cases": 315,
+        "old_hits": 0,
+        "new_hits": 0,
+        "old_events": 0,
+        "new_events": 0
+      },
+      "hard": {
+        "cases": 120,
+        "old_hits": 0,
+        "new_hits": 0,
+        "old_events": 0,
+        "new_events": 0
+      },
+      "speech": {
+        "cases": 120,
+        "old_hits": 0,
+        "new_hits": 0,
+        "old_events": 0,
+        "new_events": 0
+      },
+      "ambient": {
+        "cases": 60,
+        "old_hits": 0,
+        "new_hits": 0,
+        "old_events": 0,
+        "new_events": 0
+      }
+    },
+    "ambient_hours": 1.0833333333333341,
+    "parity_max_absolute_error": 0,
+    "positive_sample_count": 60
+  },
+  "testing": {
+    "groups": {
+      "positive": {
+        "cases": 60,
+        "old_hits": 42,
+        "new_hits": 42,
+        "old_events": 42,
+        "new_events": 42
+      },
+      "solo": {
+        "cases": 945,
+        "old_hits": 0,
+        "new_hits": 0,
+        "old_events": 0,
+        "new_events": 0
+      },
+      "hard": {
+        "cases": 600,
+        "old_hits": 1,
+        "new_hits": 1,
+        "old_events": 1,
+        "new_events": 1
+      },
+      "speech": {
+        "cases": 500,
+        "old_hits": 0,
+        "new_hits": 0,
+        "old_events": 0,
+        "new_events": 0
+      },
+      "ambient": {
+        "cases": 240,
+        "old_hits": 3,
+        "new_hits": 0,
+        "old_events": 3,
+        "new_events": 0
+      }
+    },
+    "ambient_hours": 4.333333333333351,
+    "parity_max_absolute_error": 0,
+    "positive_sample_count": 60
+  },
+  "profile": "ctc-it",
+  "baseline": "20261125-strict98",
+  "reference_panel_inspected_during_development": true,
+  "post_selection_synthetic_challenge": {
+    "positive": {
+      "cases": 60,
+      "seconds": 341.66,
+      "old_events": 38,
+      "new_events": 37,
+      "old_hits": 38,
+      "new_hits": 37
+    },
+    "mixed_negative": {
+      "cases": 32,
+      "seconds": 960.0,
+      "old_events": 0,
+      "new_events": 0,
+      "old_hits": 0,
+      "new_hits": 0
+    }
+  },
+  "ha_wake_and_immediate_command": "Synthetic wake and STT passed at 14:05:37 UTC, no intent executed",
+  "household_accuracy_measured": false
+}

@@ -7,6 +7,7 @@ from skills.modules.home_assistant import (
     RouterHomeAssistantCapabilityClient,
 )
 from skills.modules.identity import IdentityQuerySkill
+from skills.modules.local_time import LocalTimeSkill
 from skills.modules.memory_management import MemoryManagementSkill
 from skills.registry import SkillDefinition, SkillRegistry
 
@@ -16,7 +17,27 @@ def register_builtin_skills(
     *,
     home_assistant_capability: RouterHomeAssistantCapabilityClient | None = None,
     job_scheduler=None,
+    alert_timezone="Europe/Rome",
+    alert_max_seconds=60,
 ) -> None:
+    if home_assistant_capability is not None:
+        from skills.modules.music import MusicSkill
+        music = MusicSkill(home_assistant_capability)
+        registry.register(SkillDefinition(name=music.name,priority=music.priority,matcher=music.matches,executor=music.execute))
+    if job_scheduler is not None:
+        from skills.modules.voice_alerts import VoiceAlertsSkill
+
+        alerts = VoiceAlertsSkill(
+            job_scheduler, timezone_name=alert_timezone, max_seconds=alert_max_seconds
+        )
+        registry.register(
+            SkillDefinition(
+                name=alerts.name,
+                priority=alerts.priority,
+                matcher=alerts.matches,
+                executor=alerts.execute,
+            )
+        )
     memory_management = MemoryManagementSkill()
     registry.register(
         SkillDefinition(
@@ -26,6 +47,10 @@ def register_builtin_skills(
             executor=memory_management.execute,
         )
     )
+
+    clock = LocalTimeSkill(alert_timezone)
+    registry.register(SkillDefinition(name=clock.name, priority=clock.priority,
+                                      matcher=clock.matches, executor=clock.execute))
 
     identity = IdentityQuerySkill()
     registry.register(
