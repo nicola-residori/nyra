@@ -1,6 +1,6 @@
 # Nyra Italian server wake provider
 
-Installed experimental release: **Italian V2 INT8, Ehi Nira only**, deployed on both Soggiorno and Mansarda on 2026-11-24; user confirmed working on 2026-11-25 and requested an unchanged multi-day trial. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
+The active profile for Soggiorno and Mansarda is `profiles/ctc-it`. Both speakers use the shared Italian server provider for **Ehi Nira**. See [current behavior and measured limits](../../docs/WAKE_WORDS.md).
 
 ## Layout
 
@@ -63,4 +63,16 @@ The active service uses `profiles/20261125-less-false-wakes`, verifier cutoff0.8
 
 ## Strict confirmation supersedes 0.8
 
-As of 2026-11-25 12:54 Europe/Rome the active profile is `profiles/20261125-strict98`, cutoff0.98. Restore using that directory and its drop-in, following the same symlink/manifest procedure above. The earlier0.8 profile is historical and preserved. User confirmed all six recent wakes were false; their scores would all be rejected at0.98. Saved-score positive recall drops to68.89%; human recall and future room false-wake rate remain unmeasured.
+As of 2026-11-25 12:54 Europe/Rome the profile was `profiles/20261125-strict98`, cutoff0.98. Restore using that directory and its drop-in, following the same symlink/manifest procedure above. The earlier0.8 profile is historical and preserved. User confirmed all six recent wakes were false; their scores would all be rejected at0.98. Saved-score positive recall drops to68.89%; human recall and future room false-wake rate remain unmeasured.
+
+## Italian phrase and prior-speech checks
+
+Deployed on 25 November 2026 at 15:05 Europe/Rome. Each stream requires a 0.98 acoustic score and an ordered Italian letter alignment for the greeting and name. The alignment searches the final 1.3 seconds. The model rejects a candidate if its alignment cost exceeds 14 or if more than six of the first 48 speech-detector frames contain voice at probability 0.5 or above. Each frame spans 32 ms. The early speech rule helps reject ongoing conversation and can also reject an intentional call over TV dialogue. The command may immediately follow the wake word.
+
+The new output comes from the original Italian encoder’s letter head. Both heads share the same encoder and inference pass. No production dependency was added. Only numeric rejection diagnostics enter the journal. Home Assistant’s existing command pipeline still handles confirmed wakes.
+
+Restore the original profile assets listed in the manifest. Place the new verifier, vocabulary, config and manifest in `/opt/nyra-wake/profiles/ctc-it`. Put `candidate_wyoming.py`, `cached_frontend.py`, `candidate_engine.py` and `phrase_confirmation.py` in its `runtime/` directory. The original primary detector, VAD and parity-input files may be symlinks to the base model. Verify every manifest digest before installing the profile’s service drop-in. To reproduce the augmented verifier, run `training/export_phrase_confirmation.py BASE_VERIFIER pytorch_model.bin DESTINATION` with the foundation revision in the profile config. The exporter verifies the base verifier and both original tensors. The rebuilt output matched the deployed SHA-256.
+
+The [comparison on synthetic cases](reports/phrase_20261125.json) uses the same original candidate times for both profiles. The reference testing panel was inspected during development. A separate sample and fresh synthetic mixtures were reserved for the final check. To reproduce the reference comparison, run `evaluate_phrase_confirmation.py TESTDATA ORIGINAL_RESULTS_JSONL PROFILE testing` and repeat with `validation`. The home integration test sent an approved synthetic wake and immediate command through wake detection and STT. It stopped before intent execution. Human recognition and household false wakes are measured separately.
+
+On the reference testing panel the new profile suppressed all three prior background wakes in 260 minutes, retained 42 of 60 intended calls and still accepted one of 600 hard negatives. The separate post-selection check detected 37 of 60 synthetic calls versus 38 with the old profile. Both produced zero events in 16 minutes of newly mixed synthetic negatives. This second sample used held-back cases from the same synthetic corpus. It cannot establish the false-wake rate in an occupied room.

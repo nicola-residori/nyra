@@ -1,12 +1,14 @@
 # Wake word: current installed configuration
 
-As of 2026-11-25, **Soggiorno and Mansarda use the home-server Italian `Ehi Nira` provider**, not the old local ESPHome models for normal wake detection. The user confirmed recognition and a spoken response, with approximately one second of delay, and requested several days of testing without configuration changes.
+Soggiorno and Mansarda use the Italian **Ehi Nira** provider on the home server. The current profile started on 25 November 2026 at 15:05 Europe/Rome.
 
 Say **“Ehi Nira, che ore sono?”** naturally, without waiting between wake phrase and command. Spaced and joined pronunciations (`ei`, `hei`, `hey`, `ehinira`) are positive cases. **“Nira” alone is excluded.** There is no promise of identical performance for every pronunciation or room.
 
-## Current strict profile — 2026-11-25 12:54 Europe/Rome
+## Current room profile
 
-User confirmed that all six detections in the preceding monitored hour were false. The active shared service now uses `profiles/20261125-strict98`, verifier cutoff **0.98**, replacing0.8. All six recorded scores were below0.98 (maximum0.9721), so the new threshold would reject those six. This is not a guarantee against future false wakes. Weights, primary detector, timing, firmware and prior profiles are preserved. Saved-score replay yields **1,953/2,835 positives (68.89%)** and3ambientevents/260minutes: a substantial sensitivity tradeoff explicitly communicated before applying. Real-room recall remains unmeasured. [Receipt](../voice/wakeword/reports/strict98_20261125.json).
+The service checks the acoustic score, the sounds of the greeting and name, and whether speech was already in progress before the call. This reduces the chance of taking part of a conversation as a wake word. Continuous speech from a TV can also mask an intentional call. The deployed profile and the comparison on synthetic audio are documented in [the wake service guide](../voice/wakeword/README.md#italian-phrase-and-prior-speech-checks).
+
+The preceding 0.98 acoustic-only profile still admitted unintended calls. Its full saved-score evaluation detected 1,953 of 2,835 synthetic positives and produced three activations in 260 minutes of synthetic background. Separate room observations are needed to measure household performance.
 
 ## Earlier mitigation profile — 2026-11-25
 
@@ -24,7 +26,7 @@ The PC and Colab are not needed for operation. The home server, Home Assistant a
 
 - Service: `nyra-wake.service`, `/opt/nyra-wake`, `192.168.0.16:10401` (trusted LAN; no public exposure or protocol authentication).
 - HA provider: `wake_word.nyra_italian_wake`; pipeline: **Nyra - Ehi Nira** (`01m87t35th7w2nk035gqdprs0p`). Original/global default pipelines preserved.
-- Primary threshold `.4`, two consecutive 80 ms frames; verifier `.2`, 2.8-second window and `.24`-second post-trigger context; VAD `.1` with `.096` seconds minimum speech; candidate refractory 2 seconds.
+- Primary threshold `.4`, two consecutive 80 ms frames; acoustic verifier `.98` plus phrase and prior-speech checks, 2.8-second window and `.24`-second post-trigger context; VAD `.1` with `.096` seconds minimum speech; candidate refractory 2 seconds.
 - HA retains up to eight seconds of PCM with one-second pre-roll, preserving commands received during verification. Two independent stream engines share the large immutable verifier session; inference is serialized to bound memory/CPU.
 - Approximately one second of secondary-verifier delay was confirmed by the user. Two-client synthetic benchmarks were approximately 1.3/2.4 seconds after the primary candidate; load can increase delay. These are different measurements, not guaranteed latency limits.
 
